@@ -7,15 +7,20 @@ import javax.ws.rs.core.MultivaluedMap;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.Authenticator;
-import org.keycloak.authentication.authenticators.browser.AbstractUsernameFormAuthenticator;
+import org.keycloak.authentication.authenticators.browser.UsernamePasswordForm;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
+import java.util.List;
+import org.keycloak.forms.login.LoginFormsProvider;
+import org.keycloak.forms.login.freemarker.LoginFormsUtil;
+import org.keycloak.models.IdentityProviderModel;
+import org.keycloak.services.messages.Messages;
+import javax.ws.rs.core.Response;
 
 @JBossLog
-public class MagicLinkAuthenticator extends AbstractUsernameFormAuthenticator
-    implements Authenticator {
+public class MagicLinkAuthenticator extends UsernamePasswordForm implements Authenticator {
 
   static final String CREATE_NONEXISTENT_USER_CONFIG_PROPERTY = "ext-magic-create-nonexistent-user";
 
@@ -25,18 +30,26 @@ public class MagicLinkAuthenticator extends AbstractUsernameFormAuthenticator
 
     MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
 
-    String email = formData.getFirst("email");
+    String email = formData.getFirst("username");
+    //need to error check for null    
+    if (email == null || "".equals(email)) {
+      //todo
+    }
     String clientId = context.getSession().getContext().getClient().getClientId();
     String redirectUri = context.getAuthenticationSession().getRedirectUri();
     log.infof("Attempting MagicLinkAuthenticator for %s, %s, %s", email, clientId, redirectUri);
 
     UserModel user =
         MagicLink.getOrCreate(context.getSession(), email, isForceCreate(context, false));
+    //need to check for no email address
+    if (user == null || user.getEmail() == null || "".equals(user.getEmail())) {
+      //todo
+    }
     MagicLinkActionToken token =
         MagicLink.createActionToken(user, clientId, redirectUri, OptionalInt.empty());
     String link = MagicLink.linkFromActionToken(context.getSession(), token);
     boolean sent = MagicLink.sendMagicLinkEmail(context.getSession(), user, link);
-    log.infof("sent email to %s? %b. Link? %s", email, sent, link);
+    log.infof("sent email to %s? %b. Link? %s", user.getEmail(), sent, link);
 
     context.setUser(user);
     context.challenge(context.form().createForm("view-email.ftl"));
@@ -57,39 +70,38 @@ public class MagicLinkAuthenticator extends AbstractUsernameFormAuthenticator
 
   @Override
   public void authenticate(AuthenticationFlowContext context) {
-    log.info("MagicLinkAuthenticator.authenticate");
-    /*
-      String sessionKey = context.getAuthenticationSession().getAuthNote("email-key");
-    if (sessionKey != null) {
-      String requestKey = context.getHttpRequest().getUri().getQueryParameters().getFirst("key");
-      if (requestKey != null) {
-        if (requestKey.equals(sessionKey)) {
-          context.success();
-        } else {
-          context.failure(AuthenticationFlowError.INVALID_CREDENTIALS);
-        }
-      } else {
-        context.challenge(context.form().createForm("view-email.ftl"));
+    if (context.getUser() != null) {
+      // We can skip the form when user is re-authenticating. Unless current user has some IDP set, so he can re-authenticate with that IDP
+      List<IdentityProviderModel> identityProviders = LoginFormsUtil.filterIdentityProviders(context.getRealm().getIdentityProvidersStream(), context.getSession(), context);
+      if (identityProviders.isEmpty()) {
+        context.success();
+        return;
       }
-    } else {
-      context.challenge(context.form().createForm("login-email-only.ftl"));
     }
-    */
+    super.authenticate(context);
+  }
+  
+  @Override
+  protected boolean validateForm(AuthenticationFlowContext context, MultivaluedMap<String, String> formData) {
+    return validateUser(context, formData);
+  }
+  
+  @Override
+  protected Response challenge(AuthenticationFlowContext context, MultivaluedMap<String, String> formData) {
+    LoginFormsProvider forms = context.form();
+    if (!formData.isEmpty()) forms.setFormData(formData);
+    return forms.createLoginUsername();
+  }
+  
+  @Override
+  protected Response createLoginForm(LoginFormsProvider form) {
+    return form.createLoginUsername();
   }
 
   @Override
-  public boolean requiresUser() {
-    return false;
+  protected String getDefaultChallengeMessage(AuthenticationFlowContext context) {
+    if (context.getRealm().isLoginWithEmailAllowed())
+      return Messages.INVALID_USERNAME_OR_EMAIL;
+    return Messages.INVALID_USERNAME;
   }
-
-  @Override
-  public boolean configuredFor(KeycloakSession session, RealmModel realm, UserModel user) {
-    return true;
-  }
-
-  @Override
-  public void setRequiredActions(KeycloakSession session, RealmModel realm, UserModel user) {}
-
-  @Override
-  public void close() {}
 }

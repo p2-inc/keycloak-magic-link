@@ -21,13 +21,15 @@ import org.keycloak.models.UserModel;
 import org.keycloak.services.Urls;
 import org.keycloak.services.resources.LoginActionsService;
 import org.keycloak.services.resources.RealmsResource;
+import org.keycloak.models.utils.KeycloakModelUtils;
 
 /** common utilities for Magic Link authentication, used by the authenticator and resource */
 @JBossLog
 public class MagicLink {
 
   public static UserModel getOrCreate(KeycloakSession session, String email, boolean forceCreate) {
-    UserModel user = session.users().getUserByEmail(email, session.getContext().getRealm());
+    UserModel user = KeycloakModelUtils.findUserByNameOrEmail(session, session.getContext().getRealm(), email);
+    //UserModel user = session.users().getUserByEmail(email, session.getContext().getRealm());
     if (user == null && forceCreate) {
       user = session.users().addUser(session.getContext().getRealm(), email);
       user.setEnabled(true);
