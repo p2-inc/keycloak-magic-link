@@ -12,6 +12,7 @@ This contains two pathways to get an Magic Link:
 ![Install Magic Link Authenticator in Browser Flow](docs/assets/magic-authenticator.png)
 2. A Resource you can call with `manage-users` role, which allows you to specify the email, clientId, redirectUri, tokenExpiry and optionally if the email is sent, or the link is just returned to the caller.
 
+Parameters:
 | Name | Required | Default | Description |
 | ----- | ----- | ----- | ----- |
 | `email` | Y | | Email address associated with the User to create the magic link for. |
@@ -20,6 +21,7 @@ This contains two pathways to get an Magic Link:
 | `expiration_seconds` | N | 86400 (1 day) | Amount of time the magic link is valid. |
 | `force_create` | N | false | Create a user with this email address as username/email if none exists. |
 | `send_email` | N | false | Send the magic link email using the built in template. |
+
 Sample request:
 ```
 curl --request POST https://keycloak.host/auth/realms/test/magic-link \
