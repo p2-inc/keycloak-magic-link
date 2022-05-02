@@ -14,6 +14,7 @@ import javax.ws.rs.POST;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import lombok.extern.jbosslog.JBossLog;
+import org.keycloak.models.ClientModel;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 
@@ -35,6 +36,13 @@ public class MagicLinkResource extends AbstractAdminResource {
     if (user == null)
       throw new NotFoundException(
           String.format("User with email %s not found, and forceCreate is off.", rep.getEmail()));
+
+    ClientModel client = session.clients().getClientByClientId(realm, rep.getClientId());
+    if (client == null)
+      throw new NotFoundException(String.format("Client with ID %s not found.", rep.getClientId()));
+    if (!MagicLink.validateRedirectUri(session, rep.getRedirectUri(), client))
+      throw new BadRequestException(
+          String.format("redirectUri %s disallowed by client.", rep.getRedirectUri()));
 
     MagicLinkActionToken token =
         MagicLink.createActionToken(
