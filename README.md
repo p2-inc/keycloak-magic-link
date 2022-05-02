@@ -11,6 +11,7 @@ This contains two pathways to get an Magic Link:
 1. An Authenticator that can run as a form in your login flow. This takes an email, and can optionally create a user if none exists. This implementation sends the email using a theme-resources template, which you can override. Installation can be achieved by duplicating the Browser flow, and replacing the normal Username/Password/OTP forms with the Magic Link execution type:
 ![Install Magic Link Authenticator in Browser Flow](docs/assets/magic-authenticator.png)
 2. A Resource you can call with `manage-users` role, which allows you to specify the email, clientId, redirectUri, tokenExpiry and optionally if the email is sent, or the link is just returned to the caller.
+
 | Name | Required | Default | Description |
 | ----- | ----- | ----- | ----- |
 | `email` | Y | | Email address associated with the User to create the magic link for. |
