@@ -2,6 +2,8 @@
 
 Magic link implementation. Inspired by the [experiment](https://github.com/stianst/keycloak-experimental/tree/main/magic-link) by [@stianst](https://github.com/stianst).
 
+This extension is used in the [Phase Two](https://phasetwo.io) cloud offering, and is released here as part of its commitment to making its [core extensions](https://phasetwo.io/docs/introduction/open-source) open source. Please consult the [license](COPYING) for information regarding use.
+
 ## Overview
 
 This implementation differs from the original in that it creates an ActionToken that is sent as the link. This is convenient, as it does not require the user to click on the link from the same device. A common use case we heard was users entering their email address on the desktop, but then clicking on the link on their mobile, so we wanted to solve for that case.
@@ -39,7 +41,16 @@ Sample response:
 }
 ```
 
-## Implementation
+## Installation
+
+1. Build the jar:
+```
+mvn clean install
+```
+
+2. Copy the jar produced in `target/` to your `providers` directory (for Quarkus) or `standalone/deployments` directory (for legacy) and rebuild/restart keycloak.
+
+## Implementation Notes
 
 This is a rough outline of the implementation:
 
@@ -58,5 +69,5 @@ This is a rough outline of the implementation:
 	
 ---
 
-All documentation, source code and other files in this repository are Copyright 2022 Phase Two, Inc. Please consult the [license](COPYING) for information regarding use.
+All documentation, source code and other files in this repository are Copyright 2022 Phase Two, Inc.
 
