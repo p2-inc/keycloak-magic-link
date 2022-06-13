@@ -10,6 +10,7 @@ import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.authentication.authenticators.browser.UsernamePasswordForm;
+import org.keycloak.events.EventBuilder;
 import org.keycloak.forms.login.LoginFormsProvider;
 import org.keycloak.forms.login.freemarker.LoginFormsUtil;
 import org.keycloak.models.AuthenticatorConfigModel;
@@ -37,12 +38,19 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm implements Auth
     String redirectUri = context.getAuthenticationSession().getRedirectUri();
     log.infof("Attempting MagicLinkAuthenticator for %s, %s, %s", email, clientId, redirectUri);
 
+    EventBuilder event = context.newEvent();
+
     UserModel user =
-        MagicLink.getOrCreate(context.getSession(), email, isForceCreate(context, false));
+        MagicLink.getOrCreate(
+            context.getSession(),
+            email,
+            isForceCreate(context, false),
+            MagicLink.registerEvent(event));
     // need to check for no email address
     if (user == null || user.getEmail() == null || "".equals(user.getEmail())) {
       // todo
     }
+
     MagicLinkActionToken token =
         MagicLink.createActionToken(user, clientId, redirectUri, OptionalInt.empty());
     String link = MagicLink.linkFromActionToken(context.getSession(), token);

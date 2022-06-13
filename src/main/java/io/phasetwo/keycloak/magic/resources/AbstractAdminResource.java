@@ -8,6 +8,7 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.common.ClientConnection;
+import org.keycloak.events.EventBuilder;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.jose.jws.JWSInputException;
 import org.keycloak.models.ClientModel;
@@ -31,6 +32,7 @@ public abstract class AbstractAdminResource {
   protected AdminAuth auth;
   protected AdminEventBuilder adminEvent;
   protected AdminPermissionEvaluator permissions;
+  protected EventBuilder event;
   protected final RealmModel realm;
 
   protected AbstractAdminResource(RealmModel realm) {
@@ -56,6 +58,7 @@ public abstract class AbstractAdminResource {
     adminEvent =
         new AdminEventBuilder(this.realm, auth, session, session.getContext().getConnection())
             .realm(realm);
+    event = new EventBuilder​(this.realm, session, clientConnection).realm(realm);
   }
 
   private void setupPermissions() {

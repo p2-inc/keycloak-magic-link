@@ -7,12 +7,16 @@ import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
+import java.util.function.Consumer;
 import javax.ws.rs.core.UriBuilder;
 import javax.ws.rs.core.UriInfo;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.common.util.Time;
 import org.keycloak.email.EmailException;
 import org.keycloak.email.EmailTemplateProvider;
+import org.keycloak.events.Details;
+import org.keycloak.events.EventBuilder;
+import org.keycloak.events.EventType;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.Constants;
 import org.keycloak.models.KeycloakSession;
@@ -28,7 +32,27 @@ import org.keycloak.services.resources.RealmsResource;
 @JBossLog
 public class MagicLink {
 
+  public static Consumer<UserModel> registerEvent(final EventBuilder event) {
+    return new Consumer<UserModel>() {
+      @Override
+      public void accept(UserModel user) {
+        event
+            .event(EventType.REGISTER)
+            .detail(Details.REGISTER_METHOD, "magic")
+            .detail(Details.USERNAME, user.getUsername())
+            .detail(Details.EMAIL, user.getEmail())
+            .user(user)
+            .success();
+      }
+    };
+  }
+
   public static UserModel getOrCreate(KeycloakSession session, String email, boolean forceCreate) {
+    return getOrCreate(session, email, forceCreate, null);
+  }
+
+  public static UserModel getOrCreate(
+      KeycloakSession session, String email, boolean forceCreate, Consumer<UserModel> onNew) {
     UserModel user =
         KeycloakModelUtils.findUserByNameOrEmail(session, session.getContext().getRealm(), email);
     // UserModel user = session.users().getUserByEmail(email, session.getContext().getRealm());
@@ -37,6 +61,9 @@ public class MagicLink {
       user.setEnabled(true);
       user.setEmail(email);
       user.addRequiredAction(UserModel.RequiredAction.UPDATE_PROFILE);
+      if (onNew != null) {
+        onNew.accept(user);
+      }
     }
     return user;
   }

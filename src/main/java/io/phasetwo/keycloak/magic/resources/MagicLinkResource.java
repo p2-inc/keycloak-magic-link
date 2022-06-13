@@ -32,17 +32,19 @@ public class MagicLinkResource extends AbstractAdminResource {
     if (!permissions.users().canManage())
       throw new ForbiddenException("magic link requires manage-users");
 
-    UserModel user = MagicLink.getOrCreate(session, rep.getEmail(), rep.isForceCreate());
-    if (user == null)
-      throw new NotFoundException(
-          String.format("User with email %s not found, and forceCreate is off.", rep.getEmail()));
-
     ClientModel client = session.clients().getClientByClientId(realm, rep.getClientId());
     if (client == null)
       throw new NotFoundException(String.format("Client with ID %s not found.", rep.getClientId()));
     if (!MagicLink.validateRedirectUri(session, rep.getRedirectUri(), client))
       throw new BadRequestException(
           String.format("redirectUri %s disallowed by client.", rep.getRedirectUri()));
+
+    UserModel user =
+        MagicLink.getOrCreate(
+            session, rep.getEmail(), rep.isForceCreate(), MagicLink.registerEvent(event));
+    if (user == null)
+      throw new NotFoundException(
+          String.format("User with email %s not found, and forceCreate is off.", rep.getEmail()));
 
     MagicLinkActionToken token =
         MagicLink.createActionToken(
