@@ -30,7 +30,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <main.java.package>io.phasetwo.keycloak.magic</main.java.package>
     <junit.version>4.13.2</junit.version>
-    <keycloak.version>17.0.1</keycloak.version>
+    <keycloak.version>18.0.0</keycloak.version>
     <lombok.version>1.18.22</lombok.version>
     <auto-service.version>1.0.1</auto-service.version>
     <ossrh.url>https://s01.oss.sonatype.org</ossrh.url>
@@ -137,120 +137,10 @@
           <versionCommit>${buildNumber}</versionCommit>
         </configuration>
       </plugin>
-      <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>exec-maven-plugin</artifactId>
-        <version>3.0.0</version>
-        <executions>
-          <execution>
-            <goals>
-              <goal>java</goal>
-            </goals>
-          </execution>
-        </executions>
-        <configuration>
-	  <classpathScope>test</classpathScope>
-          <includeProjectDependencies>true</includeProjectDependencies>
-          <includePluginDependencies>true</includePluginDependencies>
-          <mainClass>org.keycloak.testsuite.KeycloakServer</mainClass>
-          <arguments>
-            <argument>argument1</argument>
-          </arguments>
-          <systemProperties>
-            <systemProperty>
-              <key>keycloak.bind.address</key>
-              <value>127.0.0.1</value>
-            </systemProperty>
-            <systemProperty>
-              <key>keycloak.port.https</key>
-              <value>8443</value>
-            </systemProperty>
-            <systemProperty>
-              <key>java.net.preferIPv4Stack</key>
-              <value>true</value>
-            </systemProperty>
-            <systemProperty>
-              <key>keycloak.connectionsJpa.url</key>
-              <value>jdbc:h2:file:./data/keycloak_4_x_master</value>
-            </systemProperty>
-            <systemProperty>
-              <key>keycloak.connectionsJpa.driver</key>
-              <value>org.h2.Driver</value>
-            </systemProperty>
-            <systemProperty>
-              <key>keycloak.connectionsJpa.driverDialect</key>
-              <value>org.hibernate.dialect.H2Dialect</value>
-            </systemProperty>
-            <systemProperty>
-              <key>keycloak.connectionsJpa.user</key>
-              <value>sa</value>
-            </systemProperty>
-            <systemProperty>
-              <key>keycloak.connectionsJpa.password</key>
-              <value />
-            </systemProperty>
-            <systemProperty>
-              <key>profile</key>
-              <value>COMMUNITY</value>
-            </systemProperty>
-            <systemProperty>
-              <key>product.default-profile</key>
-              <value>COMMUNITY</value>
-            </systemProperty>
-            <systemProperty>
-              <key>keycloak.password.blacklists.path</key>
-              <value>./data/blacklists/</value>
-            </systemProperty>
-            <systemProperty>
-              <key>com.sun.net.ssl.checkRevocation</key>
-              <value>false</value>
-            </systemProperty>
-            <systemProperty>
-              <key>keycloak.product.name</key>
-              <value>p2</value>
-            </systemProperty>
-            <systemProperty>
-              <key>product.name</key>
-              <value>p2</value>
-            </systemProperty>
-            <systemProperty>
-              <key>product.version</key>
-              <value>${keycloak.version}</value>
-            </systemProperty>
-            <systemProperty>
-              <key>keycloak.profile</key>
-              <value>preview</value>
-            </systemProperty>
-            <systemProperty>
-              <key>keycloak.profile.feature.account_api</key>
-              <value>enabled</value>
-            </systemProperty>
-            <systemProperty>
-              <key>keycloak.profile.feature.account2</key>
-              <value>enabled</value>
-            </systemProperty>
-            <systemProperty>
-              <key>keycloak.profile.feature.upload_scripts</key>
-              <value>enabled</value>
-            </systemProperty>
-            <systemProperty>
-              <key>keycloak.profile.feature.scripts</key>
-              <value>enabled</value>
-            </systemProperty>
-          </systemProperties>
-	</configuration>
-        <dependencies>
-	  <dependency> <!-- if you're getting a missing dependency error here, you need to install keycloak from source locally, as this never hits maven central -->
-	    <groupId>org.keycloak</groupId>
-	    <artifactId>keycloak-testsuite-utils</artifactId>
-	    <version>${keycloak.version}</version>
-	  </dependency>
-        </dependencies>
-      </plugin>
-      <plugin>
-        <groupId>com.coveo</groupId>
+      <plugin> <!-- pretty up the code using google java standards `mvn fmt:format` -->
+        <groupId>com.spotify.fmt</groupId>
         <artifactId>fmt-maven-plugin</artifactId>
-        <version>2.7</version>
+        <version>2.15</version>
       </plugin>
     </plugins>
   </build>
@@ -313,12 +203,6 @@
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
       <version>${junit.version}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency> <!-- if you're getting a missing dependency error here, you need to install keycloak from source locally, as this never hits maven central -->
-      <groupId>org.keycloak</groupId>
-      <artifactId>keycloak-testsuite-utils</artifactId>
-      <version>${keycloak.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
