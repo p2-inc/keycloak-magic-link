@@ -58,7 +58,8 @@ public abstract class AbstractAdminResource {
     adminEvent =
         new AdminEventBuilder(this.realm, auth, session, session.getContext().getConnection())
             .realm(realm);
-    event = new EventBuilder​(this.realm, session, clientConnection).realm(realm);
+    event =
+        new EventBuilder​(this.realm, session, clientConnection).realm(realm);
   }
 
   private void setupPermissions() {

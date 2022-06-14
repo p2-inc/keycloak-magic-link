@@ -71,7 +71,15 @@ public class MagicLinkAuthenticatorFactory implements AuthenticatorFactory {
     createUser.setHelpText(
         "Creates a new user when an email is provided that does not match an existing user.");
     createUser.setDefaultValue(true);
-    return Arrays.asList(createUser);
+
+    ProviderConfigProperty updateProfile = new ProviderConfigProperty();
+    updateProfile.setType(ProviderConfigProperty.BOOLEAN_TYPE);
+    updateProfile.setName(MagicLinkAuthenticator.UPDATE_PROFILE_ACTION_CONFIG_PROPERTY);
+    updateProfile.setLabel("Update profile on create");
+    updateProfile.setHelpText("Add an UPDATE_PROFILE required action if the user was created.");
+    updateProfile.setDefaultValue(false);
+
+    return Arrays.asList(createUser, updateProfile);
   }
 
   @Override

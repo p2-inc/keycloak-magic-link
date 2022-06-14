@@ -47,12 +47,17 @@ public class MagicLink {
     };
   }
 
-  public static UserModel getOrCreate(KeycloakSession session, String email, boolean forceCreate) {
-    return getOrCreate(session, email, forceCreate, null);
+  public static UserModel getOrCreate(
+      KeycloakSession session, String email, boolean forceCreate, boolean updateProfile) {
+    return getOrCreate(session, email, forceCreate, updateProfile, null);
   }
 
   public static UserModel getOrCreate(
-      KeycloakSession session, String email, boolean forceCreate, Consumer<UserModel> onNew) {
+      KeycloakSession session,
+      String email,
+      boolean forceCreate,
+      boolean updateProfile,
+      Consumer<UserModel> onNew) {
     UserModel user =
         KeycloakModelUtils.findUserByNameOrEmail(session, session.getContext().getRealm(), email);
     // UserModel user = session.users().getUserByEmail(email, session.getContext().getRealm());
@@ -60,7 +65,7 @@ public class MagicLink {
       user = session.users().addUser(session.getContext().getRealm(), email);
       user.setEnabled(true);
       user.setEmail(email);
-      user.addRequiredAction(UserModel.RequiredAction.UPDATE_PROFILE);
+      if (updateProfile) user.addRequiredAction(UserModel.RequiredAction.UPDATE_PROFILE);
       if (onNew != null) {
         onNew.accept(user);
       }

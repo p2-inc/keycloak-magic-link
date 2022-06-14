@@ -22,6 +22,7 @@ import org.keycloak.services.messages.Messages;
 public class MagicLinkAuthenticator extends UsernamePasswordForm implements Authenticator {
 
   static final String CREATE_NONEXISTENT_USER_CONFIG_PROPERTY = "ext-magic-create-nonexistent-user";
+  static final String UPDATE_PROFILE_ACTION_CONFIG_PROPERTY = "ext-magic-update-profile-action";
 
   @Override
   public void action(AuthenticationFlowContext context) {
@@ -45,6 +46,7 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm implements Auth
             context.getSession(),
             email,
             isForceCreate(context, false),
+            isUpdateProfile(context, false),
             MagicLink.registerEvent(event));
     // need to check for no email address
     if (user == null || user.getEmail() == null || "".equals(user.getEmail())) {
@@ -62,13 +64,21 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm implements Auth
   }
 
   private boolean isForceCreate(AuthenticationFlowContext context, boolean defaultValue) {
+    return is(context, CREATE_NONEXISTENT_USER_CONFIG_PROPERTY, defaultValue);
+  }
+
+  private boolean isUpdateProfile(AuthenticationFlowContext context, boolean defaultValue) {
+    return is(context, UPDATE_PROFILE_ACTION_CONFIG_PROPERTY, defaultValue);
+  }
+
+  private boolean is(AuthenticationFlowContext context, String propName, boolean defaultValue) {
     AuthenticatorConfigModel authenticatorConfig = context.getAuthenticatorConfig();
     if (authenticatorConfig == null) return defaultValue;
 
     Map<String, String> config = authenticatorConfig.getConfig();
     if (config == null) return defaultValue;
 
-    String v = config.get(CREATE_NONEXISTENT_USER_CONFIG_PROPERTY);
+    String v = config.get(propName);
     if (v == null || "".equals(v)) return defaultValue;
 
     return v.trim().toLowerCase().equals("true");

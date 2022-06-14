@@ -20,6 +20,9 @@ public class MagicLinkRequest {
   @JsonProperty("force_create")
   private boolean forceCreate = false;
 
+  @JsonProperty("update_profile")
+  private boolean updateProfile = false;
+
   @JsonProperty("send_email")
   private boolean sendEmail = false;
 }
