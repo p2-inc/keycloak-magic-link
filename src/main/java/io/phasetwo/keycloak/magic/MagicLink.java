@@ -1,5 +1,6 @@
 package io.phasetwo.keycloak.magic;
 
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import io.phasetwo.keycloak.magic.auth.token.MagicLinkActionToken;
@@ -113,14 +114,15 @@ public class MagicLink {
     try {
       EmailTemplateProvider emailTemplateProvider =
           session.getProvider(EmailTemplateProvider.class);
-      List<Object> subjAttr = ImmutableList.of();
+      String realmName = Strings.isNullOrEmpty(realm.getDisplayName()) ? realm.getName() : realm.getDisplayName();
+      List<Object> subjAttr = ImmutableList.of(realmName);
       Map<String, Object> bodyAttr = Maps.newHashMap();
-      bodyAttr.put("realmName", realm.getName());
+      bodyAttr.put("realmName", realmName);
       bodyAttr.put("magicLink", link);
       emailTemplateProvider
           .setRealm(realm)
           .setUser(user)
-          .setAttribute("realmName", realm.getName())
+          .setAttribute("realmName", realmName)
           .send("magicLinkSubject", subjAttr, "magic-link-email.ftl", bodyAttr);
       return true;
     } catch (EmailException e) {
