@@ -39,13 +39,21 @@ public class MagicLinkResource extends AbstractAdminResource {
       throw new BadRequestException(
           String.format("redirectUri %s disallowed by client.", rep.getRedirectUri()));
 
+    String emailOrUsername = rep.getEmail();
+    boolean forceCreate = rep.isForceCreate();
+    boolean updateProfile = rep.isUpdateProfile();
+    boolean sendEmail = rep.isSendEmail();
+
+    if (rep.getUsername() != null) {
+      emailOrUsername = rep.getUsername();
+      forceCreate = false;
+      updateProfile = false;
+      sendEmail = false;
+    }
+
     UserModel user =
         MagicLink.getOrCreate(
-            session,
-            rep.getEmail(),
-            rep.isForceCreate(),
-            rep.isUpdateProfile(),
-            MagicLink.registerEvent(event));
+            session, emailOrUsername, forceCreate, updateProfile, MagicLink.registerEvent(event));
     if (user == null)
       throw new NotFoundException(
           String.format("User with email %s not found, and forceCreate is off.", rep.getEmail()));
@@ -58,7 +66,7 @@ public class MagicLinkResource extends AbstractAdminResource {
             OptionalInt.of(rep.getExpirationSeconds()));
     String link = MagicLink.linkFromActionToken(session, token);
     boolean sent = false;
-    if (rep.isSendEmail()) {
+    if (sendEmail) {
       sent = MagicLink.sendMagicLinkEmail(session, user, link);
       log.infof("sent email to %s? %b. Link? %s", rep.getEmail(), sent, link);
     }

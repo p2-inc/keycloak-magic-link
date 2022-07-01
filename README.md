@@ -18,6 +18,7 @@ Parameters:
 | Name | Required | Default | Description |
 | ----- | ----- | ----- | ----- |
 | `email` | Y | | Email address associated with the User to create the magic link for. |
+| `username` | N | | Username of the User to create the magic link for. Ignores email and forces `force_create`, `update_profile`, and `send_email` to `false` if set. |
 | `client_id` | Y | | Client ID the user will be logging in to. |
 | `redirect_uri` | Y | | Redirect URI. Must be valid for the given client. |
 | `expiration_seconds` | N | 86400 (1 day) | Amount of time the magic link is valid. |

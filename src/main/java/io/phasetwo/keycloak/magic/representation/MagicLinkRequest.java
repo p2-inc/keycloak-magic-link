@@ -5,6 +5,9 @@ import lombok.Data;
 
 @Data
 public class MagicLinkRequest {
+  @JsonProperty("username")
+  private String username;
+
   @JsonProperty("email")
   private String email;
 
