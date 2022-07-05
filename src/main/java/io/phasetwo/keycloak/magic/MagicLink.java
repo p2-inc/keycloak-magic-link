@@ -96,12 +96,12 @@ public class MagicLink {
   public static boolean validateRedirectUri(
       KeycloakSession session, String redirectUri, ClientModel client) {
     String redirect = RedirectUtils.verifyRedirectUri(session, redirectUri, client);
-    log.infof("Redirect after verify %s -> %s", redirectUri, redirect);
+    log.debugf("Redirect after verify %s -> %s", redirectUri, redirect);
     return (redirectUri.equals(redirect));
   }
 
   private static UriBuilder actionTokenBuilder(URI baseUri, String tokenString, String clientId) {
-    log.infof("baseUri: %s, tokenString: %s, clientId: %s", baseUri, tokenString, clientId);
+    log.debugf("baseUri: %s, tokenString: %s, clientId: %s", baseUri, tokenString, clientId);
     return Urls.realmBase(baseUri)
         .path(RealmsResource.class, "getLoginActionsService")
         .path(LoginActionsService.class, "executeActionToken")

@@ -37,7 +37,7 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm implements Auth
     }
     String clientId = context.getSession().getContext().getClient().getClientId();
     String redirectUri = context.getAuthenticationSession().getRedirectUri();
-    log.infof("Attempting MagicLinkAuthenticator for %s, %s, %s", email, clientId, redirectUri);
+    log.debugf("Attempting MagicLinkAuthenticator for %s, %s, %s", email, clientId, redirectUri);
 
     EventBuilder event = context.newEvent();
 
@@ -57,7 +57,7 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm implements Auth
         MagicLink.createActionToken(user, clientId, redirectUri, OptionalInt.empty());
     String link = MagicLink.linkFromActionToken(context.getSession(), token);
     boolean sent = MagicLink.sendMagicLinkEmail(context.getSession(), user, link);
-    log.infof("sent email to %s? %b. Link? %s", user.getEmail(), sent, link);
+    log.debugf("sent email to %s? %b. Link? %s", user.getEmail(), sent, link);
 
     context.setUser(user);
     context.challenge(context.form().createForm("view-email.ftl"));
