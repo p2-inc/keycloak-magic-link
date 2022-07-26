@@ -1,4 +1,4 @@
-package io.phasetwo.keycloak.magic.auth.token;
+package io.phasetwo.keycloak.magic.auth;
 
 import io.phasetwo.keycloak.magic.MagicLink;
 import java.util.List;
@@ -17,6 +17,7 @@ import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.IdentityProviderModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.services.messages.Messages;
+import org.keycloak.authentication.authenticators.browser.AbstractUsernameFormAuthenticator;
 
 @JBossLog
 public class MagicLinkAuthenticator extends UsernamePasswordForm implements Authenticator {
@@ -59,7 +60,9 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm implements Auth
     boolean sent = MagicLink.sendMagicLinkEmail(context.getSession(), user, link);
     log.debugf("sent email to %s? %b. Link? %s", user.getEmail(), sent, link);
 
-    context.setUser(user);
+    //context.setUser(user);
+    context.clearUser(); // just in case
+    context.setAuthNote(AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME, email);
     context.challenge(context.form().createForm("view-email.ftl"));
   }
 

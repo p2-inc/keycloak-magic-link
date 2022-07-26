@@ -1,4 +1,4 @@
-package io.phasetwo.keycloak.magic.auth.token;
+package io.phasetwo.keycloak.magic.auth;
 
 import com.google.auto.service.AutoService;
 import java.util.Arrays;

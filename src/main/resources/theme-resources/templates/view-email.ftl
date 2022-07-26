@@ -1,12 +1,16 @@
 <#import "template.ftl" as layout>
-<@layout.registrationLayout displayInfo=social.displayInfo; section>
-    <#if section = "title">
-        ${msg("loginTitle",(realm.displayName!''))}
-    <#elseif section = "header">
-        ${msg("loginTitleHtml",(realm.displayNameHtml!''))?no_esc}
-    <#elseif section = "form">
-        <#if realm.password>
-            Check your email, and click on the link to log in!
-        </#if>
-    </#if>
+<@layout.registrationLayout displayRequiredFields=true displayMessage=false; section>
+ <#if section = "header">
+    <div id="kc-username" class="${properties.kcFormGroupClass!}">
+      <label id="kc-attempted-username">${auth.attemptedUsername}</label>
+      <a id="reset-login" href="${url.loginRestartFlowUrl}" aria-label="${msg("restartLoginTooltip")}">
+        <div class="kc-login-tooltip">
+          <i class="${properties.kcResetFlowIcon!}"></i>
+          <span class="kc-tooltip-text">${msg("restartLoginTooltip")}</span>
+        </div>
+      </a>
+    </div>
+  <#elseif section = "form">
+    Check your email, and click on the link to log in!
+  </#if>
 </@layout.registrationLayout>
