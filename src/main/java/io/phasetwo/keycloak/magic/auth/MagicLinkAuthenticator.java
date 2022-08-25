@@ -1,5 +1,6 @@
 package io.phasetwo.keycloak.magic.auth;
 
+import io.phasetwo.keycloak.magic.auth.token.MagicLinkActionToken;
 import io.phasetwo.keycloak.magic.MagicLink;
 import java.util.List;
 import java.util.Map;
@@ -62,7 +63,7 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm implements Auth
 
     //context.setUser(user);
     context.clearUser(); // just in case
-    context.setAuthNote(AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME, email);
+    context.getAuthenticationSession().setAuthNote(AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME, email);
     context.challenge(context.form().createForm("view-email.ftl"));
   }
 
