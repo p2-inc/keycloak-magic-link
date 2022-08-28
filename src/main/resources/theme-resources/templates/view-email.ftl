@@ -1,5 +1,5 @@
 <#import "template.ftl" as layout>
-<@layout.registrationLayout displayRequiredFields=true displayMessage=false; section>
+<@layout.registrationLayout displayRequiredFields=false displayMessage=false; section>
  <#if section = "header">
     <div id="kc-username" class="${properties.kcFormGroupClass!}">
       <label id="kc-attempted-username">${auth.attemptedUsername}</label>
