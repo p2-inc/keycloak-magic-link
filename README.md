@@ -26,12 +26,12 @@ Parameters:
 | `update_profile` | N | false | Add an UPDATE_PROFILE required action if the user was created. |
 | `send_email` | N | false | Send the magic link email using the built in template. |
 
-Sample request:
+Sample request (replace your access token):
 ```
 curl --request POST https://keycloak.host/auth/realms/test/magic-link \
  --header "Accept: application/json" \
  --header "Content-Type: application/json" \
- --header "Authorization: Bearer" \
+ --header "Authorization: Bearer <access_token>" \
  --data '{"email":"foo@foo.com","client_id":"account-console","redirect_uri":"https://keycloak.host/auth/realms/test/account/","expiration_seconds":3600,"force_create":true,"update_profile":true,"send_email":false}'
 ```
 Sample response:
