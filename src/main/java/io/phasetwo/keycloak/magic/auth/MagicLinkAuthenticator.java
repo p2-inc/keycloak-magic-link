@@ -46,6 +46,7 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm implements Auth
     UserModel user =
         MagicLink.getOrCreate(
             context.getSession(),
+            context.getRealm(),
             email,
             isForceCreate(context, false),
             isUpdateProfile(context, false),
@@ -57,7 +58,7 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm implements Auth
 
     MagicLinkActionToken token =
         MagicLink.createActionToken(user, clientId, redirectUri, OptionalInt.empty());
-    String link = MagicLink.linkFromActionToken(context.getSession(), token);
+    String link = MagicLink.linkFromActionToken(context.getSession(), context.getRealm(), token);
     boolean sent = MagicLink.sendMagicLinkEmail(context.getSession(), user, link);
     log.debugf("sent email to %s? %b. Link? %s", user.getEmail(), sent, link);
 

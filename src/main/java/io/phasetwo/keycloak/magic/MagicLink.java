@@ -49,21 +49,24 @@ public class MagicLink {
   }
 
   public static UserModel getOrCreate(
-      KeycloakSession session, String email, boolean forceCreate, boolean updateProfile) {
-    return getOrCreate(session, email, forceCreate, updateProfile, null);
+      KeycloakSession session,
+      RealmModel realm,
+      String email,
+      boolean forceCreate,
+      boolean updateProfile) {
+    return getOrCreate(session, realm, email, forceCreate, updateProfile, null);
   }
 
   public static UserModel getOrCreate(
       KeycloakSession session,
+      RealmModel realm,
       String email,
       boolean forceCreate,
       boolean updateProfile,
       Consumer<UserModel> onNew) {
-    UserModel user =
-        KeycloakModelUtils.findUserByNameOrEmail(session, session.getContext().getRealm(), email);
-    // UserModel user = session.users().getUserByEmail(email, session.getContext().getRealm());
+    UserModel user = KeycloakModelUtils.findUserByNameOrEmail(session, realm, email);
     if (user == null && forceCreate) {
-      user = session.users().addUser(session.getContext().getRealm(), email);
+      user = session.users().addUser(realm, email);
       user.setEnabled(true);
       user.setEmail(email);
       if (updateProfile) user.addRequiredAction(UserModel.RequiredAction.UPDATE_PROFILE);
@@ -84,12 +87,23 @@ public class MagicLink {
     return token;
   }
 
-  public static String linkFromActionToken(KeycloakSession session, MagicLinkActionToken token) {
+  public static String linkFromActionToken(
+      KeycloakSession session, RealmModel realm, MagicLinkActionToken token) {
     UriInfo uriInfo = session.getContext().getUri();
-    RealmModel realm = session.getContext().getRealm();
+
+    //This is a workaround for situations where the realm you are using to call this (e.g. master)
+    //is different than the one you are generating the action token for. Because the SignatureProvider
+    //assumes the value that is set in session.getContext().getRealm() has the keys it should use, we
+    //need to temporarily reset it
+    RealmModel r = session.getContext().getRealm();
+    session.getContext().setRealm(realm);
+    
     UriBuilder builder =
         actionTokenBuilder(
             uriInfo.getBaseUri(), token.serialize(session, realm, uriInfo), token.getIssuedFor());
+
+    //and then set it back
+    session.getContext().setRealm(r);
     return builder.build(realm.getName()).toString();
   }
 

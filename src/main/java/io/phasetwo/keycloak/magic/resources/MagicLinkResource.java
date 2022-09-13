@@ -53,7 +53,12 @@ public class MagicLinkResource extends AbstractAdminResource {
 
     UserModel user =
         MagicLink.getOrCreate(
-            session, emailOrUsername, forceCreate, updateProfile, MagicLink.registerEvent(event));
+            session,
+            realm,
+            emailOrUsername,
+            forceCreate,
+            updateProfile,
+            MagicLink.registerEvent(event));
     if (user == null)
       throw new NotFoundException(
           String.format("User with email %s not found, and forceCreate is off.", rep.getEmail()));
@@ -64,7 +69,7 @@ public class MagicLinkResource extends AbstractAdminResource {
             rep.getClientId(),
             rep.getRedirectUri(),
             OptionalInt.of(rep.getExpirationSeconds()));
-    String link = MagicLink.linkFromActionToken(session, token);
+    String link = MagicLink.linkFromActionToken(session, realm, token);
     boolean sent = false;
     if (sendEmail) {
       sent = MagicLink.sendMagicLinkEmail(session, user, link);
