@@ -69,7 +69,7 @@
 	  <transformers>
             <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
               <manifestEntries>
-		<Dependencies><![CDATA[org.keycloak.keycloak-common,org.keycloak.keycloak-core,org.keycloak.keycloak-server-spi,org.keycloak.keycloak-server-spi-private,org.keycloak.keycloak-admin-client,org.apache.httpcomponents,org.keycloak.keycloak-services,org.jboss.logging,javax.api,javax.jms.api,javax.transaction.api,com.google.guava,com.fasterxml.jackson.core.jackson-core,com.fasterxml.jackson.core.jackson-annotations,com.fasterxml.jackson.core.jackson-databind,com.googlecode.owasp-java-html-sanitizer,org.apache.commons.io,org.bouncycastle,org.jboss.resteasy.resteasy-jaxrs]]></Dependencies>
+		<Dependencies><![CDATA[org.keycloak.keycloak-common,org.keycloak.keycloak-core,org.keycloak.keycloak-server-spi,org.keycloak.keycloak-server-spi-private,org.apache.httpcomponents,org.keycloak.keycloak-services,org.jboss.logging,javax.api,javax.jms.api,javax.transaction.api,com.google.guava,com.fasterxml.jackson.core.jackson-core,com.fasterxml.jackson.core.jackson-annotations,com.fasterxml.jackson.core.jackson-databind,com.googlecode.owasp-java-html-sanitizer,org.apache.commons.io,org.bouncycastle,org.jboss.resteasy.resteasy-jaxrs]]></Dependencies>
               </manifestEntries>
             </transformer>
           </transformers>
