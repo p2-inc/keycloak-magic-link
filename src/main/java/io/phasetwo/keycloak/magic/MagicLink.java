@@ -12,6 +12,7 @@ import java.util.function.Consumer;
 import javax.ws.rs.core.UriBuilder;
 import javax.ws.rs.core.UriInfo;
 import lombok.extern.jbosslog.JBossLog;
+import org.keycloak.Config;
 import org.keycloak.common.util.Time;
 import org.keycloak.email.EmailException;
 import org.keycloak.email.EmailTemplateProvider;
@@ -96,6 +97,11 @@ public class MagicLink {
     //assumes the value that is set in session.getContext().getRealm() has the keys it should use, we
     //need to temporarily reset it
     RealmModel r = session.getContext().getRealm();
+    log.infof("realm %s session.context.realm %s", realm.getName(), r.getName());
+    //Because of the risk, throw an exception for master realm
+    if (Config.getAdminRealm().equals(realm.getName())) {
+      throw new IllegalStateException(String.format("Magic links not allowed for %s realm", Config.getAdminRealm()));
+    }
     session.getContext().setRealm(realm);
     
     UriBuilder builder =
