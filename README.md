@@ -74,7 +74,11 @@ This is a rough outline of the implementation:
     - invalidate the action token after single use
     - set the redirectUri
     - make sure to continue the login session after the handler
-	
+
+## Demo
+
+User contributed POC using Jupyter: https://github.com/tstec-polypoly/explore-keycloak
+
 ---
 
 All documentation, source code and other files in this repository are Copyright 2022 Phase Two, Inc.
