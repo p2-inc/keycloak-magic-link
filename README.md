@@ -1,8 +1,14 @@
+> :rocket: **Try it for free** in the new Phase Two [keycloak managed service](https://phasetwo.io/dashboard/?utm_source=github&utm_medium=readme&utm_campaign=keycloak-magic-link). See the [announcement and demo video](https://phasetwo.io/blog/self-service/) for more information.
+
 # keycloak-magic-link
 
 Magic link implementation. Inspired by the [experiment](https://github.com/stianst/keycloak-experimental/tree/main/magic-link) by [@stianst](https://github.com/stianst).
 
 This extension is used in the [Phase Two](https://phasetwo.io) cloud offering, and is released here as part of its commitment to making its [core extensions](https://phasetwo.io/docs/introduction/open-source) open source. Please consult the [license](COPYING) for information regarding use.
+
+## Quick start
+
+The easiest way to get started is our [Docker image](https://quay.io/repository/phasetwo/phasetwo-keycloak?tab=tags). Documentation and examples for using it are in the [phasetwo-containers](https://github.com/p2-inc/phasetwo-containers) repo. The most recent version of this extension is included.
 
 ## Overview
 
@@ -68,7 +74,11 @@ This is a rough outline of the implementation:
     - invalidate the action token after single use
     - set the redirectUri
     - make sure to continue the login session after the handler
-	
+
+## Demo
+
+User contributed POC using Jupyter: https://github.com/tstec-polypoly/explore-keycloak
+
 ---
 
 All documentation, source code and other files in this repository are Copyright 2022 Phase Two, Inc.
