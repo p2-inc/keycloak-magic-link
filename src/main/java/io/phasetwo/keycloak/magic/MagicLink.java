@@ -92,23 +92,26 @@ public class MagicLink {
       KeycloakSession session, RealmModel realm, MagicLinkActionToken token) {
     UriInfo uriInfo = session.getContext().getUri();
 
-    //This is a workaround for situations where the realm you are using to call this (e.g. master)
-    //is different than the one you are generating the action token for. Because the SignatureProvider
-    //assumes the value that is set in session.getContext().getRealm() has the keys it should use, we
-    //need to temporarily reset it
+    // This is a workaround for situations where the realm you are using to call this (e.g. master)
+    // is different than the one you are generating the action token for. Because the
+    // SignatureProvider
+    // assumes the value that is set in session.getContext().getRealm() has the keys it should use,
+    // we
+    // need to temporarily reset it
     RealmModel r = session.getContext().getRealm();
     log.infof("realm %s session.context.realm %s", realm.getName(), r.getName());
-    //Because of the risk, throw an exception for master realm
+    // Because of the risk, throw an exception for master realm
     if (Config.getAdminRealm().equals(realm.getName())) {
-      throw new IllegalStateException(String.format("Magic links not allowed for %s realm", Config.getAdminRealm()));
+      throw new IllegalStateException(
+          String.format("Magic links not allowed for %s realm", Config.getAdminRealm()));
     }
     session.getContext().setRealm(realm);
-    
+
     UriBuilder builder =
         actionTokenBuilder(
             uriInfo.getBaseUri(), token.serialize(session, realm, uriInfo), token.getIssuedFor());
 
-    //and then set it back
+    // and then set it back
     session.getContext().setRealm(r);
     return builder.build(realm.getName()).toString();
   }
