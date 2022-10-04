@@ -59,7 +59,7 @@ public class MagicLinkAuthenticatorFactory implements AuthenticatorFactory {
 
   @Override
   public String getHelpText() {
-    return "Magic Link Authenticator that sends the given email an Action Token that automatically logs them in.";
+    return "Sign in with a magic link that will be sent to your email.";
   }
 
   @Override
