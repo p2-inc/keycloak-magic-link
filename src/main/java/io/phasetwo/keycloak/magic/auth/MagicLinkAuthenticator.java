@@ -19,8 +19,10 @@ import org.keycloak.authentication.authenticators.browser.AbstractUsernameFormAu
 import org.keycloak.authentication.authenticators.browser.UsernamePasswordForm;
 import org.keycloak.events.Errors;
 import org.keycloak.events.EventBuilder;
+import org.keycloak.events.EventType;
 import org.keycloak.forms.login.LoginFormsProvider;
 import org.keycloak.forms.login.freemarker.LoginFormsUtil;
+import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.IdentityProviderModel;
 import org.keycloak.models.UserModel;
@@ -54,6 +56,12 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm implements Auth
       log.debugf(
           "Found attempted username %s from previous authenticator, skipping login form",
           attemptedUsername);
+      if (context.getExecution().getRequirement()
+          == AuthenticationExecutionModel.Requirement.REQUIRED) {
+        action(context);
+      } else {
+        context.attempted();
+      }
     }
   }
 
@@ -95,7 +103,7 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm implements Auth
             MagicLink.registerEvent(event));
     // check for no/invalid email address
     if (user == null || trimToNull(user.getEmail()) == null || !isValidEmail(user.getEmail())) {
-      context.getEvent().error(Errors.INVALID_EMAIL);
+      context.getEvent().event(EventType.LOGIN_ERROR).error(Errors.INVALID_EMAIL);
       Response challengeResponse =
           challenge(context, getDefaultChallengeMessage(context), FIELD_USERNAME);
       context.failureChallenge(AuthenticationFlowError.INVALID_USER, challengeResponse);
