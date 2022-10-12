@@ -9,16 +9,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import javax.ws.rs.core.UriBuilder;
 import javax.ws.rs.core.UriInfo;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.Config;
+import org.keycloak.authentication.Authenticator;
 import org.keycloak.common.util.Time;
 import org.keycloak.email.EmailException;
 import org.keycloak.email.EmailTemplateProvider;
 import org.keycloak.events.Details;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.events.EventType;
+import org.keycloak.models.AuthenticationExecutionModel;
+import org.keycloak.models.AuthenticationFlowModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.Constants;
 import org.keycloak.models.KeycloakSession;
@@ -26,6 +30,7 @@ import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.protocol.oidc.utils.RedirectUtils;
+import org.keycloak.provider.ProviderFactory;
 import org.keycloak.services.Urls;
 import org.keycloak.services.resources.LoginActionsService;
 import org.keycloak.services.resources.RealmsResource;
@@ -153,5 +158,101 @@ public class MagicLink {
       log.error("Failed to send welcome mail", e);
     }
     return false;
+  }
+
+  public static final String MAGIC_LINK_AUTH_FLOW_ALIAS = "magic link";
+  public static final String COOKIE_PROVIDER_ID =
+      org.keycloak.authentication.authenticators.browser.CookieAuthenticatorFactory.PROVIDER_ID;
+  public static final String IDP_REDIRECTOR_PROVIDER_ID =
+      org.keycloak.authentication.authenticators.browser.IdentityProviderAuthenticatorFactory
+          .PROVIDER_ID;
+  public static final String MAGIC_LINK_PROVIDER_ID =
+      io.phasetwo.keycloak.magic.auth.MagicLinkAuthenticatorFactory.PROVIDER_ID;
+
+  public static void realmPostCreate(RealmModel.RealmPostCreateEvent event) {
+    KeycloakSession session = event.getKeycloakSession();
+    RealmModel realm = event.getCreatedRealm();
+    AuthenticationFlowModel flow = realm.getFlowByAlias(MAGIC_LINK_AUTH_FLOW_ALIAS);
+    if (flow != null) {
+      log.infof("%s flow exists. Skipping.", MAGIC_LINK_AUTH_FLOW_ALIAS);
+      return;
+    }
+
+    log.infof("creating built-in auth flow for %s", MAGIC_LINK_AUTH_FLOW_ALIAS);
+    flow = new AuthenticationFlowModel();
+    flow.setAlias(MAGIC_LINK_AUTH_FLOW_ALIAS);
+    flow.setBuiltIn(true);
+    flow.setProviderId("basic-flow");
+    flow.setDescription("Simple magic link authentication flow.");
+    flow.setTopLevel(true);
+    flow = realm.addAuthenticationFlow(flow);
+
+    // cookie
+    addExecutionToFlow(
+        session,
+        realm,
+        flow,
+        COOKIE_PROVIDER_ID,
+        AuthenticationExecutionModel.Requirement.ALTERNATIVE);
+    // kerberos?
+    // identity provider redirector
+    addExecutionToFlow(
+        session,
+        realm,
+        flow,
+        IDP_REDIRECTOR_PROVIDER_ID,
+        AuthenticationExecutionModel.Requirement.ALTERNATIVE);
+
+    // forms
+    AuthenticationFlowModel forms = new AuthenticationFlowModel();
+    forms.setAlias(String.format("%s %s", MAGIC_LINK_AUTH_FLOW_ALIAS, "forms"));
+    forms.setProviderId("basic-flow");
+    forms.setDescription("Forms for simple magic link authentication flow.");
+    forms.setTopLevel(false);
+    forms = realm.addAuthenticationFlow(forms);
+
+    AuthenticationExecutionModel execution = new AuthenticationExecutionModel();
+    execution.setParentFlow(flow.getId());
+    execution.setFlowId(forms.getId());
+    execution.setRequirement(AuthenticationExecutionModel.Requirement.ALTERNATIVE);
+    execution.setAuthenticatorFlow(true);
+    execution.setPriority(getNextPriority(realm, flow));
+    execution = realm.addAuthenticatorExecution(execution);
+
+    addExecutionToFlow(
+        session,
+        realm,
+        forms,
+        MAGIC_LINK_PROVIDER_ID,
+        AuthenticationExecutionModel.Requirement.REQUIRED);
+  }
+
+  private static int getNextPriority(RealmModel realm, AuthenticationFlowModel parentFlow) {
+    List<AuthenticationExecutionModel> executions =
+        realm.getAuthenticationExecutionsStream(parentFlow.getId()).collect(Collectors.toList());
+    return executions.isEmpty() ? 0 : executions.get(executions.size() - 1).getPriority() + 1;
+  }
+
+  private static void addExecutionToFlow(
+      KeycloakSession session,
+      RealmModel realm,
+      AuthenticationFlowModel flow,
+      String providerId,
+      AuthenticationExecutionModel.Requirement requirement) {
+    List<AuthenticationExecutionModel> executions = realm.getAuthenticationExecutions(flow.getId());
+    boolean hasExecution =
+        executions.stream().filter(e -> providerId.equals(e.getAuthenticator())).count() > 0;
+
+    if (!hasExecution) {
+      log.infof("adding execution %s for auth flow for %s", providerId, flow.getAlias());
+      ProviderFactory f =
+          session.getKeycloakSessionFactory().getProviderFactory(Authenticator.class, providerId);
+      AuthenticationExecutionModel execution = new AuthenticationExecutionModel();
+      execution.setParentFlow(flow.getId());
+      execution.setRequirement(requirement);
+      execution.setAuthenticatorFlow(false);
+      execution.setAuthenticator(providerId);
+      execution = realm.addAuthenticatorExecution(execution);
+    }
   }
 }
