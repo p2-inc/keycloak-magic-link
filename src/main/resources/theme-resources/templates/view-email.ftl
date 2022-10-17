@@ -11,6 +11,6 @@
       </a>
     </div>
   <#elseif section = "form">
-    Check your email, and click on the link to log in!
+    ${msg("magicLinkConfirmation")}
   </#if>
 </@layout.registrationLayout>

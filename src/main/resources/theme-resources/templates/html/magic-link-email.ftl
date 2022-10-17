@@ -1,5 +1,4 @@
-<#ftl output_format="plainText">
-Click to log in to ${realmName}
-<br/><br/>
-${magicLink}
-
+<#import "template.ftl" as layout>
+<@layout.emailLayout>
+${kcSanitize(msg("magicLinkBody", realmName, magicLink))?no_esc}
+</@layout.emailLayout>
