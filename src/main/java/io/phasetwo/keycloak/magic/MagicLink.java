@@ -26,6 +26,8 @@ import org.keycloak.models.AuthenticationFlowModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.Constants;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.KeycloakSessionFactory;
+import org.keycloak.models.KeycloakSessionTask;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.utils.KeycloakModelUtils;
@@ -169,9 +171,29 @@ public class MagicLink {
   public static final String MAGIC_LINK_PROVIDER_ID =
       io.phasetwo.keycloak.magic.auth.MagicLinkAuthenticatorFactory.PROVIDER_ID;
 
-  public static void realmPostCreate(RealmModel.RealmPostCreateEvent event) {
-    KeycloakSession session = event.getKeycloakSession();
-    RealmModel realm = event.getCreatedRealm();
+  public static void realmPostCreate(
+      KeycloakSessionFactory factory, RealmModel.RealmPostCreateEvent event) {
+    setupDefaultFlow(event.getKeycloakSession(), event.getCreatedRealm());
+  }
+
+  public static void realmPostCreateInTransaction(
+      KeycloakSessionFactory factory, RealmModel.RealmPostCreateEvent event) {
+    final String name = event.getCreatedRealm().getName();
+    KeycloakModelUtils.runJobInTransaction(
+        factory,
+        new KeycloakSessionTask() {
+          @Override
+          public void run(KeycloakSession session) {
+            try {
+              setupDefaultFlow(session, session.realms().getRealmByName(name));
+            } catch (Exception e) {
+              log.warn("Error setting up default magic link flow", e);
+            }
+          }
+        });
+  }
+
+  public static void setupDefaultFlow(KeycloakSession session, RealmModel realm) {
     AuthenticationFlowModel flow = realm.getFlowByAlias(MAGIC_LINK_AUTH_FLOW_ALIAS);
     if (flow != null) {
       log.infof("%s flow exists. Skipping.", MAGIC_LINK_AUTH_FLOW_ALIAS);
@@ -239,9 +261,12 @@ public class MagicLink {
       AuthenticationFlowModel flow,
       String providerId,
       AuthenticationExecutionModel.Requirement requirement) {
-    List<AuthenticationExecutionModel> executions = realm.getAuthenticationExecutions(flow.getId());
     boolean hasExecution =
-        executions.stream().filter(e -> providerId.equals(e.getAuthenticator())).count() > 0;
+        realm
+                .getAuthenticationExecutionsStream(flow.getId())
+                .filter(e -> providerId.equals(e.getAuthenticator()))
+                .count()
+            > 0;
 
     if (!hasExecution) {
       log.infof("adding execution %s for auth flow for %s", providerId, flow.getAlias());

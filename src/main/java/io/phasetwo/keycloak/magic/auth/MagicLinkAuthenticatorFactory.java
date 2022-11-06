@@ -4,6 +4,7 @@ import com.google.auto.service.AutoService;
 import io.phasetwo.keycloak.magic.MagicLink;
 import java.util.Arrays;
 import java.util.List;
+import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.Config;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.authentication.AuthenticatorFactory;
@@ -13,7 +14,6 @@ import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.models.RealmModel;
 import org.keycloak.provider.ProviderConfigProperty;
 import org.keycloak.provider.ProviderEvent;
-import lombok.extern.jbosslog.JBossLog;
 
 @JBossLog
 @AutoService(AuthenticatorFactory.class)
@@ -95,11 +95,7 @@ public class MagicLinkAuthenticatorFactory implements AuthenticatorFactory {
     factory.register(
         (ProviderEvent ev) -> {
           if (ev instanceof RealmModel.RealmPostCreateEvent) {
-            try {
-              MagicLink.realmPostCreate((RealmModel.RealmPostCreateEvent) ev);
-            } catch (Exception e) {
-              log.warn("Error creating magic link auth flow.", e);
-            }
+            MagicLink.realmPostCreate(factory, (RealmModel.RealmPostCreateEvent) ev);
           }
         });
   }
