@@ -8,7 +8,7 @@
   <parent>
     <groupId>com.github.xgp</groupId>
     <artifactId>oss-parent</artifactId>
-    <version>0.3</version>
+    <version>0.7</version>
   </parent>
   
   <developers>
@@ -30,7 +30,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <main.java.package>io.phasetwo.keycloak.magic</main.java.package>
     <junit.version>4.13.2</junit.version>
-    <keycloak.version>20.0.0</keycloak.version>
+    <keycloak.version>20.0.1</keycloak.version>
     <lombok.version>1.18.22</lombok.version>
     <auto-service.version>1.0.1</auto-service.version>
     <ossrh.url>https://s01.oss.sonatype.org</ossrh.url>
@@ -100,27 +100,6 @@
         </configuration>
       </plugin>
       <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>buildnumber-maven-plugin</artifactId>
-        <version>1.4</version>
-        <executions>
-          <execution>
-            <id>detect-scm-revision</id>
-            <phase>validate</phase>
-            <goals>
-              <goal>create</goal>
-            </goals>
-          </execution>
-        </executions>
-        <configuration>
-          <getRevisionOnlyOnce>true</getRevisionOnlyOnce>
-          <shortRevisionLength>8</shortRevisionLength>
-          <doCheck>false</doCheck>
-          <doUpdate>false</doUpdate>
-          <timestampFormat>{0,date,yyyyMMdd}</timestampFormat>
-        </configuration>
-      </plugin>
-      <plugin>
         <groupId>com.fizzed</groupId>
         <artifactId>fizzed-versionizer-maven-plugin</artifactId>
         <version>1.0.6</version>
@@ -136,11 +115,6 @@
           <javaPackage>${main.java.package}</javaPackage>
           <versionCommit>${buildNumber}</versionCommit>
         </configuration>
-      </plugin>
-      <plugin> <!-- pretty up the code using google java standards `mvn fmt:format` -->
-        <groupId>com.spotify.fmt</groupId>
-        <artifactId>fmt-maven-plugin</artifactId>
-        <version>2.15</version>
       </plugin>
     </plugins>
   </build>
