@@ -43,11 +43,16 @@ public abstract class AbstractAdminResource {
     setupAuth();
     setupEvents();
     setupPermissions();
+    setupCors();
     init();
   }
 
   void init() {
     // override if your extending class needs additional setup;
+  }
+
+  private void setupCors() {
+    CorsResource.setupCors(session, auth);
   }
 
   private void setupAuth() {
