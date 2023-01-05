@@ -61,8 +61,9 @@ public class MagicLink {
       RealmModel realm,
       String email,
       boolean forceCreate,
-      boolean updateProfile) {
-    return getOrCreate(session, realm, email, forceCreate, updateProfile, null);
+      boolean updateProfile,
+      boolean updatePassword) {
+    return getOrCreate(session, realm, email, forceCreate, updateProfile, updatePassword, null);
   }
 
   public static UserModel getOrCreate(
@@ -71,13 +72,19 @@ public class MagicLink {
       String email,
       boolean forceCreate,
       boolean updateProfile,
+      boolean updatePassword,
       Consumer<UserModel> onNew) {
     UserModel user = KeycloakModelUtils.findUserByNameOrEmail(session, realm, email);
     if (user == null && forceCreate) {
       user = session.users().addUser(realm, email);
       user.setEnabled(true);
       user.setEmail(email);
-      if (updateProfile) user.addRequiredAction(UserModel.RequiredAction.UPDATE_PROFILE);
+      if (updatePassword) {
+        user.addRequiredAction(UserModel.RequiredAction.UPDATE_PASSWORD);
+      }
+      if (updateProfile) {
+        user.addRequiredAction(UserModel.RequiredAction.UPDATE_PROFILE);
+      }
       if (onNew != null) {
         onNew.accept(user);
       }

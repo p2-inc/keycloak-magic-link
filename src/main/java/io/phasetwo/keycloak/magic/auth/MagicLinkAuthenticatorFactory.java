@@ -84,7 +84,14 @@ public class MagicLinkAuthenticatorFactory implements AuthenticatorFactory {
     updateProfile.setHelpText("Add an UPDATE_PROFILE required action if the user was created.");
     updateProfile.setDefaultValue(false);
 
-    return Arrays.asList(createUser, updateProfile);
+    ProviderConfigProperty updatePassword = new ProviderConfigProperty();
+    updatePassword.setType(ProviderConfigProperty.BOOLEAN_TYPE);
+    updatePassword.setName(MagicLinkAuthenticator.UPDATE_PASSWORD_ACTION_CONFIG_PROPERTY);
+    updatePassword.setLabel("Update password on create");
+    updatePassword.setHelpText("Add an UPDATE_PASSWORD required action if the user was created.");
+    updatePassword.setDefaultValue(false);
+
+    return Arrays.asList(createUser, updateProfile, updatePassword);
   }
 
   @Override

@@ -24,12 +24,13 @@ Parameters:
 | Name | Required | Default | Description |
 | ----- | ----- | ----- | ----- |
 | `email` | Y | | Email address associated with the User to create the magic link for. |
-| `username` | N | | Username of the User to create the magic link for. Ignores email and forces `force_create`, `update_profile`, and `send_email` to `false` if set. |
+| `username` | N | | Username of the User to create the magic link for. Ignores email and forces `force_create`, `update_profile`, `update_password` and `send_email` to `false` if set. |
 | `client_id` | Y | | Client ID the user will be logging in to. |
 | `redirect_uri` | Y | | Redirect URI. Must be valid for the given client. |
 | `expiration_seconds` | N | 86400 (1 day) | Amount of time the magic link is valid. |
 | `force_create` | N | false | Create a user with this email address as username/email if none exists. |
 | `update_profile` | N | false | Add an UPDATE_PROFILE required action if the user was created. |
+| `update_password` | N | false | Add an UPDATE_PASSWORD required action if the user was created. |
 | `send_email` | N | false | Send the magic link email using the built in template. |
 
 Sample request (replace your access token):
@@ -38,7 +39,7 @@ curl --request POST https://keycloak.host/auth/realms/test/magic-link \
  --header "Accept: application/json" \
  --header "Content-Type: application/json" \
  --header "Authorization: Bearer <access_token>" \
- --data '{"email":"foo@foo.com","client_id":"account-console","redirect_uri":"https://keycloak.host/auth/realms/test/account/","expiration_seconds":3600,"force_create":true,"update_profile":true,"send_email":false}'
+ --data '{"email":"foo@foo.com","client_id":"account-console","redirect_uri":"https://keycloak.host/auth/realms/test/account/","expiration_seconds":3600,"force_create":true,"update_profile":true,"update_password":true,"send_email":false}'
 ```
 Sample response:
 ```

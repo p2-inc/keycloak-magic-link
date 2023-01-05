@@ -26,6 +26,9 @@ public class MagicLinkRequest {
   @JsonProperty("update_profile")
   private boolean updateProfile = false;
 
+  @JsonProperty("update_password")
+  private boolean updatePassword = false;
+
   @JsonProperty("send_email")
   private boolean sendEmail = false;
 }

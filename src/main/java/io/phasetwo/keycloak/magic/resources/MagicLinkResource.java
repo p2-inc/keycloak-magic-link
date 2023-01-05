@@ -42,12 +42,14 @@ public class MagicLinkResource extends AbstractAdminResource {
     String emailOrUsername = rep.getEmail();
     boolean forceCreate = rep.isForceCreate();
     boolean updateProfile = rep.isUpdateProfile();
+    boolean updatePassword = rep.isUpdatePassword();
     boolean sendEmail = rep.isSendEmail();
 
     if (rep.getUsername() != null) {
       emailOrUsername = rep.getUsername();
       forceCreate = false;
       updateProfile = false;
+      updatePassword = true;
       sendEmail = false;
     }
 
@@ -58,6 +60,7 @@ public class MagicLinkResource extends AbstractAdminResource {
             emailOrUsername,
             forceCreate,
             updateProfile,
+            updatePassword,
             MagicLink.registerEvent(event));
     if (user == null)
       throw new NotFoundException(
