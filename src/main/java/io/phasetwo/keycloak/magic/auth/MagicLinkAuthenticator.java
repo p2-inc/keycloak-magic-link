@@ -34,6 +34,7 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm implements Auth
 
   static final String CREATE_NONEXISTENT_USER_CONFIG_PROPERTY = "ext-magic-create-nonexistent-user";
   static final String UPDATE_PROFILE_ACTION_CONFIG_PROPERTY = "ext-magic-update-profile-action";
+  static final String UPDATE_PASSWORD_ACTION_CONFIG_PROPERTY = "ext-magic-update-password-action";
 
   @Override
   public void authenticate(AuthenticationFlowContext context) {
@@ -100,6 +101,7 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm implements Auth
             email,
             isForceCreate(context, false),
             isUpdateProfile(context, false),
+            isUpdatePassword(context, false),
             MagicLink.registerEvent(event));
     // check for no/invalid email address
     if (user == null || trimToNull(user.getEmail()) == null || !isValidEmail(user.getEmail())) {
@@ -131,6 +133,10 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm implements Auth
 
   private boolean isUpdateProfile(AuthenticationFlowContext context, boolean defaultValue) {
     return is(context, UPDATE_PROFILE_ACTION_CONFIG_PROPERTY, defaultValue);
+  }
+
+  private boolean isUpdatePassword(AuthenticationFlowContext context, boolean defaultValue) {
+    return is(context, UPDATE_PASSWORD_ACTION_CONFIG_PROPERTY, defaultValue);
   }
 
   private boolean is(AuthenticationFlowContext context, String propName, boolean defaultValue) {
