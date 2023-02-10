@@ -31,4 +31,7 @@ public class MagicLinkRequest {
 
   @JsonProperty("send_email")
   private boolean sendEmail = false;
+
+  @JsonProperty("scope")
+  private String scopes;
 }

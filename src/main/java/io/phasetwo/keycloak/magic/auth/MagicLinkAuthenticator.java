@@ -7,6 +7,7 @@ import io.phasetwo.keycloak.magic.auth.token.MagicLinkActionToken;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
+import java.util.Set;
 import javax.mail.internet.AddressException;
 import javax.mail.internet.InternetAddress;
 import javax.ws.rs.core.MultivaluedMap;
@@ -26,6 +27,7 @@ import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.IdentityProviderModel;
 import org.keycloak.models.UserModel;
+import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.services.managers.AuthenticationManager;
 import org.keycloak.services.messages.Messages;
 
@@ -90,6 +92,7 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm implements Auth
     }
     String clientId = context.getSession().getContext().getClient().getClientId();
     String redirectUri = context.getAuthenticationSession().getRedirectUri();
+    String scope = context.getAuthenticationSession().getClientNote(OIDCLoginProtocol.SCOPE_PARAM);
     log.debugf("Attempting MagicLinkAuthenticator for %s, %s, %s", email, clientId, redirectUri);
 
     EventBuilder event = context.newEvent();
@@ -113,7 +116,7 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm implements Auth
     }
 
     MagicLinkActionToken token =
-        MagicLink.createActionToken(user, clientId, redirectUri, OptionalInt.empty());
+        MagicLink.createActionToken(user, clientId, redirectUri, scope, OptionalInt.empty());
     String link = MagicLink.linkFromActionToken(context.getSession(), context.getRealm(), token);
     boolean sent = MagicLink.sendMagicLinkEmail(context.getSession(), user, link);
     log.debugf("sent email to %s? %b. Link? %s", user.getEmail(), sent, link);
