@@ -33,5 +33,5 @@ public class MagicLinkRequest {
   private boolean sendEmail = false;
 
   @JsonProperty("scope")
-  private String scopes;
+  private String scope = null;
 }

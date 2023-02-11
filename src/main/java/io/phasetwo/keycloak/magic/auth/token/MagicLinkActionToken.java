@@ -37,11 +37,11 @@ public class MagicLinkActionToken extends DefaultActionToken {
     this.redirectUri = redirectUri;
   }
 
-  public String getScopes() {
+  public String getScope() {
     return this.scopes;
   }
 
-  public void setScopes(String value) {
+  public void setScope(String value) {
     this.scopes = value;
   }
 }

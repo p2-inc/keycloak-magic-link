@@ -5,7 +5,6 @@ import io.phasetwo.keycloak.magic.auth.token.MagicLinkActionToken;
 import io.phasetwo.keycloak.magic.representation.MagicLinkRequest;
 import io.phasetwo.keycloak.magic.representation.MagicLinkResponse;
 import java.util.OptionalInt;
-import javax.validation.constraints.*;
 import javax.ws.rs.*;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.ForbiddenException;
@@ -71,8 +70,8 @@ public class MagicLinkResource extends AbstractAdminResource {
             user,
             rep.getClientId(),
             rep.getRedirectUri(),
-            rep.getScopes(),
-            OptionalInt.of(rep.getExpirationSeconds()));
+            OptionalInt.of(rep.getExpirationSeconds()),
+            rep.getScope());
     String link = MagicLink.linkFromActionToken(session, realm, token);
     boolean sent = false;
     if (sendEmail) {

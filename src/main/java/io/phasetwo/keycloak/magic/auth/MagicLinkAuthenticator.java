@@ -7,7 +7,6 @@ import io.phasetwo.keycloak.magic.auth.token.MagicLinkActionToken;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
-import java.util.Set;
 import javax.mail.internet.AddressException;
 import javax.mail.internet.InternetAddress;
 import javax.ws.rs.core.MultivaluedMap;
@@ -116,7 +115,7 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm implements Auth
     }
 
     MagicLinkActionToken token =
-        MagicLink.createActionToken(user, clientId, redirectUri, scope, OptionalInt.empty());
+        MagicLink.createActionToken(user, clientId, redirectUri, OptionalInt.empty(), scope);
     String link = MagicLink.linkFromActionToken(context.getSession(), context.getRealm(), token);
     boolean sent = MagicLink.sendMagicLinkEmail(context.getSession(), user, link);
     log.debugf("sent email to %s? %b. Link? %s", user.getEmail(), sent, link);
