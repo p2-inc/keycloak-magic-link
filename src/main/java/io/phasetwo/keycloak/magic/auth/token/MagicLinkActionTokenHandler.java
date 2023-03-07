@@ -2,6 +2,7 @@ package io.phasetwo.keycloak.magic.auth.token;
 
 import javax.ws.rs.core.Response;
 import lombok.extern.jbosslog.JBossLog;
+import org.keycloak.OAuth2Constants;
 import org.keycloak.authentication.actiontoken.AbstractActionTokenHandler;
 import org.keycloak.authentication.actiontoken.ActionTokenContext;
 import org.keycloak.events.*;
@@ -73,6 +74,11 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
           AuthenticationManager.SET_REDIRECT_URI_AFTER_REQUIRED_ACTIONS, "true");
       authSession.setRedirectUri(redirect);
       authSession.setClientNote(OIDCLoginProtocol.REDIRECT_URI_PARAM, redirectUri);
+    }
+
+    if (token.getScope() != null) {
+      authSession.setClientNote(OAuth2Constants.SCOPE, token.getScope());
+      AuthenticationManager.setClientScopesInSession(authSession);
     }
 
     user.setEmailVerified(true);
