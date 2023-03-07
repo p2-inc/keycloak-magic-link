@@ -14,14 +14,14 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.models.ClientModel;
-import org.keycloak.models.RealmModel;
+import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.UserModel;
 
 @JBossLog
 public class MagicLinkResource extends AbstractAdminResource {
 
-  public MagicLinkResource(RealmModel realm) {
-    super(realm);
+  public MagicLinkResource(KeycloakSession session) {
+    super(session);
   }
 
   @POST

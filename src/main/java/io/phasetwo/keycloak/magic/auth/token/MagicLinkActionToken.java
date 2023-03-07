@@ -17,7 +17,11 @@ public class MagicLinkActionToken extends DefaultActionToken {
   private String scopes;
 
   public MagicLinkActionToken(
-      String userId, int absoluteExpirationInSecs, String clientId, String redirectUri, String scope) {
+      String userId,
+      int absoluteExpirationInSecs,
+      String clientId,
+      String redirectUri,
+      String scope) {
     super(userId, TOKEN_TYPE, absoluteExpirationInSecs, null);
     this.redirectUri = redirectUri;
     this.issuedFor = clientId;

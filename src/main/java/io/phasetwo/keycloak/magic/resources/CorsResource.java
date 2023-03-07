@@ -1,11 +1,10 @@
 package io.phasetwo.keycloak.magic.resources;
 
 import javax.ws.rs.*;
-import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
 import lombok.extern.jbosslog.JBossLog;
-import org.jboss.resteasy.spi.HttpRequest;
-import org.jboss.resteasy.spi.HttpResponse;
+import org.keycloak.http.HttpRequest;
+import org.keycloak.http.HttpResponse;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.services.resources.Cors;
 import org.keycloak.services.resources.admin.AdminAuth;
@@ -33,22 +32,13 @@ public class CorsResource {
   }
 
   public static void setupCors(KeycloakSession session, AdminAuth auth) {
-    HttpRequest request = session.getContext().getContextObject(HttpRequest.class);
-    HttpResponse response = session.getContext().getContextObject(HttpResponse.class);
-    if (hasCors(response)) return;
+    HttpRequest request = session.getContext().getHttpRequest();
+    HttpResponse response = session.getContext().getHttpResponse();
     Cors.add(request)
         .allowedOrigins(auth.getToken())
         .allowedMethods(METHODS)
         .exposedHeaders("Location")
         .auth()
         .build(response);
-  }
-
-  public static boolean hasCors(HttpResponse response) {
-    MultivaluedMap<String, Object> headers = response.getOutputHeaders();
-    if (headers == null) return false;
-    return (headers.get("Access-Control-Allow-Credentials") != null
-        || headers.get("Access-Control-Allow-Origin") != null
-        || headers.get("Access-Control-Expose-Headers") != null);
   }
 }

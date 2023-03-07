@@ -98,12 +98,13 @@ public class MagicLink {
     int validityInSecs = validity.orElse(60 * 60 * 24); // 1 day
     int absoluteExpirationInSecs = Time.currentTime() + validityInSecs;
     MagicLinkActionToken token =
-        new MagicLinkActionToken(user.getId(), absoluteExpirationInSecs, clientId, redirectUri, scope);
+        new MagicLinkActionToken(
+            user.getId(), absoluteExpirationInSecs, clientId, redirectUri, scope);
     return token;
   }
 
   public static MagicLinkActionToken createActionToken(
-          UserModel user, String clientId, String redirectUri, OptionalInt validity) {
+      UserModel user, String clientId, String redirectUri, OptionalInt validity) {
     return createActionToken(user, clientId, redirectUri, validity, null);
   }
 
