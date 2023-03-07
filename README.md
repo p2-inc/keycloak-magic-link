@@ -82,5 +82,5 @@ User contributed POC using Jupyter: https://github.com/tstec-polypoly/explore-ke
 
 ---
 
-All documentation, source code and other files in this repository are Copyright 2022 Phase Two, Inc.
+All documentation, source code and other files in this repository are Copyright 2023 Phase Two, Inc.
 
