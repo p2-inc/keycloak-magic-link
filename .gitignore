@@ -7,3 +7,6 @@ dependency-reduced-pom.xml
 .classpath
 NOTES
 .idea/
+.factorypath
+.project
+.settings/
