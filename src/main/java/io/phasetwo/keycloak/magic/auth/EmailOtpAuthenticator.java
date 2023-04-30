@@ -1,6 +1,5 @@
 package io.phasetwo.keycloak.magic.auth;
 
-
 import com.google.common.collect.ImmutableList;
 import io.phasetwo.keycloak.magic.MagicLink;
 import java.util.concurrent.ThreadLocalRandom;
@@ -22,7 +21,7 @@ import org.keycloak.services.messages.Messages;
 public class EmailOtpAuthenticator implements Authenticator {
 
   public static final String USER_AUTH_NOTE_OTP_CODE = "user-auth-note-otp-code";
-  public static final String FORM_PARAM_OTP_CODE = "otpCode";
+  public static final String FORM_PARAM_OTP_CODE = "otp";
 
   public void authenticate(AuthenticationFlowContext context) {
     challenge(context, null);
@@ -40,9 +39,9 @@ public class EmailOtpAuthenticator implements Authenticator {
     context.challenge(response);
   }
 
-  public void sendOtp(AuthenticationFlowContext context) {
+  private void sendOtp(AuthenticationFlowContext context) {
     if (context.getAuthenticationSession().getAuthNote(USER_AUTH_NOTE_OTP_CODE) != null) {
-      log.infof(
+      log.debugf(
           "Skipping sending OTP email to %s because auth note isn't empty",
           context.getUser().getEmail());
       return;
@@ -50,13 +49,13 @@ public class EmailOtpAuthenticator implements Authenticator {
     String code = String.format("%06d", ThreadLocalRandom.current().nextInt(999999));
     boolean sent = MagicLink.sendOtpEmail(context.getSession(), context.getUser(), code);
     if (sent) {
-      log.infof("Sent OTP code %s to email %s", code, context.getUser().getEmail());
+      log.debugf("Sent OTP code %s to email %s", code, context.getUser().getEmail());
       context.getAuthenticationSession().setAuthNote(USER_AUTH_NOTE_OTP_CODE, code);
     }
   }
 
   public void action(AuthenticationFlowContext context) {
-    log.info("EmailOtpAuthenticator.action");
+    log.debug("EmailOtpAuthenticator.action");
 
     MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
     if (formData.containsKey("resend")) {
@@ -64,13 +63,8 @@ public class EmailOtpAuthenticator implements Authenticator {
       challenge(context, null);
       return;
     }
-    if (formData.containsKey("cancel")) {
-      context.getAuthenticationSession().removeAuthNote(USER_AUTH_NOTE_OTP_CODE);
-      return;
-    }
-
     String code = formData.getFirst(FORM_PARAM_OTP_CODE);
-    log.infof("Got %s for OTP code in form", code);
+    log.debugf("Got %s for OTP code in form", code);
     try {
       if (code != null
           && code.equals(context.getAuthenticationSession().getAuthNote(USER_AUTH_NOTE_OTP_CODE))) {

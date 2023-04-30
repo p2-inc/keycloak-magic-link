@@ -34,12 +34,11 @@
             </div>
           </div>
 
-        <div id="kc-form-buttons" class="${properties.kcFormButtonsClass!}">
-          <input class="${properties.kcButtonClass!} ${properties.kcButtonPrimaryClass!} ${properties.kcButtonBlockClass!} ${properties.kcButtonLargeClass!}" name="submit" id="kc-submit" type="submit" value="${msg("doSubmit")}" />
-          <input class="${properties.kcButtonClass!} ${properties.kcButtonPrimaryClass!} ${properties.kcButtonBlockClass!} ${properties.kcButtonLargeClass!}" name="resend" id="kc-resend" type="submit" value="${msg("doResend")}" />
-          <input class="${properties.kcButtonClass!} ${properties.kcButtonPrimaryClass!} ${properties.kcButtonBlockClass!} ${properties.kcButtonLargeClass!}" name="cancel" id="kc-cancel" type="submit" value="${msg("doCancel")}" />
+          <div id="kc-form-buttons" class="${properties.kcFormButtonsClass!}">
+            <input class="${properties.kcButtonClass!} ${properties.kcButtonPrimaryClass!} ${properties.kcButtonLargeClass!}" name="submit" id="kc-submit" type="submit" value="${msg("doSubmit")}" />
+            <input class="${properties.kcButtonClass!} ${properties.kcButtonPrimaryClass!} ${properties.kcButtonLargeClass!}" name="resend" id="kc-resend" type="submit" value="${msg("doResend")}" />
+          </div>
         </div>
-
       </form>
     </#if>
 </@layout.registrationLayout>
