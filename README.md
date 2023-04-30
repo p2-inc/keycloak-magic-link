@@ -4,20 +4,26 @@
 
 Magic link implementation. Inspired by the [experiment](https://github.com/stianst/keycloak-experimental/tree/main/magic-link) by [@stianst](https://github.com/stianst).
 
+There is also a simple Email OTP authenticator implementation here.
 This extension is used in the [Phase Two](https://phasetwo.io) cloud offering, and is released here as part of its commitment to making its [core extensions](https://phasetwo.io/docs/introduction/open-source) open source. Please consult the [license](COPYING) for information regarding use.
 
 ## Quick start
 
 The easiest way to get started is our [Docker image](https://quay.io/repository/phasetwo/phasetwo-keycloak?tab=tags). Documentation and examples for using it are in the [phasetwo-containers](https://github.com/p2-inc/phasetwo-containers) repo. The most recent version of this extension is included.
 
-## Overview
+## Magic link
 
 This implementation differs from the original in that it creates an ActionToken that is sent as the link. This is convenient, as it does not require the user to click on the link from the same device. A common use case we heard was users entering their email address on the desktop, but then clicking on the link on their mobile, so we wanted to solve for that case.
 
-This contains two pathways to get an Magic Link:
+This contains two pathways to get a Magic Link:
 
 1. An Authenticator that can run as a form in your login flow. This takes an email, and can optionally create a user if none exists. This implementation sends the email using a theme-resources template, which you can override. Installation can be achieved by duplicating the Browser flow, and replacing the normal Username/Password/OTP forms with the Magic Link execution type ([@tstec-polypoly](https://github.com/tstec-polypoly) provides a great step-by-step guide for setting it up https://github.com/p2-inc/keycloak-magic-link/issues/6#issuecomment-1230675741):
-![Install Magic Link Authenticator in Browser Flow](docs/assets/magic-authenticator.png)
+![Install Magic Link Authenticator in Browser Flow](docs/assets/magic-link-authenticator.png)
+Note that you aren't required to use a *Username form* with this, as it extends `UsernamePasswordForm` and renders the username form page for you. You can also use this Authenticator in conjunction with others that set the attempted username as an Auth Note. 
+
+The authenticator can be configured to create a user with the given email address as username/email if none exists. It is also possible to force `UPDATE_PROFILE` and `UPDATE_PASSWORD` required actions when the user is created by this Authenticator. 
+![Configure Magic Link Authenticator with options](docs/assets/magic-link-config.png)
+
 2. A Resource you can call with `manage-users` role, which allows you to specify the email, clientId, redirectUri, tokenExpiry and optionally if the email is sent, or the link is just returned to the caller.
 
 Parameters:
@@ -49,6 +55,11 @@ Sample response:
   "sent": false
 }
 ```
+
+## Email OTP
+
+There is a simple authenticator to email a 6-digit OTP to the users email address. This implementation sends the email using a theme-resources template, which you can override. It is recommended to use this in an Authentication flow following the *Username form*. An example flow looks like this:
+![Install Email OTP Authenticator in Browser Flow](docs/assets/email-otp-authenticator.png)
 
 ## Installation
 
