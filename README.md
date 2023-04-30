@@ -18,8 +18,10 @@ This implementation differs from the original in that it creates an ActionToken 
 This contains two pathways to get a Magic Link:
 
 1. An Authenticator that can run as a form in your login flow. This takes an email, and can optionally create a user if none exists. This implementation sends the email using a theme-resources template, which you can override. Installation can be achieved by duplicating the Browser flow, and replacing the normal Username/Password/OTP forms with the Magic Link execution type ([@tstec-polypoly](https://github.com/tstec-polypoly) provides a great step-by-step guide for setting it up https://github.com/p2-inc/keycloak-magic-link/issues/6#issuecomment-1230675741). Note that you aren't required to use a *Username form* with this, as it extends `UsernamePasswordForm` and renders the username form page for you:
+
 ![Install Magic Link Authenticator in Browser Flow](docs/assets/magic-link-authenticator.png)
 The authenticator can be configured to create a user with the given email address as username/email if none exists. It is also possible to force `UPDATE_PROFILE` and `UPDATE_PASSWORD` required actions when the user is created by this Authenticator:
+
 ![Configure Magic Link Authenticator with options](docs/assets/magic-link-config.png)
 
 2. A Resource you can call with `manage-users` role, which allows you to specify the email, clientId, redirectUri, tokenExpiry and optionally if the email is sent, or the link is just returned to the caller.
