@@ -157,8 +157,7 @@ public class MagicLink {
     try {
       EmailTemplateProvider emailTemplateProvider =
           session.getProvider(EmailTemplateProvider.class);
-      String realmName =
-          Strings.isNullOrEmpty(realm.getDisplayName()) ? realm.getName() : realm.getDisplayName();
+      String realmName = getRealmName(realm);
       List<Object> subjAttr = ImmutableList.of(realmName);
       Map<String, Object> bodyAttr = Maps.newHashMap();
       bodyAttr.put("realmName", realmName);
@@ -170,9 +169,34 @@ public class MagicLink {
           .send("magicLinkSubject", subjAttr, "magic-link-email.ftl", bodyAttr);
       return true;
     } catch (EmailException e) {
-      log.error("Failed to send welcome mail", e);
+      log.error("Failed to send magic link email", e);
     }
     return false;
+  }
+
+  public static boolean sendOtpEmail(KeycloakSession session, UserModel user, String code) {
+    RealmModel realm = session.getContext().getRealm();
+    try {
+      EmailTemplateProvider emailTemplateProvider =
+          session.getProvider(EmailTemplateProvider.class);
+      String realmName = getRealmName(realm);
+      List<Object> subjAttr = ImmutableList.of(realmName);
+      Map<String, Object> bodyAttr = Maps.newHashMap();
+      bodyAttr.put("code", code);
+      emailTemplateProvider
+          .setRealm(realm)
+          .setUser(user)
+          .setAttribute("realmName", realmName)
+          .send("otpSubject", subjAttr, "otp-email.ftl", bodyAttr);
+      return true;
+    } catch (EmailException e) {
+      log.error("Failed to send otp mail", e);
+    }
+    return false;
+  }
+
+  public static String getRealmName(RealmModel realm) {
+    return Strings.isNullOrEmpty(realm.getDisplayName()) ? realm.getName() : realm.getDisplayName();
   }
 
   public static final String MAGIC_LINK_AUTH_FLOW_ALIAS = "magic link";

@@ -1,4 +1,4 @@
 <#import "template.ftl" as layout>
 <@layout.emailLayout>
-${kcSanitize(msg("magicLinkBodyHtml", realmName, magicLink))?no_esc}
+${kcSanitize(msg("otpBodyHtml", realmName, code))?no_esc}
 </@layout.emailLayout>
