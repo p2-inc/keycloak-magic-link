@@ -43,6 +43,9 @@ Parameters:
 | `update_profile` | N | false | Add an UPDATE_PROFILE required action if the user was created. |
 | `update_password` | N | false | Add an UPDATE_PASSWORD required action if the user was created. |
 | `send_email` | N | false | Send the magic link email using the built in template. |
+| `scope` | N | | OIDC `scope` variable. |
+| `nonce` | N | | OIDC `nonce` variable. |
+| `state` | N | | OIDC `state` variable. |
 
 Sample request (replace your access token):
 ```

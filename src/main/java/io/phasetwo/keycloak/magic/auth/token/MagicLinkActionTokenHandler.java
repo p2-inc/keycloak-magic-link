@@ -74,6 +74,12 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
           AuthenticationManager.SET_REDIRECT_URI_AFTER_REQUIRED_ACTIONS, "true");
       authSession.setRedirectUri(redirect);
       authSession.setClientNote(OIDCLoginProtocol.REDIRECT_URI_PARAM, redirectUri);
+      if (token.getState() != null) {
+        authSession.setClientNote(OIDCLoginProtocol.STATE_PARAM, token.getState());
+      }
+      if (token.getNonce() != null) {
+        authSession.setClientNote(OIDCLoginProtocol.NONCE_PARAM, token.getNonce());
+      }
     }
 
     if (token.getScope() != null) {
