@@ -74,11 +74,24 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
           AuthenticationManager.SET_REDIRECT_URI_AFTER_REQUIRED_ACTIONS, "true");
       authSession.setRedirectUri(redirect);
       authSession.setClientNote(OIDCLoginProtocol.REDIRECT_URI_PARAM, redirectUri);
+      if (token.getState() != null) {
+        authSession.setClientNote(OIDCLoginProtocol.STATE_PARAM, token.getState());
+      }
+      if (token.getNonce() != null) {
+        authSession.setClientNote(OIDCLoginProtocol.NONCE_PARAM, token.getNonce());
+      }
     }
 
     if (token.getScope() != null) {
       authSession.setClientNote(OAuth2Constants.SCOPE, token.getScope());
       AuthenticationManager.setClientScopesInSession(authSession);
+    }
+
+    if (token.getRememberMe() != null && token.getRememberMe()) {
+      authSession.setAuthNote(Details.REMEMBER_ME, "true");
+      tokenContext.getEvent().detail(Details.REMEMBER_ME, "true");
+    } else {
+      authSession.removeAuthNote(Details.REMEMBER_ME);
     }
 
     user.setEmailVerified(true);

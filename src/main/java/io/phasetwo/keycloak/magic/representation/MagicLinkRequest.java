@@ -34,4 +34,13 @@ public class MagicLinkRequest {
 
   @JsonProperty("scope")
   private String scope = null;
+
+  @JsonProperty("nonce")
+  private String nonce = null;
+
+  @JsonProperty("state")
+  private String state = null;
+
+  @JsonProperty("remember_me")
+  private Boolean rememberMe = false;
 }

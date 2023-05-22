@@ -9,6 +9,9 @@ public class MagicLinkActionToken extends DefaultActionToken {
 
   private static final String JSON_FIELD_REDIRECT_URI = "rdu";
   private static final String JSON_FIELD_SCOPE = "scope";
+  private static final String JSON_FIELD_NONCE = "nonce";
+  private static final String JSON_FIELD_STATE = "state";
+  private static final String JSON_FIELD_REMEMBER_ME = "rme";
 
   @JsonProperty(value = JSON_FIELD_REDIRECT_URI)
   private String redirectUri;
@@ -16,16 +19,54 @@ public class MagicLinkActionToken extends DefaultActionToken {
   @JsonProperty(value = JSON_FIELD_SCOPE)
   private String scopes;
 
+  @JsonProperty(value = JSON_FIELD_NONCE)
+  private String nonce;
+
+  @JsonProperty(value = JSON_FIELD_STATE)
+  private String state;
+
+  @JsonProperty(value = JSON_FIELD_REMEMBER_ME)
+  private Boolean rememberMe = false;
+
+  public MagicLinkActionToken(
+      String userId, int absoluteExpirationInSecs, String clientId, String redirectUri) {
+    super(userId, TOKEN_TYPE, absoluteExpirationInSecs, null);
+    this.redirectUri = redirectUri;
+    this.issuedFor = clientId;
+  }
+
   public MagicLinkActionToken(
       String userId,
       int absoluteExpirationInSecs,
       String clientId,
       String redirectUri,
-      String scope) {
+      String scope,
+      String nonce,
+      String state) {
     super(userId, TOKEN_TYPE, absoluteExpirationInSecs, null);
     this.redirectUri = redirectUri;
     this.issuedFor = clientId;
     this.scopes = scope;
+    this.nonce = nonce;
+    this.state = state;
+  }
+
+  public MagicLinkActionToken(
+      String userId,
+      int absoluteExpirationInSecs,
+      String clientId,
+      String redirectUri,
+      String scope,
+      String nonce,
+      String state,
+      Boolean rememberMe) {
+    super(userId, TOKEN_TYPE, absoluteExpirationInSecs, null);
+    this.redirectUri = redirectUri;
+    this.issuedFor = clientId;
+    this.scopes = scope;
+    this.nonce = nonce;
+    this.state = state;
+    this.rememberMe = rememberMe;
   }
 
   private MagicLinkActionToken() {
@@ -47,5 +88,29 @@ public class MagicLinkActionToken extends DefaultActionToken {
 
   public void setScope(String value) {
     this.scopes = value;
+  }
+
+  public String getNonce() {
+    return this.nonce;
+  }
+
+  public void setNonce(String value) {
+    this.nonce = value;
+  }
+
+  public String getState() {
+    return this.state;
+  }
+
+  public void setState(String value) {
+    this.state = value;
+  }
+
+  public Boolean getRememberMe() {
+    return this.rememberMe;
+  }
+
+  public void setRememberMe(Boolean value) {
+    this.rememberMe = value;
   }
 }

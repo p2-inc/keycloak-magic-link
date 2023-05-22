@@ -43,6 +43,10 @@ Parameters:
 | `update_profile` | N | false | Add an UPDATE_PROFILE required action if the user was created. |
 | `update_password` | N | false | Add an UPDATE_PASSWORD required action if the user was created. |
 | `send_email` | N | false | Send the magic link email using the built in template. |
+| `scope` | N | | OIDC `scope` variable. |
+| `nonce` | N | | OIDC `nonce` variable. |
+| `state` | N | | OIDC `state` variable. |
+| `remember_me` | N | false | If the user is treated as if they had checked "Remember Me" on login. Requires that it is enabled in the Realm. |
 
 Sample request (replace your access token):
 ```

@@ -31,11 +31,13 @@ import org.keycloak.models.KeycloakSessionTask;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.utils.KeycloakModelUtils;
+import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.utils.RedirectUtils;
 import org.keycloak.provider.ProviderFactory;
 import org.keycloak.services.Urls;
 import org.keycloak.services.resources.LoginActionsService;
 import org.keycloak.services.resources.RealmsResource;
+import org.keycloak.sessions.AuthenticationSessionModel;
 
 /** common utilities for Magic Link authentication, used by the authenticator and resource */
 @JBossLog
@@ -93,19 +95,50 @@ public class MagicLink {
   }
 
   public static MagicLinkActionToken createActionToken(
-      UserModel user, String clientId, String redirectUri, OptionalInt validity, String scope) {
+      UserModel user,
+      String clientId,
+      OptionalInt validity,
+      Boolean rememberMe,
+      AuthenticationSessionModel authSession) {
+    String redirectUri = authSession.getRedirectUri();
+    String scope = authSession.getClientNote(OIDCLoginProtocol.SCOPE_PARAM);
+    String state = authSession.getClientNote(OIDCLoginProtocol.STATE_PARAM);
+    String nonce = authSession.getClientNote(OIDCLoginProtocol.NONCE_PARAM);
+    log.debugf(
+        "Attempting MagicLinkAuthenticator for %s, %s, %s", user.getEmail(), clientId, redirectUri);
+    log.debugf("MagicLinkAuthenticator extra vars %s %s %s %b", scope, state, nonce, rememberMe);
+    return createActionToken(
+        user, clientId, redirectUri, validity, scope, nonce, state, rememberMe);
+  }
+
+  public static MagicLinkActionToken createActionToken(
+      UserModel user,
+      String clientId,
+      String redirectUri,
+      OptionalInt validity,
+      String scope,
+      String nonce,
+      String state,
+      Boolean rememberMe) {
     // build the action token
     int validityInSecs = validity.orElse(60 * 60 * 24); // 1 day
     int absoluteExpirationInSecs = Time.currentTime() + validityInSecs;
     MagicLinkActionToken token =
         new MagicLinkActionToken(
-            user.getId(), absoluteExpirationInSecs, clientId, redirectUri, scope);
+            user.getId(),
+            absoluteExpirationInSecs,
+            clientId,
+            redirectUri,
+            scope,
+            nonce,
+            state,
+            rememberMe);
     return token;
   }
 
   public static MagicLinkActionToken createActionToken(
       UserModel user, String clientId, String redirectUri, OptionalInt validity) {
-    return createActionToken(user, clientId, redirectUri, validity, null);
+    return createActionToken(user, clientId, redirectUri, validity, null, null, null, false);
   }
 
   public static String linkFromActionToken(
@@ -119,7 +152,7 @@ public class MagicLink {
     // we
     // need to temporarily reset it
     RealmModel r = session.getContext().getRealm();
-    log.infof("realm %s session.context.realm %s", realm.getName(), r.getName());
+    log.debugf("realm %s session.context.realm %s", realm.getName(), r.getName());
     // Because of the risk, throw an exception for master realm
     if (Config.getAdminRealm().equals(realm.getName())) {
       throw new IllegalStateException(
