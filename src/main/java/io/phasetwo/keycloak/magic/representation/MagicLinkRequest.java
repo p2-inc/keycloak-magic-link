@@ -40,4 +40,7 @@ public class MagicLinkRequest {
 
   @JsonProperty("state")
   private String state = null;
+
+  @JsonProperty("remember_me")
+  private Boolean rememberMe = false;
 }

@@ -87,6 +87,13 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
       AuthenticationManager.setClientScopesInSession(authSession);
     }
 
+    if (token.getRememberMe() != null && token.getRememberMe()) {
+      authSession.setAuthNote(Details.REMEMBER_ME, "true");
+      tokenContext.getEvent().detail(Details.REMEMBER_ME, "true");
+    } else {
+      authSession.removeAuthNote(Details.REMEMBER_ME);
+    }
+
     user.setEmailVerified(true);
 
     String nextAction =

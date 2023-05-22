@@ -98,6 +98,7 @@ public class MagicLink {
       UserModel user,
       String clientId,
       OptionalInt validity,
+      Boolean rememberMe,
       AuthenticationSessionModel authSession) {
     String redirectUri = authSession.getRedirectUri();
     String scope = authSession.getClientNote(OIDCLoginProtocol.SCOPE_PARAM);
@@ -105,7 +106,7 @@ public class MagicLink {
     String nonce = authSession.getClientNote(OIDCLoginProtocol.NONCE_PARAM);
     log.debugf(
         "Attempting MagicLinkAuthenticator for %s, %s, %s", user.getEmail(), clientId, redirectUri);
-    return createActionToken(user, clientId, redirectUri, validity, scope, nonce, state);
+    return createActionToken(user, clientId, redirectUri, validity, scope, nonce, state, rememberMe);
   }
 
   public static MagicLinkActionToken createActionToken(
@@ -115,19 +116,20 @@ public class MagicLink {
       OptionalInt validity,
       String scope,
       String nonce,
-      String state) {
+      String state,
+      Boolean rememberMe) {
     // build the action token
     int validityInSecs = validity.orElse(60 * 60 * 24); // 1 day
     int absoluteExpirationInSecs = Time.currentTime() + validityInSecs;
     MagicLinkActionToken token =
         new MagicLinkActionToken(
-            user.getId(), absoluteExpirationInSecs, clientId, redirectUri, scope, nonce, state);
+            user.getId(), absoluteExpirationInSecs, clientId, redirectUri, scope, nonce, state, rememberMe);
     return token;
   }
 
   public static MagicLinkActionToken createActionToken(
       UserModel user, String clientId, String redirectUri, OptionalInt validity) {
-    return createActionToken(user, clientId, redirectUri, validity, null, null, null);
+    return createActionToken(user, clientId, redirectUri, validity, null, null, null, false);
   }
 
   public static String linkFromActionToken(
