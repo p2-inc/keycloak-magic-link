@@ -10,7 +10,6 @@ import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.events.Errors;
 import org.keycloak.forms.login.LoginFormsProvider;
-import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
@@ -69,12 +68,7 @@ public class EmailOtpAuthenticator implements Authenticator {
       if (code != null
           && code.equals(context.getAuthenticationSession().getAuthNote(USER_AUTH_NOTE_OTP_CODE))) {
         context.getAuthenticationSession().removeAuthNote(USER_AUTH_NOTE_OTP_CODE);
-        if (context.getExecution().getRequirement()
-            == AuthenticationExecutionModel.Requirement.REQUIRED) {
-          context.success();
-        } else {
-          context.attempted();
-        }
+        context.success();
         return;
       }
     } catch (Exception e) {

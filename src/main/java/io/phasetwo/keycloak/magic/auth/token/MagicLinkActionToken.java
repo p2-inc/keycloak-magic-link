@@ -29,10 +29,7 @@ public class MagicLinkActionToken extends DefaultActionToken {
   private Boolean rememberMe = false;
 
   public MagicLinkActionToken(
-      String userId,
-      int absoluteExpirationInSecs,
-      String clientId,
-      String redirectUri) {
+      String userId, int absoluteExpirationInSecs, String clientId, String redirectUri) {
     super(userId, TOKEN_TYPE, absoluteExpirationInSecs, null);
     this.redirectUri = redirectUri;
     this.issuedFor = clientId;

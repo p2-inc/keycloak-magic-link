@@ -106,7 +106,9 @@ public class MagicLink {
     String nonce = authSession.getClientNote(OIDCLoginProtocol.NONCE_PARAM);
     log.debugf(
         "Attempting MagicLinkAuthenticator for %s, %s, %s", user.getEmail(), clientId, redirectUri);
-    return createActionToken(user, clientId, redirectUri, validity, scope, nonce, state, rememberMe);
+    log.debugf("MagicLinkAuthenticator extra vars %s %s %s %b", scope, state, nonce, rememberMe);
+    return createActionToken(
+        user, clientId, redirectUri, validity, scope, nonce, state, rememberMe);
   }
 
   public static MagicLinkActionToken createActionToken(
@@ -123,7 +125,14 @@ public class MagicLink {
     int absoluteExpirationInSecs = Time.currentTime() + validityInSecs;
     MagicLinkActionToken token =
         new MagicLinkActionToken(
-            user.getId(), absoluteExpirationInSecs, clientId, redirectUri, scope, nonce, state, rememberMe);
+            user.getId(),
+            absoluteExpirationInSecs,
+            clientId,
+            redirectUri,
+            scope,
+            nonce,
+            state,
+            rememberMe);
     return token;
   }
 
@@ -143,7 +152,7 @@ public class MagicLink {
     // we
     // need to temporarily reset it
     RealmModel r = session.getContext().getRealm();
-    log.infof("realm %s session.context.realm %s", realm.getName(), r.getName());
+    log.debugf("realm %s session.context.realm %s", realm.getName(), r.getName());
     // Because of the risk, throw an exception for master realm
     if (Config.getAdminRealm().equals(realm.getName())) {
       throw new IllegalStateException(

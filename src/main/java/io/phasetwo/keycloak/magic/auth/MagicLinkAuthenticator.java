@@ -4,7 +4,6 @@ import static org.keycloak.services.validation.Validation.FIELD_USERNAME;
 
 import io.phasetwo.keycloak.magic.MagicLink;
 import io.phasetwo.keycloak.magic.auth.token.MagicLinkActionToken;
-import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
 import javax.mail.internet.AddressException;
@@ -14,17 +13,13 @@ import javax.ws.rs.core.Response;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.AuthenticationFlowError;
-import org.keycloak.authentication.Authenticator;
 import org.keycloak.authentication.authenticators.browser.AbstractUsernameFormAuthenticator;
 import org.keycloak.authentication.authenticators.browser.UsernamePasswordForm;
 import org.keycloak.events.Errors;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.events.EventType;
 import org.keycloak.forms.login.LoginFormsProvider;
-import org.keycloak.forms.login.freemarker.LoginFormsUtil;
-import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.AuthenticatorConfigModel;
-import org.keycloak.models.IdentityProviderModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.services.managers.AuthenticationManager;
 import org.keycloak.services.messages.Messages;
@@ -38,6 +33,7 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
 
   @Override
   public void authenticate(AuthenticationFlowContext context) {
+    log.debug("MagicLinkAuthenticator.authenticate");
     String attemptedUsername = getAttemptedUsername(context);
     if (attemptedUsername == null) {
       super.authenticate(context);
@@ -45,28 +41,21 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
       log.debugf(
           "Found attempted username %s from previous authenticator, skipping login form",
           attemptedUsername);
-      if (context.getExecution().getRequirement()
-          == AuthenticationExecutionModel.Requirement.REQUIRED) {
-        action(context);
-      } else {
-        context.attempted();
-      }
+      action(context);
     }
   }
 
   @Override
   public void action(AuthenticationFlowContext context) {
-    log.info("MagicLinkAuthenticator.action");
+    log.debug("MagicLinkAuthenticator.action");
 
     MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
 
-    boolean previousAuthenticator = false;
     String email = trimToNull(formData.getFirst(AuthenticationManager.FORM_USERNAME));
     // check for empty email
     if (email == null) {
       // - first check for email from previous authenticator
       email = getAttemptedUsername(context);
-      if (email != null) previousAuthenticator = true;
     }
     // - throw error if still empty
     if (email == null) {
@@ -106,26 +95,29 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
 
     MagicLinkActionToken token =
         MagicLink.createActionToken(
-            user, clientId, OptionalInt.empty(), rememberMe(context), context.getAuthenticationSession());
+            user,
+            clientId,
+            OptionalInt.empty(),
+            rememberMe(context),
+            context.getAuthenticationSession());
     String link = MagicLink.linkFromActionToken(context.getSession(), context.getRealm(), token);
     boolean sent = MagicLink.sendMagicLinkEmail(context.getSession(), user, link);
     log.debugf("sent email to %s? %b. Link? %s", user.getEmail(), sent, link);
 
-    if (!previousAuthenticator) {
-      context.clearUser();
-      context
-          .getAuthenticationSession()
-          .setAuthNote(AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME, email);
-    }
+    context
+        .getAuthenticationSession()
+        .setAuthNote(AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME, email);
     context.challenge(context.form().createForm("view-email.ftl"));
   }
 
   private boolean rememberMe(AuthenticationFlowContext context) {
     MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
     String rememberMe = formData.getFirst("rememberMe");
-    return context.getRealm().isRememberMe() && rememberMe != null && rememberMe.equalsIgnoreCase("on");
+    return context.getRealm().isRememberMe()
+        && rememberMe != null
+        && rememberMe.equalsIgnoreCase("on");
   }
-  
+
   private boolean isForceCreate(AuthenticationFlowContext context, boolean defaultValue) {
     return is(context, CREATE_NONEXISTENT_USER_CONFIG_PROPERTY, defaultValue);
   }
@@ -162,7 +154,21 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
   }
 
   private String getAttemptedUsername(AuthenticationFlowContext context) {
-    return trimToNull(context.getAuthenticationSession().getAuthNote(ATTEMPTED_USERNAME));
+    if (context.getUser() != null && context.getUser().getEmail() != null) {
+      return context.getUser().getEmail();
+    }
+    String username =
+        trimToNull(context.getAuthenticationSession().getAuthNote(ATTEMPTED_USERNAME));
+    if (username != null) {
+      if (isValidEmail(username)) {
+        return username;
+      }
+      UserModel user = context.getSession().users().getUserByUsername(context.getRealm(), username);
+      if (user != null && user.getEmail() != null) {
+        return user.getEmail();
+      }
+    }
+    return null;
   }
 
   private static String trimToNull(final String s) {
@@ -177,7 +183,7 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
   @Override
   protected boolean validateForm(
       AuthenticationFlowContext context, MultivaluedMap<String, String> formData) {
-    log.info("validateForm");
+    log.debug("validateForm");
     return validateUser(context, formData);
   }
 
