@@ -1,6 +1,7 @@
 package io.phasetwo.keycloak.magic.auth.token;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.UUID;
 import org.keycloak.authentication.actiontoken.DefaultActionToken;
 
 public class MagicLinkActionToken extends DefaultActionToken {
@@ -9,7 +10,6 @@ public class MagicLinkActionToken extends DefaultActionToken {
 
   private static final String JSON_FIELD_REDIRECT_URI = "rdu";
   private static final String JSON_FIELD_SCOPE = "scope";
-  private static final String JSON_FIELD_NONCE = "nonce";
   private static final String JSON_FIELD_STATE = "state";
   private static final String JSON_FIELD_REMEMBER_ME = "rme";
 
@@ -18,9 +18,6 @@ public class MagicLinkActionToken extends DefaultActionToken {
 
   @JsonProperty(value = JSON_FIELD_SCOPE)
   private String scopes;
-
-  @JsonProperty(value = JSON_FIELD_NONCE)
-  private String nonce;
 
   @JsonProperty(value = JSON_FIELD_STATE)
   private String state;
@@ -43,11 +40,10 @@ public class MagicLinkActionToken extends DefaultActionToken {
       String scope,
       String nonce,
       String state) {
-    super(userId, TOKEN_TYPE, absoluteExpirationInSecs, null);
+    super(userId, TOKEN_TYPE, absoluteExpirationInSecs, nonce(nonce));
     this.redirectUri = redirectUri;
     this.issuedFor = clientId;
     this.scopes = scope;
-    this.nonce = nonce;
     this.state = state;
   }
 
@@ -60,11 +56,10 @@ public class MagicLinkActionToken extends DefaultActionToken {
       String nonce,
       String state,
       Boolean rememberMe) {
-    super(userId, TOKEN_TYPE, absoluteExpirationInSecs, null);
+    super(userId, TOKEN_TYPE, absoluteExpirationInSecs, nonce(nonce));
     this.redirectUri = redirectUri;
     this.issuedFor = clientId;
     this.scopes = scope;
-    this.nonce = nonce;
     this.state = state;
     this.rememberMe = rememberMe;
   }
@@ -72,6 +67,14 @@ public class MagicLinkActionToken extends DefaultActionToken {
   private MagicLinkActionToken() {
     // Note that the class must have a private constructor without any arguments. This is necessary
     // to deserialize the token class from JWT.
+  }
+
+  static UUID nonce(String nonce) {
+    try {
+      return UUID.fromString(nonce);
+    } catch (Exception ignore) {
+    }
+    return null;
   }
 
   public String getRedirectUri() {
@@ -88,14 +91,6 @@ public class MagicLinkActionToken extends DefaultActionToken {
 
   public void setScope(String value) {
     this.scopes = value;
-  }
-
-  public String getNonce() {
-    return this.nonce;
-  }
-
-  public void setNonce(String value) {
-    this.nonce = value;
   }
 
   public String getState() {
