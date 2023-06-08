@@ -17,12 +17,10 @@ public class TinyUrlJpaEntityProvider implements JpaEntityProvider {
   }
 
   @Override
-  public void close() {
-  }
+  public void close() {}
 
   @Override
   public String getFactoryId() {
     return TinyUrlEntityProviderFactory.ID;
   }
-
 }

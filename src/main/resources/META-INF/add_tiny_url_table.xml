@@ -3,7 +3,7 @@
   <changeSet author="akash@atomic.work" id="tinyurl-1.0">
 
     <createTable tableName="tiny_url">
-      <column name="id" type="BIGINT">
+      <column name="id" type="BIGSERIAL" autoIncrement="true">
         <constraints nullable="false"/>
       </column>
       <column name="realm_id" type="VARCHAR(255)">
@@ -12,10 +12,16 @@
       <column name="url_key" type="VARCHAR(8)">
         <constraints nullable="false" unique="true"/>
       </column>
-      <column name="full_url" type="TEXT">
+      <column name="jwt_token" type="TEXT">
+        <constraints nullable="false"/>
+      </column>
+      <column name="client_id" type="VARCHAR(255)">
         <constraints nullable="false"/>
       </column>
       <column name="created_at" type="TIMESTAMP WITHOUT TIME ZONE">
+        <constraints nullable="false"/>
+      </column>
+      <column name="expires_at" type="TIMESTAMP WITHOUT TIME ZONE">
         <constraints nullable="false"/>
       </column>
     </createTable>

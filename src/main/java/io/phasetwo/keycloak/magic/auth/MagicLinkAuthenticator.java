@@ -80,7 +80,10 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
             MagicLink.registerEvent(event));
 
     // check for no/invalid email address
-    if (user == null || trimToNull(user.getEmail()) == null || !isValidEmail(user.getEmail())) {
+    if (user == null
+        || trimToNull(user.getEmail()) == null
+        || !isValidEmail(user.getEmail())
+        || !user.isEnabled()) {
       context.getEvent().event(EventType.LOGIN_ERROR).error(Errors.INVALID_EMAIL);
       Response challengeResponse =
           challenge(context, getDefaultChallengeMessage(context), FIELD_USERNAME);

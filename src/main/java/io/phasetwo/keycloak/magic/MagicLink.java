@@ -160,9 +160,18 @@ public class MagicLink {
     }
     session.getContext().setRealm(realm);
 
+    //    UriBuilder builder =
+    //        actionTokenBuilder(
+    //            uriInfo.getBaseUri(), token.serialize(session, realm, uriInfo),
+    // token.getIssuedFor());
+
     UriBuilder builder =
-        actionTokenBuilder(
-            uriInfo.getBaseUri(), token.serialize(session, realm, uriInfo), token.getIssuedFor());
+        TinyUrlHelper.tinyUriBuilder(
+            session,
+            uriInfo.getBaseUri(),
+            token.serialize(session, realm, uriInfo),
+            token.getIssuedFor(),
+            token.getExp());
 
     // and then set it back
     session.getContext().setRealm(r);

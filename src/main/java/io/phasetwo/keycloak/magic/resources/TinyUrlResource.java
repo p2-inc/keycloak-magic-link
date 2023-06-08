@@ -1,20 +1,30 @@
 package io.phasetwo.keycloak.magic.resources;
 
+import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import io.phasetwo.keycloak.magic.TinyUrlHelper;
 import io.phasetwo.keycloak.magic.jpa.TinyUrl;
 import io.phasetwo.keycloak.magic.spi.TinyUrlService;
-import io.phasetwo.keycloak.magic.spi.TinyUrlServiceProviderFactory;
-import java.util.List;
+import java.net.URI;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
-import javax.persistence.EntityManager;
-import javax.persistence.Query;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
-import lombok.extern.jbosslog.JBossLog;
-import org.keycloak.connections.jpa.JpaConnectionProvider;
-import org.keycloak.models.KeycloakSession;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.Status;
+import lombok.extern.jbosslog.JBossLog;
+import org.keycloak.models.ClientModel;
+import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.RealmModel;
+import org.keycloak.services.ErrorPage;
+import org.keycloak.services.error.KeycloakErrorHandler;
+import org.keycloak.services.messages.Messages;
+import org.keycloak.theme.Theme;
+import org.keycloak.theme.freemarker.FreeMarkerProvider;
 
 @JBossLog
 public class TinyUrlResource extends AbstractAdminResource {
@@ -24,11 +34,21 @@ public class TinyUrlResource extends AbstractAdminResource {
 
   @GET
   @Produces(MediaType.APPLICATION_JSON)
-  @Path("{name}")
-  public String validateTinyUrl(@PathParam("name") String name) {
-    Optional<TinyUrl> tinyUrl = session.getProvider(TinyUrlService.class).findByUrlKey(name);
-    return "Hello " + name + "! " + tinyUrl.isPresent();
+  @Path("{url_key}")
+  public Response getMagicLinkUrl(@PathParam("url_key") String urlKey) {
+    Optional<TinyUrl> tinyUrl = session.getProvider(TinyUrlService.class).findByUrlKey(urlKey);
+
+    if (tinyUrl.isEmpty()) {
+      ClientModel client = session.getContext().getRealm().getClientByClientId("esd-ui");
+      session.getContext().setClient(client);
+      return ErrorPage.error(session, null, Response.Status.BAD_REQUEST, Messages.EXPIRED_ACTION_TOKEN_NO_SESSION );
+    }
+
+    String redirectUrl =
+        TinyUrlHelper.actionTokenBuilder(session.getContext().getUri().getBaseUri(), tinyUrl.get())
+            .build()
+            .toString();
+    log.debugf("Tiny Url Redirecting to %s", redirectUrl);
+    return Response.temporaryRedirect(URI.create(redirectUrl)).build();
   }
-
-
 }

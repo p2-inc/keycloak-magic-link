@@ -4,7 +4,6 @@ import com.google.auto.service.AutoService;
 import org.keycloak.provider.Provider;
 import org.keycloak.provider.ProviderFactory;
 import org.keycloak.provider.Spi;
-import org.keycloak.services.resource.RealmResourceProviderFactory;
 
 @AutoService(Spi.class)
 public class TinyUrlSpi implements Spi {

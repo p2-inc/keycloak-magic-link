@@ -6,7 +6,6 @@ import org.keycloak.connections.jpa.entityprovider.JpaEntityProvider;
 import org.keycloak.connections.jpa.entityprovider.JpaEntityProviderFactory;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
-import org.keycloak.services.resource.RealmResourceProviderFactory;
 
 @AutoService(JpaEntityProviderFactory.class)
 public class TinyUrlEntityProviderFactory implements JpaEntityProviderFactory {
