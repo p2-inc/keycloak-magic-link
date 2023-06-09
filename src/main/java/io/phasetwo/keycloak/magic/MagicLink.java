@@ -165,7 +165,7 @@ public class MagicLink {
     //            uriInfo.getBaseUri(), token.serialize(session, realm, uriInfo),
     // token.getIssuedFor());
 
-    UriBuilder builder =
+    String link =
         TinyUrlHelper.tinyUriBuilder(
             session,
             uriInfo.getBaseUri(),
@@ -175,7 +175,7 @@ public class MagicLink {
 
     // and then set it back
     session.getContext().setRealm(r);
-    return builder.build(realm.getName()).toString();
+    return link;
   }
 
   public static boolean validateRedirectUri(

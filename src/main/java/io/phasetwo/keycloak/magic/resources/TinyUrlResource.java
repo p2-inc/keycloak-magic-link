@@ -3,6 +3,7 @@ package io.phasetwo.keycloak.magic.resources;
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import io.phasetwo.keycloak.magic.TinyUrlHelper;
+import io.phasetwo.keycloak.magic.constants.TinyUrlConstants;
 import io.phasetwo.keycloak.magic.jpa.TinyUrl;
 import io.phasetwo.keycloak.magic.spi.TinyUrlService;
 import java.net.URI;
@@ -39,7 +40,7 @@ public class TinyUrlResource extends AbstractAdminResource {
     Optional<TinyUrl> tinyUrl = session.getProvider(TinyUrlService.class).findByUrlKey(urlKey);
 
     if (tinyUrl.isEmpty()) {
-      ClientModel client = session.getContext().getRealm().getClientByClientId("esd-ui");
+      ClientModel client = session.getContext().getRealm().getClientByClientId(TinyUrlConstants.ESD_UI);
       session.getContext().setClient(client);
       return ErrorPage.error(session, null, Response.Status.BAD_REQUEST, Messages.EXPIRED_ACTION_TOKEN_NO_SESSION );
     }
