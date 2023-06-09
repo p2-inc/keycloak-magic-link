@@ -18,6 +18,5 @@ public class TinyUrlCleanupHelper {
     List<TinyUrl> tinyUrls = tinyUrlService.findAllKeysOlderThan(Instant.now().getEpochSecond());
     tinyUrls.forEach(tinyUrlService::hardDeleteTinyUrl);
     log.infof("Deleted %d old Tiny Urls", tinyUrls.size());
-
   }
 }

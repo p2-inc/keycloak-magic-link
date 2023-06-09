@@ -25,21 +25,27 @@ public class TinyUrlHelper {
     log.debugf("urlKey: %s", urlKey);
 
     // This is for local env only
-    if(StringUtils.isBlank(System.getenv(TinyUrlConstants.KC_ENV_KEY))){
+    if (StringUtils.isBlank(System.getenv(TinyUrlConstants.KC_ENV_KEY))) {
       return Urls.realmBase(baseUri)
-        .path(session.getContext().getRealm().getName())
-        .path(TinyUrlResourceProviderFactory.PROVIDER_ID)
-        .path(urlKey).build(session.getContext().getRealm().getName()).toString();
+          .path(session.getContext().getRealm().getName())
+          .path(TinyUrlResourceProviderFactory.PROVIDER_ID)
+          .path(urlKey)
+          .build(session.getContext().getRealm().getName())
+          .toString();
     } else if (System.getenv(TinyUrlConstants.KC_ENV_KEY)
         .equals(TinyUrlConstants.KC_ENV_PROD_VALUE)) {
-      return String.format(TinyUrlConstants.ESD_MAGIC_LINK_FORMAT, session.getContext().getClient().getRootUrl(),urlKey);
-      }
-    throw new RuntimeException("Invalid environment variable value for "+ TinyUrlConstants.KC_ENV_KEY);
+      return String.format(
+          TinyUrlConstants.ESD_MAGIC_LINK_FORMAT,
+          session.getContext().getClient().getRootUrl(),
+          urlKey);
+    }
+    throw new RuntimeException(
+        "Invalid environment variable value for " + TinyUrlConstants.KC_ENV_KEY);
 
-//    return Urls.realmBase(baseUri)
-//        .path(session.getContext().getRealm().getName())
-//        .path(TinyUrlResourceProviderFactory.PROVIDER_ID)
-//        .path(urlKey);
+    //    return Urls.realmBase(baseUri)
+    //        .path(session.getContext().getRealm().getName())
+    //        .path(TinyUrlResourceProviderFactory.PROVIDER_ID)
+    //        .path(urlKey);
   }
 
   public static UriBuilder actionTokenBuilder(URI baseUri, TinyUrl tinyUrl) {
