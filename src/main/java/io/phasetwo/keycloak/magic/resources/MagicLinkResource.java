@@ -38,6 +38,7 @@ public class MagicLinkResource extends AbstractAdminResource {
       throw new BadRequestException(
           String.format("redirectUri %s disallowed by client.", rep.getRedirectUri()));
 
+    session.getContext().setClient(client);
     String emailOrUsername = rep.getEmail();
     boolean forceCreate = rep.isForceCreate();
     boolean updateProfile = rep.isUpdateProfile();
