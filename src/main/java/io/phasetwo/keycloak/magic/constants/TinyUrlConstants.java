@@ -13,5 +13,5 @@ public interface TinyUrlConstants {
 
   String KC_ENV_PROD_VALUE = "prod";
 
-  String ESD_MAGIC_LINK_FORMAT = "%sapi/login/%s";
+  String ESD_MAGIC_LINK_FORMAT = "%slogin/%s";
 }
