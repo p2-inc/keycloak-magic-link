@@ -42,6 +42,9 @@ public class TinyUrlResource extends AbstractAdminResource {
         TinyUrlHelper.actionTokenBuilder(session.getContext().getUri().getBaseUri(), tinyUrl.get())
             .build()
             .toString();
+    //deleting the magic link after one use
+    session.getProvider(TinyUrlService.class).hardDeleteTinyUrl(tinyUrl.get());
+
     log.debugf("Tiny Url Redirecting to %s", redirectUrl);
     return Response.temporaryRedirect(URI.create(redirectUrl)).build();
   }
