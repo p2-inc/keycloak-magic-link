@@ -14,4 +14,7 @@ public interface TinyUrlConstants {
   String KC_ENV_PROD_VALUE = "prod";
 
   String ESD_MAGIC_LINK_FORMAT = "%slogin/%s";
+
+  String ESD_UI_LOGO_KEY = "logo";
+
 }

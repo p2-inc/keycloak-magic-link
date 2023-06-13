@@ -4,15 +4,19 @@ import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import io.phasetwo.keycloak.magic.auth.token.MagicLinkActionToken;
+import io.phasetwo.keycloak.magic.constants.TinyUrlConstants;
 import java.net.URI;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import javax.ws.rs.core.UriBuilder;
 import javax.ws.rs.core.UriInfo;
 import lombok.extern.jbosslog.JBossLog;
+import org.apache.commons.lang3.StringUtils;
 import org.keycloak.Config;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.common.util.Time;
@@ -196,6 +200,7 @@ public class MagicLink {
 
   public static boolean sendMagicLinkEmail(KeycloakSession session, UserModel user, String link) {
     RealmModel realm = session.getContext().getRealm();
+    session.getContext().getClient().getAttribute(TinyUrlConstants.ESD_UI_LOGO_KEY);
     try {
       EmailTemplateProvider emailTemplateProvider =
           session.getProvider(EmailTemplateProvider.class);
@@ -204,6 +209,14 @@ public class MagicLink {
       Map<String, Object> bodyAttr = Maps.newHashMap();
       bodyAttr.put("realmName", realmName);
       bodyAttr.put("magicLink", link);
+      if (StringUtils.isNotBlank(
+          session.getContext().getClient().getAttribute(TinyUrlConstants.ESD_UI_LOGO_KEY))) {
+        bodyAttr.put(
+            TinyUrlConstants.ESD_UI_LOGO_KEY,
+            session.getContext().getClient().getAttribute(TinyUrlConstants.ESD_UI_LOGO_KEY)
+                + "?ts="
+                + Instant.now().toEpochMilli());
+      }
       emailTemplateProvider
           .setRealm(realm)
           .setUser(user)
