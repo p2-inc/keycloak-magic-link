@@ -10,7 +10,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import javax.ws.rs.core.UriBuilder;
@@ -169,13 +168,7 @@ public class MagicLink {
     //            uriInfo.getBaseUri(), token.serialize(session, realm, uriInfo),
     // token.getIssuedFor());
 
-    String link =
-        TinyUrlHelper.tinyUriBuilder(
-            session,
-            uriInfo.getBaseUri(),
-            token.serialize(session, realm, uriInfo),
-            token.getIssuedFor(),
-            token.getExp());
+    String link = TinyUrlHelper.getTinyUri(session, uriInfo, token, r);
 
     // and then set it back
     session.getContext().setRealm(r);

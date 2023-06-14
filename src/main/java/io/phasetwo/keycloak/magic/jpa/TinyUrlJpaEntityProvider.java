@@ -13,7 +13,7 @@ public class TinyUrlJpaEntityProvider implements JpaEntityProvider {
 
   @Override
   public String getChangelogLocation() {
-    return "META-INF/add_tiny_url_table.xml";
+    return "META-INF/add_deleted_email_column_V1.xml";
   }
 
   @Override

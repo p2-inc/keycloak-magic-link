@@ -30,10 +30,20 @@ public class TinyUrlServiceImpl implements TinyUrlService {
   }
 
   @Override
-  public List<TinyUrl> findAllKeysOlderThan(long time) {
+  public List<TinyUrl> findAllKeysExpiredBeforeAndNotDeleted(long time) {
     List<TinyUrl> tinyUrls =
         getEntityManager()
-            .createNamedQuery("findAllKeysOlderThan", TinyUrl.class)
+            .createNamedQuery("findAllKeysExpiredBeforeAndNotDeleted", TinyUrl.class)
+            .setParameter("time", Instant.ofEpochSecond(time))
+            .getResultList();
+    return tinyUrls;
+  }
+
+  @Override
+  public List<TinyUrl> findAllKeysExpiredBefore(long time) {
+    List<TinyUrl> tinyUrls =
+        getEntityManager()
+            .createNamedQuery("findAllKeysExpiredBefore", TinyUrl.class)
             .setParameter("time", Instant.ofEpochSecond(time))
             .getResultList();
     return tinyUrls;
@@ -48,6 +58,12 @@ public class TinyUrlServiceImpl implements TinyUrlService {
   @Override
   public void hardDeleteTinyUrl(TinyUrl tinyUrl) {
     getEntityManager().remove(tinyUrl);
+  }
+
+  @Override
+  public void softDeleteTinyUrl(TinyUrl tinyUrl) {
+    tinyUrl.setDeleted(true);
+    getEntityManager().merge(tinyUrl);
   }
 
   @Override

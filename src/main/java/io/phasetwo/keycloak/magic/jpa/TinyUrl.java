@@ -25,7 +25,10 @@ import lombok.NoArgsConstructor;
   @NamedQuery(
       name = "findByUrlKey",
       query = "from TinyUrl where urlKey = :urlKey and realmId = :realmId"),
-  @NamedQuery(name = "findAllKeysOlderThan", query = "from TinyUrl where expiresAt < :time ")
+  @NamedQuery(
+      name = "findAllKeysExpiredBeforeAndNotDeleted",
+      query = "from TinyUrl where expiresAt < :time and deleted = false"),
+  @NamedQuery(name = "findAllKeysExpiredBefore", query = "from TinyUrl where expiresAt < :time ")
 })
 public class TinyUrl {
 
@@ -52,8 +55,15 @@ public class TinyUrl {
   @Column(name = "expires_at", nullable = false)
   private Instant expiresAt;
 
+  @Column(name = "email")
+  private String email;
+
+  @Column(name = "deleted", nullable = false)
+  private boolean deleted;
+
   @PrePersist
   public void prePersist() {
     createdAt = Instant.now();
+    deleted = false;
   }
 }

@@ -1,5 +1,6 @@
 package io.phasetwo.keycloak.magic;
 
+import io.phasetwo.keycloak.magic.auth.token.MagicLinkActionToken;
 import io.phasetwo.keycloak.magic.constants.TinyUrlConstants;
 import io.phasetwo.keycloak.magic.jpa.TinyUrl;
 import io.phasetwo.keycloak.magic.resources.TinyUrlResourceProviderFactory;
@@ -7,26 +8,29 @@ import io.phasetwo.keycloak.magic.spi.TinyUrlService;
 import java.net.URI;
 import java.time.Instant;
 import java.util.Random;
-import javax.ws.rs.core.UriBuilder;
+import javax.ws.rs.core.UriInfo;
 import lombok.extern.jbosslog.JBossLog;
 import org.apache.commons.lang3.StringUtils;
 import org.keycloak.models.Constants;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.RealmModel;
 import org.keycloak.services.Urls;
 
 @JBossLog
 public class TinyUrlHelper {
 
-  public static String tinyUriBuilder(
-      KeycloakSession session, URI baseUri, String tokenString, String issuedFor, long expiresAt) {
-    log.debugf("baseUri: %s, token: %s, issuedFor: %s", baseUri, tokenString, issuedFor);
+  public static String getTinyUri(
+      KeycloakSession session, UriInfo uriInfo, MagicLinkActionToken token, RealmModel realm) {
+    log.debugf(
+        "baseUri: %s, token: %s, issuedFor: %s",
+        uriInfo, token.serialize(session, realm, uriInfo), token.getIssuedFor());
 
-    String urlKey = generateUrlKey(session, tokenString, issuedFor, expiresAt);
+    String urlKey = generateUrlKey(session, token, realm, uriInfo);
     log.debugf("urlKey: %s", urlKey);
 
     // This is for local env only
     if (StringUtils.isBlank(System.getenv(TinyUrlConstants.KC_ENV_KEY))) {
-      return Urls.realmBase(baseUri)
+      return Urls.realmBase(uriInfo.getBaseUri())
           .path(session.getContext().getRealm().getName())
           .path(TinyUrlResourceProviderFactory.PROVIDER_ID)
           .path(urlKey)
@@ -48,17 +52,19 @@ public class TinyUrlHelper {
     //        .path(urlKey);
   }
 
-  public static UriBuilder actionTokenBuilder(URI baseUri, TinyUrl tinyUrl) {
+  public static String getActionTokenUri(URI baseUri, TinyUrl tinyUrl) {
     log.debugf("baseUri: %s, tokenString: %s", baseUri, tinyUrl.getJwtToken());
     return Urls.realmBase(baseUri)
         .path(tinyUrl.getRealmId())
         .path(TinyUrlConstants.ACTION_TOKEN_URL_PATH)
         .queryParam(Constants.KEY, tinyUrl.getJwtToken())
-        .queryParam(Constants.CLIENT_ID, tinyUrl.getClientId());
+        .queryParam(Constants.CLIENT_ID, tinyUrl.getClientId())
+        .build()
+        .toString();
   }
 
   private static String generateUrlKey(
-      KeycloakSession session, String token, String issuedFor, long expiresAt) {
+      KeycloakSession session, MagicLinkActionToken token, RealmModel realm, UriInfo uriInfo) {
 
     TinyUrlService tinyUrlService = session.getProvider(TinyUrlService.class);
 
@@ -67,11 +73,12 @@ public class TinyUrlHelper {
       try {
         TinyUrl tinyUrl =
             TinyUrl.builder()
-                .jwtToken(token)
-                .clientId(issuedFor)
+                .jwtToken(token.serialize(session, realm, uriInfo))
+                .clientId(token.getIssuedFor())
                 .urlKey(generateAlphanumericString())
                 .realmId(session.getContext().getRealm().getName())
-                .expiresAt(Instant.ofEpochSecond(expiresAt))
+                .expiresAt(Instant.ofEpochSecond(token.getExp()))
+                .email(session.users().getUserById(realm, token.getUserId()).getEmail())
                 .build();
         tinyUrlService.addTinyUrl(tinyUrl);
         log.debugf("Generated unique urlKey: %s", tinyUrl.getUrlKey());
