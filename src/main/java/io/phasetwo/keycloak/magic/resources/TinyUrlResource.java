@@ -36,6 +36,7 @@ public class TinyUrlResource extends AbstractAdminResource {
     ClientModel client =
         session.getContext().getRealm().getClientByClientId(TinyUrlConstants.ESD_UI);
     session.getContext().setClient(client);
+    session.getContext().setRealm(realm);
 
     if (tinyUrl.isEmpty()) {
       return ErrorPage.error(
