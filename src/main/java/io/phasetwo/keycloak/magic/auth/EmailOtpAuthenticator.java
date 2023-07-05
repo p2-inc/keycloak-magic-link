@@ -68,6 +68,7 @@ public class EmailOtpAuthenticator implements Authenticator {
       if (code != null
           && code.equals(context.getAuthenticationSession().getAuthNote(USER_AUTH_NOTE_OTP_CODE))) {
         context.getAuthenticationSession().removeAuthNote(USER_AUTH_NOTE_OTP_CODE);
+        context.getAuthenticationSession().getAuthenticatedUser().setEmailVerified(true);
         context.success();
         return;
       }
