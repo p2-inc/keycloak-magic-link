@@ -81,15 +81,15 @@ public class MagicLink {
       user = session.users().addUser(realm, email);
       user.setEnabled(true);
       user.setEmail(email);
-      if (updatePassword) {
-        user.addRequiredAction(UserModel.RequiredAction.UPDATE_PASSWORD);
-      }
-      if (updateProfile) {
-        user.addRequiredAction(UserModel.RequiredAction.UPDATE_PROFILE);
-      }
       if (onNew != null) {
         onNew.accept(user);
       }
+    }
+    if (updatePassword) {
+      user.addRequiredAction(UserModel.RequiredAction.UPDATE_PASSWORD);
+    }
+    if (updateProfile) {
+      user.addRequiredAction(UserModel.RequiredAction.UPDATE_PROFILE);
     }
     return user;
   }
