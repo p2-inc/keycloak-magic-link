@@ -1,6 +1,6 @@
 package io.phasetwo.keycloak.magic.auth.token;
 
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.authentication.actiontoken.AbstractActionTokenHandler;

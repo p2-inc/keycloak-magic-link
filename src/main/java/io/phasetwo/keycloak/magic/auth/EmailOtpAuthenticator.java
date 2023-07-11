@@ -2,9 +2,9 @@ package io.phasetwo.keycloak.magic.auth;
 
 import com.google.common.collect.ImmutableList;
 import io.phasetwo.keycloak.magic.MagicLink;
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.Response;
 import java.util.concurrent.ThreadLocalRandom;
-import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.core.Response;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.Authenticator;

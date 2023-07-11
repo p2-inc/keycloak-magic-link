@@ -1,10 +1,10 @@
 package io.phasetwo.keycloak.magic.resources;
 
-import javax.validation.constraints.*;
-import javax.ws.rs.*;
-import javax.ws.rs.NotAuthorizedException;
-import javax.ws.rs.NotFoundException;
-import javax.ws.rs.core.HttpHeaders;
+import jakarta.validation.constraints.*;
+import jakarta.ws.rs.*;
+import jakarta.ws.rs.NotAuthorizedException;
+import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.core.HttpHeaders;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.common.ClientConnection;
 import org.keycloak.events.EventBuilder;
