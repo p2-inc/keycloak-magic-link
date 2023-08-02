@@ -104,9 +104,9 @@ public class MagicLink {
     String scope = authSession.getClientNote(OIDCLoginProtocol.SCOPE_PARAM);
     String state = authSession.getClientNote(OIDCLoginProtocol.STATE_PARAM);
     String nonce = authSession.getClientNote(OIDCLoginProtocol.NONCE_PARAM);
-    log.debugf(
+    log.infof(
         "Attempting MagicLinkAuthenticator for %s, %s, %s", user.getEmail(), clientId, redirectUri);
-    log.debugf("MagicLinkAuthenticator extra vars %s %s %s %b", scope, state, nonce, rememberMe);
+    log.infof("MagicLinkAuthenticator extra vars %s %s %s %b", scope, state, nonce, rememberMe);
     return createActionToken(
         user, clientId, redirectUri, validity, scope, nonce, state, rememberMe);
   }
