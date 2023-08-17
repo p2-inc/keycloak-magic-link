@@ -52,6 +52,11 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
   }
 
   @Override
+  public boolean canUseTokenRepeatedly(MagicLinkActionToken token, ActionTokenContext<MagicLinkActionToken> tokenContext) {
+    return false; //Invalidate action token after one use
+  }
+
+  @Override
   public Response handleToken(
       MagicLinkActionToken token, ActionTokenContext<MagicLinkActionToken> tokenContext) {
     log.infof("handleToken for iss:%s, user:%s", token.getIssuedFor(), token.getUserId());
