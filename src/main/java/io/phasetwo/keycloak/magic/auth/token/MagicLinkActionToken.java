@@ -25,6 +25,8 @@ public class MagicLinkActionToken extends DefaultActionToken {
   @JsonProperty(value = JSON_FIELD_REMEMBER_ME)
   private Boolean rememberMe = false;
 
+  private Boolean actionTokenPersistent = true;
+
   public MagicLinkActionToken(
       String userId, int absoluteExpirationInSecs, String clientId, String redirectUri) {
     super(userId, TOKEN_TYPE, absoluteExpirationInSecs, null);
@@ -55,13 +57,15 @@ public class MagicLinkActionToken extends DefaultActionToken {
       String scope,
       String nonce,
       String state,
-      Boolean rememberMe) {
+      Boolean rememberMe,
+      Boolean isActionTokenPersistent) {
     super(userId, TOKEN_TYPE, absoluteExpirationInSecs, nonce(nonce));
     this.redirectUri = redirectUri;
     this.issuedFor = clientId;
     this.scopes = scope;
     this.state = state;
     this.rememberMe = rememberMe;
+    this.actionTokenPersistent = isActionTokenPersistent;
   }
 
   private MagicLinkActionToken() {
@@ -107,5 +111,13 @@ public class MagicLinkActionToken extends DefaultActionToken {
 
   public void setRememberMe(Boolean value) {
     this.rememberMe = value;
+  }
+
+  public Boolean getActionTokenPersistent() {
+    return this.actionTokenPersistent;
+  }
+
+  public void setActionTokenPersistent(Boolean value) {
+    this.actionTokenPersistent = value;
   }
 }

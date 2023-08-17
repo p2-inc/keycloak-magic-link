@@ -43,4 +43,7 @@ public class MagicLinkRequest {
 
   @JsonProperty("remember_me")
   private Boolean rememberMe = false;
+
+  @JsonProperty("action_token_persistent")
+  private Boolean actionTokenPersistent = true;
 }

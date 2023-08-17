@@ -31,6 +31,8 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
   static final String UPDATE_PROFILE_ACTION_CONFIG_PROPERTY = "ext-magic-update-profile-action";
   static final String UPDATE_PASSWORD_ACTION_CONFIG_PROPERTY = "ext-magic-update-password-action";
 
+  static final String ACTION_TOKEN_PERSISTENT_CONFIG_PROPERTY = "ext-magic-allow-token-reuse";
+
   @Override
   public void authenticate(AuthenticationFlowContext context) {
     log.debug("MagicLinkAuthenticator.authenticate");
@@ -99,7 +101,8 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
             clientId,
             OptionalInt.empty(),
             rememberMe(context),
-            context.getAuthenticationSession());
+            context.getAuthenticationSession(),
+            isActionTokenPersistent(context, true));
     String link = MagicLink.linkFromActionToken(context.getSession(), context.getRealm(), token);
     boolean sent = MagicLink.sendMagicLinkEmail(context.getSession(), user, link);
     log.debugf("sent email to %s? %b. Link? %s", user.getEmail(), sent, link);
@@ -128,6 +131,10 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
 
   private boolean isUpdatePassword(AuthenticationFlowContext context, boolean defaultValue) {
     return is(context, UPDATE_PASSWORD_ACTION_CONFIG_PROPERTY, defaultValue);
+  }
+
+  private boolean isActionTokenPersistent(AuthenticationFlowContext context, boolean defaultValue) {
+    return is(context, ACTION_TOKEN_PERSISTENT_CONFIG_PROPERTY, defaultValue);
   }
 
   private boolean is(AuthenticationFlowContext context, String propName, boolean defaultValue) {
