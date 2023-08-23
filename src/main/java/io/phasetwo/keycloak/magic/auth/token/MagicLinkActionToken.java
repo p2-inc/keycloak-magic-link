@@ -12,6 +12,7 @@ public class MagicLinkActionToken extends DefaultActionToken {
   private static final String JSON_FIELD_SCOPE = "scope";
   private static final String JSON_FIELD_STATE = "state";
   private static final String JSON_FIELD_REMEMBER_ME = "rme";
+  private static final String JSON_FIELD_STRING_NONCE = "nce";
 
   private static final String JSON_FIELD_REUSABLE = "ru";
 
@@ -29,6 +30,9 @@ public class MagicLinkActionToken extends DefaultActionToken {
 
   @JsonProperty(value = JSON_FIELD_REUSABLE)
   private Boolean actionTokenPersistent = true;
+
+  @JsonProperty(value = JSON_FIELD_STRING_NONCE)
+  private String nonce;
 
   public MagicLinkActionToken(
       String userId, int absoluteExpirationInSecs, String clientId, String redirectUri) {
@@ -69,6 +73,7 @@ public class MagicLinkActionToken extends DefaultActionToken {
     this.state = state;
     this.rememberMe = rememberMe;
     this.actionTokenPersistent = isActionTokenPersistent;
+    this.nonce = nonce;
   }
 
   private MagicLinkActionToken() {
@@ -122,5 +127,13 @@ public class MagicLinkActionToken extends DefaultActionToken {
 
   public void setActionTokenPersistent(Boolean value) {
     this.actionTokenPersistent = value;
+  }
+
+  public String getNonce() {
+    return this.nonce;
+  }
+
+  public void setNonce(String value) {
+    this.nonce = value;
   }
 }
