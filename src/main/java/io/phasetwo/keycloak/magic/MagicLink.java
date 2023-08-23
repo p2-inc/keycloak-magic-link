@@ -95,6 +95,16 @@ public class MagicLink {
   }
 
   public static MagicLinkActionToken createActionToken(
+          UserModel user,
+          String clientId,
+          OptionalInt validity,
+          Boolean rememberMe,
+          AuthenticationSessionModel authSession) {
+    return createActionToken(
+            user, clientId, validity, rememberMe, authSession, true);
+  }
+
+  public static MagicLinkActionToken createActionToken(
       UserModel user,
       String clientId,
       OptionalInt validity,
@@ -110,6 +120,18 @@ public class MagicLink {
     log.infof("MagicLinkAuthenticator extra vars %s %s %s %b", scope, state, nonce, rememberMe);
     return createActionToken(
         user, clientId, redirectUri, validity, scope, nonce, state, rememberMe, isActionTokenPersistent);
+  }
+
+  public static MagicLinkActionToken createActionToken(
+          UserModel user,
+          String clientId,
+          String redirectUri,
+          OptionalInt validity,
+          String scope,
+          String nonce,
+          String state,
+          Boolean rememberMe) {
+    return createActionToken(user, clientId, redirectUri, validity, scope, nonce, state, rememberMe, true);
   }
 
   public static MagicLinkActionToken createActionToken(
