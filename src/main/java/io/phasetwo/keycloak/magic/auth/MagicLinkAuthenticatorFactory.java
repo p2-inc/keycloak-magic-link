@@ -91,7 +91,14 @@ public class MagicLinkAuthenticatorFactory implements AuthenticatorFactory {
     updatePassword.setHelpText("Add an UPDATE_PASSWORD required action if the user was created.");
     updatePassword.setDefaultValue(false);
 
-    return Arrays.asList(createUser, updateProfile, updatePassword);
+    ProviderConfigProperty actionTokenPersistent = new ProviderConfigProperty();
+    actionTokenPersistent.setType(ProviderConfigProperty.BOOLEAN_TYPE);
+    actionTokenPersistent.setName(MagicLinkAuthenticator.ACTION_TOKEN_PERSISTENT_CONFIG_PROPERTY);
+    actionTokenPersistent.setLabel("Allow magic link to be reusable");
+    actionTokenPersistent.setHelpText("Toggle whether magic link should be persistent until expired.");
+    actionTokenPersistent.setDefaultValue(true);
+
+    return Arrays.asList(createUser, updateProfile, updatePassword, actionTokenPersistent);
   }
 
   @Override
