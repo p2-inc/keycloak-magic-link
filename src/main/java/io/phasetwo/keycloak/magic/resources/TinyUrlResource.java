@@ -8,6 +8,7 @@ import io.phasetwo.keycloak.magic.jpa.TinyUrl;
 import io.phasetwo.keycloak.magic.representation.MagicLinkInfo;
 import io.phasetwo.keycloak.magic.spi.TinyUrlService;
 import java.net.URI;
+import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import javax.ws.rs.GET;
@@ -84,7 +85,7 @@ public class TinyUrlResource extends AbstractAdminResource {
   @Path("{url_key}/validate")
   public Response validateMagicLinkCode(@PathParam("url_key") String urlKey) {
     Optional<TinyUrl> tinyUrl = session.getProvider(TinyUrlService.class).findByUrlKey(urlKey);
-    String jsonResponse = String.format("{\"isLoginCodeValid\": \"%s\"}", tinyUrl.isPresent());
+    Map<String, Boolean> jsonResponse = Map.of("isLoginCodeValid", tinyUrl.isPresent());
     if (tinyUrl.isPresent()) {
       return Response.ok().entity(jsonResponse).build();
     } else {
