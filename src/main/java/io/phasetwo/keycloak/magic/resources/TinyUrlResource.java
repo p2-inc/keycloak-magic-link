@@ -84,7 +84,7 @@ public class TinyUrlResource extends AbstractAdminResource {
   @Path("{url_key}/validate")
   public Response validateMagicLinkCode(@PathParam("url_key") String urlKey) {
     Optional<TinyUrl> tinyUrl = session.getProvider(TinyUrlService.class).findByUrlKey(urlKey);
-    String jsonResponse = String.format("{\"isTokenValid\": \"%s\"}", tinyUrl.isPresent());
+    String jsonResponse = String.format("{\"isLoginCodeValid\": \"%s\"}", tinyUrl.isPresent());
     if (tinyUrl.isPresent()) {
       return Response.ok().entity(jsonResponse).build();
     } else {
