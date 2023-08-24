@@ -79,6 +79,20 @@ mvn clean install
 
 2. Copy the jar produced in `target/` to your `providers` directory (for Quarkus) or `standalone/deployments` directory (for legacy) and rebuild/restart keycloak.
 
+## Releases
+
+Releases are tagged and published to [Maven Central](https://repo1.maven.org/maven2/io/phasetwo/keycloak/keycloak-magic-link/) after each merge to `main`. Jars can be downloaded from there.
+
+If you are depending on the library in your own Maven-built project, or using a bundling tool in Maven, you can add the dependency like this:
+```xml
+    <dependency>
+      <groupId>io.phasetwo.keycloak</groupId>
+      <artifactId>keycloak-magic-link</artifactId>
+      <version>VERSION</version>
+    </dependency>
+```
+
+
 ## Implementation Notes
 
 This is a rough outline of the implementation:
