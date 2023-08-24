@@ -3,6 +3,7 @@ package io.phasetwo.keycloak.magic;
 import io.phasetwo.keycloak.magic.auth.token.MagicLinkActionToken;
 import io.phasetwo.keycloak.magic.constants.TinyUrlConstants;
 import io.phasetwo.keycloak.magic.jpa.TinyUrl;
+import io.phasetwo.keycloak.magic.representation.MagicLinkInfo;
 import io.phasetwo.keycloak.magic.resources.TinyUrlResourceProviderFactory;
 import io.phasetwo.keycloak.magic.spi.TinyUrlService;
 import java.net.URI;
@@ -19,7 +20,7 @@ import org.keycloak.services.Urls;
 @JBossLog
 public class TinyUrlHelper {
 
-  public static String getTinyUri(
+  public static MagicLinkInfo getTinyUri(
       KeycloakSession session, UriInfo uriInfo, MagicLinkActionToken token, RealmModel realm) {
     log.debugf(
         "baseUri: %s, token: %s, issuedFor: %s",
@@ -30,18 +31,22 @@ public class TinyUrlHelper {
 
     // This is for local env only
     if (StringUtils.isBlank(System.getenv(TinyUrlConstants.KC_ENV_KEY))) {
-      return Urls.realmBase(uriInfo.getBaseUri())
-          .path(session.getContext().getRealm().getName())
-          .path(TinyUrlResourceProviderFactory.PROVIDER_ID)
-          .path(urlKey)
-          .build(session.getContext().getRealm().getName())
-          .toString();
+      String link =
+          Urls.realmBase(uriInfo.getBaseUri())
+              .path(session.getContext().getRealm().getName())
+              .path(TinyUrlResourceProviderFactory.PROVIDER_ID)
+              .path(urlKey)
+              .build(session.getContext().getRealm().getName())
+              .toString();
+      return MagicLinkInfo.builder().link(link).code(urlKey).build();
     } else if (System.getenv(TinyUrlConstants.KC_ENV_KEY)
         .equals(TinyUrlConstants.KC_ENV_PROD_VALUE)) {
-      return String.format(
-          TinyUrlConstants.ESD_MAGIC_LINK_FORMAT,
-          session.getContext().getClient().getRootUrl(),
-          urlKey);
+      String link =
+          String.format(
+              TinyUrlConstants.ESD_MAGIC_LINK_FORMAT,
+              session.getContext().getClient().getRootUrl(),
+              urlKey);
+      return MagicLinkInfo.builder().link(link).code(urlKey).build();
     }
     throw new RuntimeException(
         "Invalid environment variable value for " + TinyUrlConstants.KC_ENV_KEY);
