@@ -39,7 +39,7 @@ public class TinyUrlResource extends AbstractAdminResource {
         session.getContext().getRealm().getClientByClientId(TinyUrlConstants.ESD_UI);
     session.getContext().setClient(client);
     session.getContext().setRealm(realm);
-
+    log.info("Anish Tiny link resource Incoming url: " + session.getContext().getUri());
     if (tinyUrl.isEmpty()) {
       return ErrorPage.error(
           session, null, Response.Status.BAD_REQUEST, Messages.EXPIRED_ACTION_TOKEN_NO_SESSION);
@@ -85,43 +85,11 @@ public class TinyUrlResource extends AbstractAdminResource {
   @Path("{url_key}/validate")
   public Response validateMagicLinkCode(@PathParam("url_key") String urlKey) {
     Optional<TinyUrl> tinyUrl = session.getProvider(TinyUrlService.class).findByUrlKey(urlKey);
-    ClientModel client =
-        session.getContext().getRealm().getClientByClientId(TinyUrlConstants.ESD_UI);
-    session.getContext().setClient(client);
-    session.getContext().setRealm(realm);
-    if (tinyUrl.isEmpty()) {
-      return ErrorPage.error(
-          session, null, Response.Status.BAD_REQUEST, Messages.EXPIRED_ACTION_TOKEN_NO_SESSION);
-    } else if (tinyUrl.get().isDeleted()) {
-      UserModel user = session.users().getUserByEmail(realm, tinyUrl.get().getEmail());
-      if (user != null && user.isEnabled()) {
-        MagicLinkActionToken token =
-            MagicLink.createActionToken(
-                user,
-                tinyUrl.get().getClientId(),
-                client.getRootUrl(),
-                OptionalInt.empty(),
-                null,
-                null,
-                null,
-                false);
-
-        MagicLinkInfo link = MagicLink.linkFromActionToken(session, realm, token);
-        MagicLink.sendMagicLinkEmail(session, user, link);
-        log.infof(
-            "resent magic link email for expired tiny url to %s? Link? %s", user.getEmail(), link);
-        return ErrorPage.error(
-            session, null, Response.Status.CREATED, Messages.EXPIRED_ACTION_TOKEN_SESSION_EXISTS);
-      } else {
-        return ErrorPage.error(
-            session, null, Response.Status.BAD_REQUEST, Messages.EXPIRED_ACTION_TOKEN_NO_SESSION);
-      }
+    String jsonResponse = String.format("{\"isTokenValid\": \"%s\"}", tinyUrl.isPresent());
+    if (tinyUrl.isPresent()) {
+      return Response.ok().entity(jsonResponse).build();
+    } else {
+      return Response.status(Response.Status.NOT_FOUND).entity(jsonResponse).build();
     }
-
-    String redirectUrl =
-        TinyUrlHelper.getActionTokenUri(session.getContext().getUri().getBaseUri(), tinyUrl.get());
-
-    log.debugf("Tiny Url code valid to %s", redirectUrl);
-    return Response.ok().build();
   }
 }
