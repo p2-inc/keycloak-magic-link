@@ -39,7 +39,6 @@ public class TinyUrlResource extends AbstractAdminResource {
         session.getContext().getRealm().getClientByClientId(TinyUrlConstants.ESD_UI);
     session.getContext().setClient(client);
     session.getContext().setRealm(realm);
-    log.info("Anish Tiny link resource Incoming url: " + session.getContext().getUri());
     if (tinyUrl.isEmpty()) {
       return ErrorPage.error(
           session, null, Response.Status.BAD_REQUEST, Messages.EXPIRED_ACTION_TOKEN_NO_SESSION);
