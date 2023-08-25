@@ -4,6 +4,7 @@ import static org.keycloak.services.validation.Validation.FIELD_USERNAME;
 
 import io.phasetwo.keycloak.magic.MagicLink;
 import io.phasetwo.keycloak.magic.auth.token.MagicLinkActionToken;
+import io.phasetwo.keycloak.magic.representation.MagicLinkInfo;
 import java.util.Map;
 import java.util.OptionalInt;
 import javax.mail.internet.AddressException;
@@ -103,9 +104,10 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
             OptionalInt.empty(),
             rememberMe(context),
             context.getAuthenticationSession());
-    String link = MagicLink.linkFromActionToken(context.getSession(), context.getRealm(), token);
+    MagicLinkInfo link =
+        MagicLink.linkFromActionToken(context.getSession(), context.getRealm(), token);
     boolean sent = MagicLink.sendMagicLinkEmail(context.getSession(), user, link);
-    log.debugf("sent email to %s? %b. Link? %s", user.getEmail(), sent, link);
+    log.debugf("sent email to %s? %b. Link? %s", user.getEmail(), sent, link.getLink());
 
     context
         .getAuthenticationSession()

@@ -2,6 +2,7 @@ package io.phasetwo.keycloak.magic.resources;
 
 import io.phasetwo.keycloak.magic.MagicLink;
 import io.phasetwo.keycloak.magic.auth.token.MagicLinkActionToken;
+import io.phasetwo.keycloak.magic.representation.MagicLinkInfo;
 import io.phasetwo.keycloak.magic.representation.MagicLinkRequest;
 import io.phasetwo.keycloak.magic.representation.MagicLinkResponse;
 import java.util.OptionalInt;
@@ -77,16 +78,16 @@ public class MagicLinkResource extends AbstractAdminResource {
             rep.getNonce(),
             rep.getState(),
             rep.getRememberMe());
-    String link = MagicLink.linkFromActionToken(session, realm, token);
+    MagicLinkInfo linkInfo = MagicLink.linkFromActionToken(session, realm, token);
     boolean sent = false;
     if (sendEmail) {
-      sent = MagicLink.sendMagicLinkEmail(session, user, link);
-      log.infof("sent email to %s? %b. Link? %s", rep.getEmail(), sent, link);
+      sent = MagicLink.sendMagicLinkEmail(session, user, linkInfo);
+      log.infof("sent email to %s? %b. Link? %s", rep.getEmail(), sent, linkInfo.getLink());
     }
 
     MagicLinkResponse resp = new MagicLinkResponse();
     resp.setUserId(user.getId());
-    resp.setLink(link);
+    resp.setLink(linkInfo.getLink());
     resp.setSent(sent);
 
     return resp;

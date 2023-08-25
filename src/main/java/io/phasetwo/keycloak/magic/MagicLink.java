@@ -5,6 +5,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import io.phasetwo.keycloak.magic.auth.token.MagicLinkActionToken;
 import io.phasetwo.keycloak.magic.constants.TinyUrlConstants;
+import io.phasetwo.keycloak.magic.representation.MagicLinkInfo;
 import java.net.URI;
 import java.time.Instant;
 import java.util.List;
@@ -144,7 +145,7 @@ public class MagicLink {
     return createActionToken(user, clientId, redirectUri, validity, null, null, null, false);
   }
 
-  public static String linkFromActionToken(
+  public static MagicLinkInfo linkFromActionToken(
       KeycloakSession session, RealmModel realm, MagicLinkActionToken token) {
     UriInfo uriInfo = session.getContext().getUri();
 
@@ -168,11 +169,11 @@ public class MagicLink {
     //            uriInfo.getBaseUri(), token.serialize(session, realm, uriInfo),
     // token.getIssuedFor());
 
-    String link = TinyUrlHelper.getTinyUri(session, uriInfo, token, r);
+    MagicLinkInfo linkWithInfo = TinyUrlHelper.getTinyUri(session, uriInfo, token, r);
 
     // and then set it back
     session.getContext().setRealm(r);
-    return link;
+    return linkWithInfo;
   }
 
   public static boolean validateRedirectUri(
@@ -191,7 +192,8 @@ public class MagicLink {
         .queryParam(Constants.CLIENT_ID, clientId);
   }
 
-  public static boolean sendMagicLinkEmail(KeycloakSession session, UserModel user, String link) {
+  public static boolean sendMagicLinkEmail(
+      KeycloakSession session, UserModel user, MagicLinkInfo magicLinkInfo) {
     RealmModel realm = session.getContext().getRealm();
     session.getContext().getClient().getAttribute(TinyUrlConstants.ESD_UI_LOGO_KEY);
     try {
@@ -201,7 +203,8 @@ public class MagicLink {
       List<Object> subjAttr = ImmutableList.of(realmName);
       Map<String, Object> bodyAttr = Maps.newHashMap();
       bodyAttr.put("realmName", realmName);
-      bodyAttr.put("magicLink", link);
+      bodyAttr.put("magicLink", magicLinkInfo.getLink());
+      bodyAttr.put("loginCode", magicLinkInfo.getCode());
       if (StringUtils.isNotBlank(
           session.getContext().getClient().getAttribute(TinyUrlConstants.ESD_UI_LOGO_KEY))) {
         bodyAttr.put(

@@ -18,4 +18,6 @@ public interface TinyUrlConstants {
   String ESD_MAGIC_LINK_FORMAT = "%slogin/%s";
 
   String ESD_UI_LOGO_KEY = "logo";
+
+  String LOGIN_STATUS_CODE = "login_code_status";
 }
