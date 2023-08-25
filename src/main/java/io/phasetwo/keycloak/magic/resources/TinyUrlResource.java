@@ -106,7 +106,7 @@ public class TinyUrlResource extends AbstractAdminResource {
         return Response.ok().entity(jsonResponse).build();
       }
       Map<String, String> jsonResponse = Map.of(LOGIN_STATUS_CODE, "INVALID");
-      return Response.ok().entity(jsonResponse).build();
+      return Response.status(Response.Status.NOT_FOUND).entity(jsonResponse).build();
     } else {
       Map<String, String> jsonResponse = Map.of(LOGIN_STATUS_CODE, "VALID");
       return Response.ok().entity(jsonResponse).build();
