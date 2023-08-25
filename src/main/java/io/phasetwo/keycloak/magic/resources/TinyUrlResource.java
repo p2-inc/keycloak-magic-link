@@ -1,5 +1,7 @@
 package io.phasetwo.keycloak.magic.resources;
 
+import static io.phasetwo.keycloak.magic.constants.TinyUrlConstants.LOGIN_STATUS_CODE;
+
 import io.phasetwo.keycloak.magic.MagicLink;
 import io.phasetwo.keycloak.magic.TinyUrlHelper;
 import io.phasetwo.keycloak.magic.auth.token.MagicLinkActionToken;
@@ -46,22 +48,7 @@ public class TinyUrlResource extends AbstractAdminResource {
     } else if (tinyUrl.get().isDeleted()) {
       UserModel user = session.users().getUserByEmail(realm, tinyUrl.get().getEmail());
       if (user != null && user.isEnabled()) {
-        MagicLinkActionToken token =
-            MagicLink.createActionToken(
-                user,
-                tinyUrl.get().getClientId(),
-                client.getRootUrl(),
-                OptionalInt.empty(),
-                null,
-                null,
-                null,
-                false);
-
-        MagicLinkInfo linkInfo = MagicLink.linkFromActionToken(session, realm, token);
-        MagicLink.sendMagicLinkEmail(session, user, linkInfo);
-        log.infof(
-            "resent magic link email for expired tiny url to %s? Link? %s",
-            user.getEmail(), linkInfo.getLink());
+        resendMagicLinkForUser(client, tinyUrl.get(), user);
         return ErrorPage.error(
             session, null, Response.Status.CREATED, Messages.EXPIRED_ACTION_TOKEN_SESSION_EXISTS);
       } else {
@@ -80,16 +67,49 @@ public class TinyUrlResource extends AbstractAdminResource {
     return Response.temporaryRedirect(URI.create(redirectUrl)).build();
   }
 
+  private void resendMagicLinkForUser(ClientModel client, TinyUrl tinyUrl, UserModel user) {
+    MagicLinkActionToken token =
+        MagicLink.createActionToken(
+            user,
+            tinyUrl.getClientId(),
+            client.getRootUrl(),
+            OptionalInt.empty(),
+            null,
+            null,
+            null,
+            false);
+
+    MagicLinkInfo linkInfo = MagicLink.linkFromActionToken(session, realm, token);
+    MagicLink.sendMagicLinkEmail(session, user, linkInfo);
+    log.infof(
+        "resent magic link email for expired tiny url to %s? Link? %s",
+        user.getEmail(), linkInfo.getLink());
+  }
+
   @POST
   @Produces(MediaType.APPLICATION_JSON)
   @Path("{url_key}/validate")
   public Response validateMagicLinkCode(@PathParam("url_key") String urlKey) {
     Optional<TinyUrl> tinyUrl = session.getProvider(TinyUrlService.class).findByUrlKey(urlKey);
-    Map<String, Boolean> jsonResponse = Map.of("isLoginCodeValid", tinyUrl.isPresent());
-    if (tinyUrl.isPresent()) {
+    ClientModel client =
+        session.getContext().getRealm().getClientByClientId(TinyUrlConstants.ESD_UI);
+    session.getContext().setClient(client);
+    session.getContext().setRealm(realm);
+    if (tinyUrl.isEmpty()) {
+      Map<String, String> jsonResponse = Map.of(LOGIN_STATUS_CODE, "INVALID");
+      return Response.status(Response.Status.NOT_FOUND).entity(jsonResponse).build();
+    } else if (tinyUrl.get().isDeleted()) {
+      UserModel user = session.users().getUserByEmail(realm, tinyUrl.get().getEmail());
+      if (user != null && user.isEnabled()) {
+        Map<String, String> jsonResponse = Map.of(LOGIN_STATUS_CODE, "RESENT");
+        resendMagicLinkForUser(client, tinyUrl.get(), user);
+        return Response.ok().entity(jsonResponse).build();
+      }
+      Map<String, String> jsonResponse = Map.of(LOGIN_STATUS_CODE, "INVALID");
       return Response.ok().entity(jsonResponse).build();
     } else {
-      return Response.status(Response.Status.NOT_FOUND).entity(jsonResponse).build();
+      Map<String, String> jsonResponse = Map.of(LOGIN_STATUS_CODE, "VALID");
+      return Response.ok().entity(jsonResponse).build();
     }
   }
 }
