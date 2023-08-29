@@ -206,7 +206,7 @@ public class MagicLink {
       bodyAttr.put("magicLink", magicLinkInfo.getLink());
       bodyAttr.put(
           "loginCode",
-          magicLinkInfo.getCode().substring(0, 3) + "-" + magicLinkInfo.getCode().substring(3));
+          magicLinkInfo.getCode().substring(0, 4) + "-" + magicLinkInfo.getCode().substring(4));
       if (StringUtils.isNotBlank(
           session.getContext().getClient().getAttribute(TinyUrlConstants.ESD_UI_LOGO_KEY))) {
         bodyAttr.put(
