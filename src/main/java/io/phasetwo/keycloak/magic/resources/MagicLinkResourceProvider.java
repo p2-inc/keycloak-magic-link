@@ -1,5 +1,6 @@
 package io.phasetwo.keycloak.magic.resources;
 
+import io.phasetwo.keycloak.ext.resource.BaseRealmResourceProvider;
 import org.keycloak.models.KeycloakSession;
 
 public class MagicLinkResourceProvider extends BaseRealmResourceProvider {

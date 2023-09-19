@@ -1,5 +1,6 @@
 package io.phasetwo.keycloak.magic.resources;
 
+import io.phasetwo.keycloak.ext.resource.AbstractAdminResource;
 import io.phasetwo.keycloak.magic.MagicLink;
 import io.phasetwo.keycloak.magic.auth.token.MagicLinkActionToken;
 import io.phasetwo.keycloak.magic.representation.MagicLinkRequest;
@@ -16,9 +17,10 @@ import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.UserModel;
+import org.keycloak.services.resources.admin.AdminAuth;
 
 @JBossLog
-public class MagicLinkResource extends AbstractAdminResource {
+public class MagicLinkResource extends AbstractAdminResource<AdminAuth> {
 
   public MagicLinkResource(KeycloakSession session) {
     super(session);

@@ -70,14 +70,15 @@ Sample response:
 There is a simple authenticator to email a 6-digit OTP to the users email address. This implementation sends the email using a theme-resources template, which you can override. It is recommended to use this in an Authentication flow following the *Username form*. An example flow looks like this:
 ![Install Email OTP Authenticator in Browser Flow](docs/assets/email-otp-authenticator.png)
 
-## Installation
+## Building
 
-1. Build the jar:
 ```
 mvn clean install
 ```
 
-2. Copy the jar produced in `target/` to your `providers` directory (for Quarkus) or `standalone/deployments` directory (for legacy) and rebuild/restart keycloak.
+## Installation
+
+The jars that are distributed with the `bundle` classifier have the 3rd party dependencies bundled (via the Maven shade plugin). Put the `keycloak-magic-link-{version}-bundle` jar in the `providers/` directory of your Keycloak distribution and restart Keycloak. If you are installing several extensions that may have overlapping dependencies, it is recommended that you use the standalone jar, and manually install the dependencies, as you may run into version conflicts with the class files in the shaded jar.
 
 ## Releases
 
