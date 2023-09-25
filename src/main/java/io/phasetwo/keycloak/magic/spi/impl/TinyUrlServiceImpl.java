@@ -5,7 +5,8 @@ import io.phasetwo.keycloak.magic.spi.TinyUrlService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import javax.persistence.EntityManager;
+
+import jakarta.persistence.EntityManager;
 import org.keycloak.connections.jpa.JpaConnectionProvider;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
@@ -74,6 +75,6 @@ public class TinyUrlServiceImpl implements TinyUrlService {
   }
 
   private EntityManager getEntityManager() {
-    return session.getProvider(JpaConnectionProvider.class).getEntityManager();
+    return (EntityManager) session.getProvider(JpaConnectionProvider.class).getEntityManager();
   }
 }

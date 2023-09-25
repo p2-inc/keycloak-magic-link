@@ -1,6 +1,6 @@
 package io.phasetwo.keycloak.magic.auth.token;
 
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.authentication.actiontoken.AbstractActionTokenHandler;
@@ -52,6 +52,11 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
   }
 
   @Override
+  public boolean canUseTokenRepeatedly(MagicLinkActionToken token, ActionTokenContext<MagicLinkActionToken> tokenContext) {
+    return token.getActionTokenPersistent(); //Invalidate action token after one use if configured to do so
+  }
+
+  @Override
   public Response handleToken(
       MagicLinkActionToken token, ActionTokenContext<MagicLinkActionToken> tokenContext) {
     log.infof("handleToken for iss:%s, user:%s", token.getIssuedFor(), token.getUserId());
@@ -77,9 +82,8 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
       if (token.getState() != null) {
         authSession.setClientNote(OIDCLoginProtocol.STATE_PARAM, token.getState());
       }
-      if (token.getActionVerificationNonce() != null) {
-        authSession.setClientNote(
-            OIDCLoginProtocol.NONCE_PARAM, token.getActionVerificationNonce().toString());
+      if (token.getNonce() != null) {
+        authSession.setClientNote(OIDCLoginProtocol.NONCE_PARAM, token.getNonce());
       }
     }
 
