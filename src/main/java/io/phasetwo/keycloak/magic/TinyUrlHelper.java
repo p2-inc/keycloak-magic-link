@@ -9,7 +9,8 @@ import io.phasetwo.keycloak.magic.spi.TinyUrlService;
 import java.net.URI;
 import java.time.Instant;
 import java.util.Random;
-import javax.ws.rs.core.UriInfo;
+
+import jakarta.ws.rs.core.UriInfo;
 import lombok.extern.jbosslog.JBossLog;
 import org.apache.commons.lang3.StringUtils;
 import org.keycloak.models.Constants;
@@ -21,7 +22,7 @@ import org.keycloak.services.Urls;
 public class TinyUrlHelper {
 
   public static MagicLinkInfo getTinyUri(
-      KeycloakSession session, UriInfo uriInfo, MagicLinkActionToken token, RealmModel realm) {
+          KeycloakSession session, UriInfo uriInfo, MagicLinkActionToken token, RealmModel realm) {
     log.debugf(
         "baseUri: %s, token: %s, issuedFor: %s",
         uriInfo, token.serialize(session, realm, uriInfo), token.getIssuedFor());

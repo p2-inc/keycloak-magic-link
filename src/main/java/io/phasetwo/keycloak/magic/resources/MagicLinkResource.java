@@ -5,14 +5,14 @@ import io.phasetwo.keycloak.magic.auth.token.MagicLinkActionToken;
 import io.phasetwo.keycloak.magic.representation.MagicLinkInfo;
 import io.phasetwo.keycloak.magic.representation.MagicLinkRequest;
 import io.phasetwo.keycloak.magic.representation.MagicLinkResponse;
+import jakarta.ws.rs.*;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.ForbiddenException;
+import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.MediaType;
 import java.util.OptionalInt;
-import javax.ws.rs.*;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.ForbiddenException;
-import javax.ws.rs.NotFoundException;
-import javax.ws.rs.POST;
-import javax.ws.rs.Produces;
-import javax.ws.rs.core.MediaType;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
@@ -50,8 +50,6 @@ public class MagicLinkResource extends AbstractAdminResource {
     if (rep.getUsername() != null) {
       emailOrUsername = rep.getUsername();
       forceCreate = false;
-      updateProfile = false;
-      updatePassword = true;
       sendEmail = false;
     }
 
@@ -66,7 +64,8 @@ public class MagicLinkResource extends AbstractAdminResource {
             MagicLink.registerEvent(event));
     if (user == null)
       throw new NotFoundException(
-          String.format("User with email %s not found, and forceCreate is off.", rep.getEmail()));
+          String.format(
+              "User with email/username %s not found, and forceCreate is off.", emailOrUsername));
 
     MagicLinkActionToken token =
         MagicLink.createActionToken(
@@ -77,7 +76,8 @@ public class MagicLinkResource extends AbstractAdminResource {
             rep.getScope(),
             rep.getNonce(),
             rep.getState(),
-            rep.getRememberMe());
+            rep.getRememberMe(),
+            rep.getActionTokenPersistent());
     MagicLinkInfo linkInfo = MagicLink.linkFromActionToken(session, realm, token);
     boolean sent = false;
     if (sendEmail) {
