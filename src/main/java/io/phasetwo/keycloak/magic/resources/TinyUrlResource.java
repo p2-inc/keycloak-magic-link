@@ -56,14 +56,16 @@ public class TinyUrlResource extends AbstractAdminResource {
             session, null, Response.Status.BAD_REQUEST, Messages.EXPIRED_ACTION_TOKEN_NO_SESSION);
       }
     }
-
+    log.infof("No error page was returned for url_key %s", urlKey);
     String redirectUrl =
         TinyUrlHelper.getActionTokenUri(session.getContext().getUri().getBaseUri(), tinyUrl.get());
 
     // hard deleting the magic link after one use
-    session.getProvider(TinyUrlService.class).hardDeleteTinyUrl(tinyUrl.get());
+    // commenting this out as it is deleting the tokens for clients that do preview link or url
+    // defense
+    // session.getProvider(TinyUrlService.class).hardDeleteTinyUrl(tinyUrl.get());
 
-    log.debugf("Tiny Url Redirecting to %s", redirectUrl);
+    log.infof("Tiny Url Redirecting to %s", redirectUrl);
     return Response.temporaryRedirect(URI.create(redirectUrl)).build();
   }
 

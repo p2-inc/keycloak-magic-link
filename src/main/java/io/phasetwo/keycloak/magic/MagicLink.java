@@ -229,7 +229,9 @@ public class MagicLink {
       Map<String, Object> bodyAttr = Maps.newHashMap();
       bodyAttr.put("realmName", realmName);
       bodyAttr.put("magicLink", magicLinkInfo.getLink());
-      bodyAttr.put("loginCode", magicLinkInfo.getCode());
+      bodyAttr.put(
+          "loginCode",
+          magicLinkInfo.getCode().substring(0, 4) + "-" + magicLinkInfo.getCode().substring(4));
       if (StringUtils.isNotBlank(
           session.getContext().getClient().getAttribute(TinyUrlConstants.ESD_UI_LOGO_KEY))) {
         bodyAttr.put(
