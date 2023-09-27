@@ -83,7 +83,6 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
             isUpdatePassword(context, false),
             MagicLink.registerEvent(event));
 
-    log.infof("user is %s %s", user.getEmail(), user.isEnabled());
     // check for no/invalid email address
     if (user == null
         || trimToNull(user.getEmail()) == null
@@ -101,6 +100,7 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
       return; // the enabledUser method sets the challenge
     }
 
+    log.infof("user is %s %s", user.getEmail(), user.isEnabled());
     MagicLinkActionToken token =
         MagicLink.createActionToken(
             user,
@@ -196,14 +196,14 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
   @Override
   protected boolean validateForm(
       AuthenticationFlowContext context, MultivaluedMap<String, String> formData) {
-    log.info("validateForm");
+    log.debugf("validateForm");
     return validateUser(context, formData);
   }
 
   @Override
   protected Response challenge(
       AuthenticationFlowContext context, MultivaluedMap<String, String> formData) {
-    log.info("challenge");
+    log.debugf("challenge");
     LoginFormsProvider forms = context.form();
     if (!formData.isEmpty()) forms.setFormData(formData);
     return forms.createLoginUsername();
@@ -211,13 +211,13 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
 
   @Override
   protected Response createLoginForm(LoginFormsProvider form) {
-    log.info("createLoginForm");
+    log.debugf("createLoginForm");
     return form.createLoginUsername();
   }
 
   @Override
   protected String getDefaultChallengeMessage(AuthenticationFlowContext context) {
-    log.info("getDefaultChallengeMessage");
+    log.debugf("getDefaultChallengeMessage");
     return context.getRealm().isLoginWithEmailAllowed()
         ? Messages.INVALID_USERNAME_OR_EMAIL
         : Messages.INVALID_USERNAME;
