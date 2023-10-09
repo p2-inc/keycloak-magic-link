@@ -84,13 +84,14 @@ public class MagicLink {
       if (onNew != null) {
         onNew.accept(user);
       }
+      if (updatePassword) {
+        user.addRequiredAction(UserModel.RequiredAction.UPDATE_PASSWORD);
+      }
+      if (updateProfile) {
+        user.addRequiredAction(UserModel.RequiredAction.UPDATE_PROFILE);
+      }
     }
-    if (updatePassword) {
-      user.addRequiredAction(UserModel.RequiredAction.UPDATE_PASSWORD);
-    }
-    if (updateProfile) {
-      user.addRequiredAction(UserModel.RequiredAction.UPDATE_PROFILE);
-    }
+
     return user;
   }
 
