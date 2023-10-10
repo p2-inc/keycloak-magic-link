@@ -82,7 +82,6 @@ public class MagicLinkResource extends AbstractAdminResource {
     boolean sent = false;
     if (sendEmail) {
       sent = MagicLink.sendMagicLinkEmail(session, user, linkInfo);
-      log.infof("sent email to %s? %b. Link? %s", rep.getEmail(), sent, linkInfo.getLink());
     }
 
     MagicLinkResponse resp = new MagicLinkResponse();
