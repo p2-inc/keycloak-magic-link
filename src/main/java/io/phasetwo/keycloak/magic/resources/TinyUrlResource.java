@@ -65,7 +65,7 @@ public class TinyUrlResource extends AbstractAdminResource {
     // defense
     // session.getProvider(TinyUrlService.class).hardDeleteTinyUrl(tinyUrl.get());
 
-    log.infof("Tiny Url Redirecting to %s", redirectUrl);
+    // log.debugf("Tiny Url Redirecting to %s", redirectUrl);
     return Response.temporaryRedirect(URI.create(redirectUrl)).build();
   }
 
