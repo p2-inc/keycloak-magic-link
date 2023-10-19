@@ -96,13 +96,12 @@ public class MagicLink {
   }
 
   public static MagicLinkActionToken createActionToken(
-          UserModel user,
-          String clientId,
-          OptionalInt validity,
-          Boolean rememberMe,
-          AuthenticationSessionModel authSession) {
-    return createActionToken(
-            user, clientId, validity, rememberMe, authSession, true);
+      UserModel user,
+      String clientId,
+      OptionalInt validity,
+      Boolean rememberMe,
+      AuthenticationSessionModel authSession) {
+    return createActionToken(user, clientId, validity, rememberMe, authSession, true);
   }
 
   public static MagicLinkActionToken createActionToken(
@@ -116,23 +115,21 @@ public class MagicLink {
     String scope = authSession.getClientNote(OIDCLoginProtocol.SCOPE_PARAM);
     String state = authSession.getClientNote(OIDCLoginProtocol.STATE_PARAM);
     String nonce = authSession.getClientNote(OIDCLoginProtocol.NONCE_PARAM);
+    String codeChallenge = authSession.getClientNote(OIDCLoginProtocol.CODE_CHALLENGE_PARAM);
     log.infof(
         "Attempting MagicLinkAuthenticator for %s, %s, %s", user.getEmail(), clientId, redirectUri);
     log.infof("MagicLinkAuthenticator extra vars %s %s %s %b", scope, state, nonce, rememberMe);
     return createActionToken(
-        user, clientId, redirectUri, validity, scope, nonce, state, rememberMe, isActionTokenPersistent);
-  }
-
-  public static MagicLinkActionToken createActionToken(
-          UserModel user,
-          String clientId,
-          String redirectUri,
-          OptionalInt validity,
-          String scope,
-          String nonce,
-          String state,
-          Boolean rememberMe) {
-    return createActionToken(user, clientId, redirectUri, validity, scope, nonce, state, rememberMe, true);
+        user,
+        clientId,
+        redirectUri,
+        validity,
+        scope,
+        nonce,
+        state,
+        codeChallenge,
+        rememberMe,
+        isActionTokenPersistent);
   }
 
   public static MagicLinkActionToken createActionToken(
@@ -143,6 +140,30 @@ public class MagicLink {
       String scope,
       String nonce,
       String state,
+      String codeChallenge,
+      Boolean rememberMe) {
+    return createActionToken(
+        user,
+        clientId,
+        redirectUri,
+        validity,
+        scope,
+        nonce,
+        state,
+        codeChallenge,
+        rememberMe,
+        true);
+  }
+
+  public static MagicLinkActionToken createActionToken(
+      UserModel user,
+      String clientId,
+      String redirectUri,
+      OptionalInt validity,
+      String scope,
+      String nonce,
+      String state,
+      String codeChallenge,
       Boolean rememberMe,
       Boolean isActionTokenPersistent) {
     // build the action token
@@ -164,7 +185,8 @@ public class MagicLink {
 
   public static MagicLinkActionToken createActionToken(
       UserModel user, String clientId, String redirectUri, OptionalInt validity) {
-    return createActionToken(user, clientId, redirectUri, validity, null, null, null, false, true);
+    return createActionToken(
+        user, clientId, redirectUri, validity, null, null, null, null, false, true);
   }
 
   public static String linkFromActionToken(
