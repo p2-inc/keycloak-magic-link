@@ -52,8 +52,10 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
   }
 
   @Override
-  public boolean canUseTokenRepeatedly(MagicLinkActionToken token, ActionTokenContext<MagicLinkActionToken> tokenContext) {
-    return token.getActionTokenPersistent(); //Invalidate action token after one use if configured to do so
+  public boolean canUseTokenRepeatedly(
+      MagicLinkActionToken token, ActionTokenContext<MagicLinkActionToken> tokenContext) {
+    return token
+        .getActionTokenPersistent(); // Invalidate action token after one use if configured to do so
   }
 
   @Override
@@ -84,6 +86,9 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
       }
       if (token.getNonce() != null) {
         authSession.setClientNote(OIDCLoginProtocol.NONCE_PARAM, token.getNonce());
+      }
+      if (token.getCodeChallenge() != null) {
+        authSession.setClientNote(OIDCLoginProtocol.CODE_CHALLENGE_PARAM, token.getCodeChallenge());
       }
     }
 

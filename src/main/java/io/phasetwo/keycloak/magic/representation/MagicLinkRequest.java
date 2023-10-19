@@ -1,9 +1,11 @@
 package io.phasetwo.keycloak.magic.representation;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 @Data
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class MagicLinkRequest {
   @JsonProperty("username")
   private String username;
@@ -40,6 +42,9 @@ public class MagicLinkRequest {
 
   @JsonProperty("state")
   private String state = null;
+
+  @JsonProperty("code_challenge")
+  private String codeChallenge = null;
 
   @JsonProperty("remember_me")
   private Boolean rememberMe = false;

@@ -95,7 +95,8 @@ public class MagicLinkAuthenticatorFactory implements AuthenticatorFactory {
     actionTokenPersistent.setType(ProviderConfigProperty.BOOLEAN_TYPE);
     actionTokenPersistent.setName(MagicLinkAuthenticator.ACTION_TOKEN_PERSISTENT_CONFIG_PROPERTY);
     actionTokenPersistent.setLabel("Allow magic link to be reusable");
-    actionTokenPersistent.setHelpText("Toggle whether magic link should be persistent until expired.");
+    actionTokenPersistent.setHelpText(
+        "Toggle whether magic link should be persistent until expired.");
     actionTokenPersistent.setDefaultValue(true);
 
     return Arrays.asList(createUser, updateProfile, updatePassword, actionTokenPersistent);
