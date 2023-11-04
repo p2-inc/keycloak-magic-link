@@ -48,5 +48,5 @@ public class MagicLinkRequest {
   private Boolean actionTokenPersistent = true;
 
   @JsonProperty("send_email_with_code")
-  private Boolean sendEmailWithCode = true;
+  private boolean sendEmailWithCode = true;
 }

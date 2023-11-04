@@ -46,7 +46,7 @@ public class MagicLinkResource extends AbstractAdminResource {
     boolean updateProfile = rep.isUpdateProfile();
     boolean updatePassword = rep.isUpdatePassword();
     boolean sendEmail = rep.isSendEmail();
-    boolean sendEmailWithCode = rep.getSendEmailWithCode();
+    boolean sendEmailWithCode = rep.isSendEmailWithCode();
 
     if (rep.getUsername() != null) {
       emailOrUsername = rep.getUsername();

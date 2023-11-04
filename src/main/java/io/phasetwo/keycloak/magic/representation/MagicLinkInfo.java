@@ -13,7 +13,7 @@ public class MagicLinkInfo {
   @JsonProperty("code")
   private String code;
 
-  @JsonProperty("code")
+  @JsonProperty("should_send_code")
   @Builder.Default
   private boolean shouldSendCode = true;
 }
