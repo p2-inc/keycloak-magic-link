@@ -46,6 +46,7 @@ public class MagicLinkResource extends AbstractAdminResource {
     boolean updateProfile = rep.isUpdateProfile();
     boolean updatePassword = rep.isUpdatePassword();
     boolean sendEmail = rep.isSendEmail();
+    boolean sendEmailWithCode = rep.isSendEmailWithCode();
 
     if (rep.getUsername() != null) {
       emailOrUsername = rep.getUsername();
@@ -79,6 +80,7 @@ public class MagicLinkResource extends AbstractAdminResource {
             rep.getRememberMe(),
             rep.getActionTokenPersistent());
     MagicLinkInfo linkInfo = MagicLink.linkFromActionToken(session, realm, token);
+    linkInfo.setShouldSendCode(sendEmailWithCode);
     boolean sent = false;
     if (sendEmail) {
       sent = MagicLink.sendMagicLinkEmail(session, user, linkInfo);

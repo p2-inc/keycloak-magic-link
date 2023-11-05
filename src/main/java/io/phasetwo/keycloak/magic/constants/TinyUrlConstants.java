@@ -20,4 +20,6 @@ public interface TinyUrlConstants {
   String ESD_UI_LOGO_KEY = "logo";
 
   String LOGIN_STATUS_CODE = "login_code_status";
+
+  String HTTPS_PREFIX = "https://";
 }

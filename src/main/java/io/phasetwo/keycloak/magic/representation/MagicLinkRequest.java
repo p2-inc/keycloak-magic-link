@@ -46,4 +46,7 @@ public class MagicLinkRequest {
 
   @JsonProperty("reusable")
   private Boolean actionTokenPersistent = true;
+
+  @JsonProperty("send_email_with_code")
+  private boolean sendEmailWithCode = true;
 }

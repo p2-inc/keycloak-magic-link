@@ -43,6 +43,8 @@ import org.keycloak.services.resources.LoginActionsService;
 import org.keycloak.services.resources.RealmsResource;
 import org.keycloak.sessions.AuthenticationSessionModel;
 
+import static io.phasetwo.keycloak.magic.constants.TinyUrlConstants.HTTPS_PREFIX;
+
 /** common utilities for Magic Link authentication, used by the authenticator and resource */
 @JBossLog
 public class MagicLink {
@@ -229,6 +231,8 @@ public class MagicLink {
       Map<String, Object> bodyAttr = Maps.newHashMap();
       bodyAttr.put("realmName", realmName);
       bodyAttr.put("magicLink", magicLinkInfo.getLink());
+      bodyAttr.put("accountUrl", getBaseUrl(session));
+      bodyAttr.put("shouldSendLoginCode", magicLinkInfo.isShouldSendCode());
       bodyAttr.put(
           "loginCode",
           magicLinkInfo.getCode().substring(0, 4) + "-" + magicLinkInfo.getCode().substring(4));
@@ -250,6 +254,22 @@ public class MagicLink {
       log.error("Failed to send magic link email", e);
     }
     return false;
+  }
+
+  public static String getBaseUrl(KeycloakSession session) {
+    try {
+      if (session.getContext().getClient().getBaseUrl() != null
+          && session.getContext().getClient().getBaseUrl().contains(HTTPS_PREFIX))
+        return session.getContext().getClient().getBaseUrl().split(HTTPS_PREFIX)[1].split("/")[0];
+      else if (session.getContext().getClient().getRootUrl() != null
+          && session.getContext().getClient().getBaseUrl().contains(HTTPS_PREFIX))
+        return session.getContext().getClient().getRootUrl().split(HTTPS_PREFIX)[1].split("/")[0];
+      else return null;
+    } catch (Exception e) {
+      // this is not critical, we can look at it if there are errors
+      log.error("Failed to get base url", e);
+    }
+    return null;
   }
 
   public static boolean sendOtpEmail(KeycloakSession session, UserModel user, String code) {
