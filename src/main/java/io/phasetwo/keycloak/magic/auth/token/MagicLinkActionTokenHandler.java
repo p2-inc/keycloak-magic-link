@@ -52,8 +52,10 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
   }
 
   @Override
-  public boolean canUseTokenRepeatedly(MagicLinkActionToken token, ActionTokenContext<MagicLinkActionToken> tokenContext) {
-    return token.getActionTokenPersistent(); //Invalidate action token after one use if configured to do so
+  public boolean canUseTokenRepeatedly(
+      MagicLinkActionToken token, ActionTokenContext<MagicLinkActionToken> tokenContext) {
+    return token
+        .getActionTokenPersistent(); // Invalidate action token after one use if configured to do so
   }
 
   @Override
