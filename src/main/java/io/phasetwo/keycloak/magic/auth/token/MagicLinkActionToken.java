@@ -3,6 +3,7 @@ package io.phasetwo.keycloak.magic.auth.token;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.UUID;
 import org.keycloak.authentication.actiontoken.DefaultActionToken;
+import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 
 public class MagicLinkActionToken extends DefaultActionToken {
 
@@ -74,6 +75,7 @@ public class MagicLinkActionToken extends DefaultActionToken {
     this.rememberMe = rememberMe;
     this.actionTokenPersistent = isActionTokenPersistent;
     this.nonce = nonce;
+    this.setOtherClaims(OIDCLoginProtocol.NONCE_PARAM, nonce);
   }
 
   private MagicLinkActionToken() {
