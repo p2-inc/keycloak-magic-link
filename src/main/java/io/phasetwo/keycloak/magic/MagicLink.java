@@ -3,6 +3,7 @@ package io.phasetwo.keycloak.magic;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
+import io.phasetwo.keycloak.magic.auth.token.ExpandedMagicLinkActionToken;
 import io.phasetwo.keycloak.magic.auth.token.MagicLinkActionToken;
 import jakarta.ws.rs.core.UriBuilder;
 import jakarta.ws.rs.core.UriInfo;
@@ -15,21 +16,14 @@ import java.util.stream.Collectors;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.Config;
 import org.keycloak.authentication.Authenticator;
+import org.keycloak.authentication.actiontoken.DefaultActionToken;
 import org.keycloak.common.util.Time;
 import org.keycloak.email.EmailException;
 import org.keycloak.email.EmailTemplateProvider;
 import org.keycloak.events.Details;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.events.EventType;
-import org.keycloak.models.AuthenticationExecutionModel;
-import org.keycloak.models.AuthenticationFlowModel;
-import org.keycloak.models.ClientModel;
-import org.keycloak.models.Constants;
-import org.keycloak.models.KeycloakSession;
-import org.keycloak.models.KeycloakSessionFactory;
-import org.keycloak.models.KeycloakSessionTask;
-import org.keycloak.models.RealmModel;
-import org.keycloak.models.UserModel;
+import org.keycloak.models.*;
 import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.utils.RedirectUtils;
@@ -104,6 +98,39 @@ public class MagicLink {
     return createActionToken(user, clientId, validity, rememberMe, authSession, true);
   }
 
+  public static ExpandedMagicLinkActionToken createExpandedActionToken(
+      UserModel user,
+      String clientId,
+      OptionalInt validity,
+      Boolean rememberMe,
+      AuthenticationSessionModel authSession,
+      Boolean isActionTokenPersistent) {
+    String redirectUri = authSession.getRedirectUri();
+    String scope = authSession.getClientNote(OIDCLoginProtocol.SCOPE_PARAM);
+    String state = authSession.getClientNote(OIDCLoginProtocol.STATE_PARAM);
+    String nonce = authSession.getClientNote(OIDCLoginProtocol.NONCE_PARAM);
+    log.infof(
+        "Attempting MagicLinkAuthenticator for %s, %s, %s", user.getEmail(), clientId, redirectUri);
+    log.infof("MagicLinkAuthenticator extra vars %s %s %s %b", scope, state, nonce, rememberMe);
+
+    int validityInSecs = validity.orElse(60 * 60 * 24); // 1 day
+    int absoluteExpirationInSecs = Time.currentTime() + validityInSecs;
+    ExpandedMagicLinkActionToken token =
+        new ExpandedMagicLinkActionToken(
+            user.getId(),
+            absoluteExpirationInSecs,
+            clientId,
+            redirectUri,
+            scope,
+            nonce,
+            state,
+            rememberMe,
+            isActionTokenPersistent,
+            authSession.getParentSession().getId(),
+            authSession.getTabId());
+    return token;
+  }
+
   public static MagicLinkActionToken createActionToken(
       UserModel user,
       String clientId,
@@ -176,7 +203,7 @@ public class MagicLink {
   }
 
   public static String linkFromActionToken(
-      KeycloakSession session, RealmModel realm, MagicLinkActionToken token) {
+      KeycloakSession session, RealmModel realm, DefaultActionToken token) {
     UriInfo uriInfo = session.getContext().getUri();
 
     // This is a workaround for situations where the realm you are using to call this (e.g. master)
