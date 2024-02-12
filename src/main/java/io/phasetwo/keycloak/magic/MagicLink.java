@@ -105,14 +105,10 @@ public class MagicLink {
       Boolean rememberMe,
       AuthenticationSessionModel authSession,
       Boolean isActionTokenPersistent) {
-    String redirectUri = authSession.getRedirectUri();
-    String scope = authSession.getClientNote(OIDCLoginProtocol.SCOPE_PARAM);
-    String state = authSession.getClientNote(OIDCLoginProtocol.STATE_PARAM);
-    String nonce = authSession.getClientNote(OIDCLoginProtocol.NONCE_PARAM);
     log.infof(
-        "Attempting MagicLinkAuthenticator for %s, %s, %s", user.getEmail(), clientId, redirectUri);
-    log.infof("MagicLinkAuthenticator extra vars %s %s %s %b", scope, state, nonce, rememberMe);
+        "Attempting ExpandedMagicLinkAuthenticator for %s, %s, %s, %s", user.getEmail(), clientId, authSession.getParentSession().getId(), authSession.getTabId());
 
+    String nonce = authSession.getClientNote(OIDCLoginProtocol.NONCE_PARAM);
     int validityInSecs = validity.orElse(60 * 60 * 24); // 1 day
     int absoluteExpirationInSecs = Time.currentTime() + validityInSecs;
     ExpandedMagicLinkActionToken token =
@@ -120,12 +116,7 @@ public class MagicLink {
             user.getId(),
             absoluteExpirationInSecs,
             clientId,
-            redirectUri,
-            scope,
             nonce,
-            state,
-            rememberMe,
-            isActionTokenPersistent,
             authSession.getParentSession().getId(),
             authSession.getTabId());
     return token;

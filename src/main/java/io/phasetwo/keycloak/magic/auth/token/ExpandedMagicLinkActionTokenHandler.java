@@ -48,48 +48,16 @@ public class ExpandedMagicLinkActionTokenHandler
         UserModel user = tokenContext.getAuthenticationSession().getAuthenticatedUser();
 
         final AuthenticationSessionModel authSession = tokenContext.getAuthenticationSession();
+        final RootAuthenticationSessionModel rootSession = authSession.getParentSession();
         final ClientModel client = authSession.getClient();
-//        final String redirectUri =
-//                token.getRedirectUri() != null
-//                        ? token.getRedirectUri()
-//                        : ResolveRelative.resolveRelativeUri(
-//                        tokenContext.getSession(), client.getRootUrl(), client.getBaseUrl());
-//        log.infof("Using redirect_uri %s", redirectUri);
-//
-//        String redirect =
-//                RedirectUtils.verifyRedirectUri(
-//                        tokenContext.getSession(), redirectUri, authSession.getClient());
-//        if (redirect != null) {
-//            authSession.setAuthNote(
-//                    AuthenticationManager.SET_REDIRECT_URI_AFTER_REQUIRED_ACTIONS, "true");
-//            authSession.setRedirectUri(redirect);
-//            authSession.setClientNote(OIDCLoginProtocol.REDIRECT_URI_PARAM, redirectUri);
-//            if (token.getState() != null) {
-//                authSession.setClientNote(OIDCLoginProtocol.STATE_PARAM, token.getState());
-//            }
-//            if (token.getNonce() != null) {
-//                authSession.setClientNote(OIDCLoginProtocol.NONCE_PARAM, token.getNonce());
-//                authSession.setUserSessionNote(OIDCLoginProtocol.NONCE_PARAM, token.getNonce());
-//            }
-//        }
-//
-//        if (token.getScope() != null) {
-//            authSession.setClientNote(OAuth2Constants.SCOPE, token.getScope());
-//            AuthenticationManager.setClientScopesInSession(authSession);
-//        }
-//
-//        if (token.getRememberMe() != null && token.getRememberMe()) {
-//            authSession.setAuthNote(Details.REMEMBER_ME, "true");
-//            tokenContext.getEvent().detail(Details.REMEMBER_ME, "true");
-//        } else {
-//            authSession.removeAuthNote(Details.REMEMBER_ME);
-//        }
 
         user.setEmailVerified(true);
         KeycloakSession session = tokenContext.getSession();
         AuthenticationSessionProvider provider = session.authenticationSessions();
         RootAuthenticationSessionModel m = provider.getRootAuthenticationSession(tokenContext.getRealm(), token.getSessionId());
 
+        log.infof("root session orig %s, handler %s", rootSession.getId(), m.getId());
+        
         AuthenticationSessionModel asm = m.getAuthenticationSession(client, token.getTabId());
 
         asm.setAuthNote(VALID_SESSION, "true");
@@ -97,4 +65,20 @@ public class ExpandedMagicLinkActionTokenHandler
         LoginFormsProvider loginFormsProvider = session.getProvider(LoginFormsProvider.class);
         return loginFormsProvider.createForm("email-confirmation.ftl");
     }
+
+  @Override
+  public AuthenticationSessionModel startFreshAuthenticationSession(ExpandedMagicLinkActionToken token, ActionTokenContext<ExpandedMagicLinkActionToken> tokenContext) {
+    log.infof("startFreshAuthenticationSession %s", token.getIssuedFor());
+
+    ClientModel client = tokenContext.getSession().clients().getClientByClientId(tokenContext.getRealm(), token.getIssuedFor());
+    AuthenticationSessionProvider provider = tokenContext.getSession().authenticationSessions();
+    RootAuthenticationSessionModel m = provider.getRootAuthenticationSession(tokenContext.getRealm(), token.getSessionId());
+    AuthenticationSessionModel authSession = m.createAuthenticationSession(client);
+    
+    //AuthenticationSessionModel authSession = tokenContext.createAuthenticationSessionForClient(token.getIssuedFor());
+    //authSession.setAuthNote(AuthenticationManager.END_AFTER_REQUIRED_ACTIONS, "true");
+    return authSession;
+  }
+    
+
 }
