@@ -3,8 +3,9 @@ package io.phasetwo.keycloak.magic;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
-import io.phasetwo.keycloak.magic.auth.token.ExpandedMagicLinkActionToken;
+import io.phasetwo.keycloak.magic.auth.MagicLinkContinuationAuthenticatorFactory;
 import io.phasetwo.keycloak.magic.auth.token.MagicLinkActionToken;
+import io.phasetwo.keycloak.magic.auth.token.MagicLinkContinuationActionToken;
 import jakarta.ws.rs.core.UriBuilder;
 import jakarta.ws.rs.core.UriInfo;
 import java.net.URI;
@@ -98,27 +99,27 @@ public class MagicLink {
     return createActionToken(user, clientId, validity, rememberMe, authSession, true);
   }
 
-  public static ExpandedMagicLinkActionToken createExpandedActionToken(
+  public static MagicLinkContinuationActionToken createExpandedActionToken(
       UserModel user,
       String clientId,
       OptionalInt validity,
-      Boolean rememberMe,
-      AuthenticationSessionModel authSession,
-      Boolean isActionTokenPersistent) {
+      AuthenticationSessionModel authSession) {
     log.infof(
-        "Attempting ExpandedMagicLinkAuthenticator for %s, %s, %s, %s", user.getEmail(), clientId, authSession.getParentSession().getId(), authSession.getTabId());
+        "Attempting MagicLinkContinuationAuthenticator for %s, %s, %s, %s",
+        user.getEmail(), clientId, authSession.getParentSession().getId(), authSession.getTabId());
 
     String nonce = authSession.getClientNote(OIDCLoginProtocol.NONCE_PARAM);
     int validityInSecs = validity.orElse(60 * 60 * 24); // 1 day
     int absoluteExpirationInSecs = Time.currentTime() + validityInSecs;
-    ExpandedMagicLinkActionToken token =
-        new ExpandedMagicLinkActionToken(
+    MagicLinkContinuationActionToken token =
+        new MagicLinkContinuationActionToken(
             user.getId(),
             absoluteExpirationInSecs,
             clientId,
             nonce,
             authSession.getParentSession().getId(),
-            authSession.getTabId());
+            authSession.getTabId(),
+            authSession.getRedirectUri());
     return token;
   }
 
@@ -291,7 +292,7 @@ public class MagicLink {
       org.keycloak.authentication.authenticators.browser.IdentityProviderAuthenticatorFactory
           .PROVIDER_ID;
   public static final String MAGIC_LINK_PROVIDER_ID =
-      io.phasetwo.keycloak.magic.auth.MagicLinkAuthenticatorFactory.PROVIDER_ID;
+      MagicLinkContinuationAuthenticatorFactory.PROVIDER_ID;
 
   public static void realmPostCreate(
       KeycloakSessionFactory factory, RealmModel.RealmPostCreateEvent event) {

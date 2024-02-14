@@ -7,17 +7,17 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 
 @AutoService(ActionTokenHandlerFactory.class)
-public class ExpandedMagicLinkActionTokenHandlerFactory
-    implements ActionTokenHandlerFactory<ExpandedMagicLinkActionToken> {
+public class MagicLinkContinuationActionTokenHandlerFactory
+    implements ActionTokenHandlerFactory<MagicLinkContinuationActionToken> {
 
-  public static final String PROVIDER_ID = "exp-magic-link";
+  public static final String PROVIDER_ID = "magic-link-continuation";
 
   @Override
   public void close() {}
 
   @Override
-  public ExpandedMagicLinkActionTokenHandler create(KeycloakSession session) {
-    return new ExpandedMagicLinkActionTokenHandler();
+  public MagicLinkContinuationLinkActionTokenHandler create(KeycloakSession session) {
+    return new MagicLinkContinuationLinkActionTokenHandler();
   }
 
   @Override
