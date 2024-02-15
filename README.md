@@ -3,6 +3,7 @@
 # keycloak-magic-link
 
 Magic link implementation. Inspired by the [experiment](https://github.com/stianst/keycloak-experimental/tree/main/magic-link) by [@stianst](https://github.com/stianst).
+It comes in two flavours: magic link and magic link continuation;
 
 There is also a simple Email OTP authenticator implementation here.
 This extension is used in the [Phase Two](https://phasetwo.io) cloud offering, and is released here as part of its commitment to making its [core extensions](https://phasetwo.io/docs/introduction/open-source) open source. Please consult the [license](COPYING) for information regarding use.
@@ -26,6 +27,24 @@ An Authenticator that can run as a form in your login flow. This takes an email,
 The authenticator can be configured to create a user with the given email address as username/email if none exists. It is also possible to force `UPDATE_PROFILE` and `UPDATE_PASSWORD` required actions when the user is created by this Authenticator:
 
 ![Configure Magic Link Authenticator with options](docs/assets/magic-link-config.png)
+
+## Magic link continuation
+
+This Magic link continuation authenticator is similar to the Magic Link authenticator in implementation, but has a different behaviour. Instead of creating a session on the device where the link is clicked, the flow continues the login on the initial login page. The login page is polling the authentication page each 5 seconds until the session is confirmed or the authentication flow expires. The default expiration for the Magic link continuation flow is 10 minutes.
+
+
+### Authenticator
+
+![Install Magic Link continuation Authenticator in Browser Flow](docs/assets/magic-link-continuation-authenticator.png)
+
+The authenticator can be configured to set the expiration of the authentication flow.
+
+![Configure Magic Link continuation Authenticator with options](docs/assets/magic-link-continuation-config.png)
+
+When the period is exceeded the authentication flow will reset.
+
+![Magic Link continuation expired](docs/assets/magic-link-continuation-expiration.png)
+
 
 ### Resource
 

@@ -11,7 +11,7 @@
       </a>
     </div>
   <#elseif section = "form">
-    ${msg("magicLinkConfirmation")}
+    ${msg("magicLinkContinuationConfirmation")}
   </#if>
   <script>
      (function (w, d) {

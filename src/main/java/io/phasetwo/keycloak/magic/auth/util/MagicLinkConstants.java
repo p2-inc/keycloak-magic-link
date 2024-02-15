@@ -6,4 +6,5 @@ public final class MagicLinkConstants {
   public static final String SESSION_CONFIRMED = "SESSION_CONFIRMED";
 
   public static final String TIMEOUT = "TIMEOUT";
+  public static final String AUTH_SESSION_ID = "AUTH_SESSION_ID";
 }

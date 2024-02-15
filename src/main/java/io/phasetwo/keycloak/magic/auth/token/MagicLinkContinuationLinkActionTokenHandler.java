@@ -4,6 +4,7 @@ import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.SESSION_CO
 import static org.keycloak.services.util.CookieHelper.getCookie;
 
 import io.phasetwo.keycloak.magic.auth.model.MagicLinkContinuationBean;
+import io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants;
 import jakarta.ws.rs.core.Cookie;
 import jakarta.ws.rs.core.Response;
 import lombok.extern.jbosslog.JBossLog;
@@ -25,7 +26,6 @@ import org.keycloak.sessions.RootAuthenticationSessionModel;
 @JBossLog
 public class MagicLinkContinuationLinkActionTokenHandler
     extends AbstractActionTokenHandler<MagicLinkContinuationActionToken> {
-  public static final String AUTH_SESSION_ID = "AUTH_SESSION_ID";
 
   public MagicLinkContinuationLinkActionTokenHandler() {
     super(
@@ -56,20 +56,26 @@ public class MagicLinkContinuationLinkActionTokenHandler
     if (rootAuthenticationSession != null) {
       AuthenticationSessionModel authenticationFlowSession =
           rootAuthenticationSession.getAuthenticationSession(client, token.getTabId());
-      authenticationFlowSession.setAuthNote(SESSION_CONFIRMED, "true");
+      if (authenticationFlowSession != null) {
+        authenticationFlowSession.setAuthNote(SESSION_CONFIRMED, "true");
 
-      Cookie cookie =
-          getCookie(session.getContext().getRequestHeaders().getCookies(), AUTH_SESSION_ID);
+        Cookie cookie =
+            getCookie(
+                session.getContext().getRequestHeaders().getCookies(),
+                MagicLinkConstants.AUTH_SESSION_ID);
 
-      boolean sameBrowser = cookie != null && cookie.getValue().equals(token.getSessionId());
-      MagicLinkContinuationBean magicLinkContinuationBean =
-          new MagicLinkContinuationBean(sameBrowser, token.getRedirectUri());
+        boolean sameBrowser = cookie != null && cookie.getValue().equals(token.getSessionId());
+        MagicLinkContinuationBean magicLinkContinuationBean =
+            new MagicLinkContinuationBean(sameBrowser, token.getRedirectUri());
+        tokenContext.getEvent().success();
 
-      return loginFormsProvider
-          .setAttribute("magicLinkContinuation", magicLinkContinuationBean)
-          .createForm("email-confirmation.ftl");
+        return loginFormsProvider
+            .setAttribute("magicLinkContinuation", magicLinkContinuationBean)
+            .createForm("email-confirmation.ftl");
+      }
     }
 
+    tokenContext.getEvent().error("Expired magic link continuation session!");
     return loginFormsProvider.createForm("email-confirmation-error.ftl");
   }
 

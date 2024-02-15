@@ -24,6 +24,7 @@ import org.keycloak.forms.login.LoginFormsProvider;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.services.managers.AuthenticationManager;
+import org.keycloak.services.managers.AuthenticationSessionManager;
 import org.keycloak.services.messages.Messages;
 import org.keycloak.utils.StringUtil;
 
@@ -33,10 +34,22 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
   @Override
   public void authenticate(AuthenticationFlowContext context) {
     log.debug("MagicLinkContinuationAuthenticator.authenticate");
+
+    if (sessionExpired(context)) {
+      AuthenticationSessionManager manager = new AuthenticationSessionManager(context.getSession());
+      manager.removeTabIdInAuthenticationSession(
+          context.getRealm(), context.getAuthenticationSession());
+
+      context.getEvent().error(Errors.SESSION_EXPIRED);
+      Response challengeResponse =
+          challenge(context, Messages.EXPIRED_ACTION_TOKEN_NO_SESSION, FIELD_USERNAME);
+      context.failureChallenge(
+          AuthenticationFlowError.GENERIC_AUTHENTICATION_ERROR, challengeResponse);
+      return;
+    }
+
     String attemptedUsername = getAttemptedUsername(context);
     String sessionConfirmed = context.getAuthenticationSession().getAuthNote(SESSION_CONFIRMED);
-    if (sessionExpired(context)) return;
-
     if (StringUtil.isNotBlank(sessionConfirmed)) {
       UserModel user;
       if (isValidEmail(attemptedUsername)) {
@@ -51,8 +64,8 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
     } else if (attemptedUsername == null) {
       super.authenticate(context);
     } else {
-      String emailSent = context.getAuthenticationSession().getAuthNote(SESSION_INITIATED);
-      if (StringUtil.isBlank(emailSent)) {
+      String sessionInitiated = context.getAuthenticationSession().getAuthNote(SESSION_INITIATED);
+      if (StringUtil.isBlank(sessionInitiated)) {
         log.debugf(
             "Found attempted username %s from previous authenticator, skipping login form",
             attemptedUsername);
@@ -67,13 +80,7 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
     String expiration = context.getAuthenticationSession().getAuthNote(SESSION_EXPIRATION);
     if (StringUtil.isNotBlank(expiration)) {
       ZonedDateTime expirationTime = ZonedDateTime.parse(expiration);
-      if (expirationTime.isBefore(ZonedDateTime.now())) {
-        Response challengeResponse =
-            challenge(context, Messages.EXPIRED_ACTION_TOKEN_NO_SESSION, FIELD_USERNAME);
-        context.failureChallenge(
-            AuthenticationFlowError.GENERIC_AUTHENTICATION_ERROR, challengeResponse);
-        return true;
-      }
+      return expirationTime.isBefore(ZonedDateTime.now());
     }
     return false;
   }
@@ -99,6 +106,7 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
       context.failureChallenge(AuthenticationFlowError.INVALID_USER, challengeResponse);
       return;
     }
+
     String clientId = context.getSession().getContext().getClient().getClientId();
 
     EventBuilder event = context.newEvent();
