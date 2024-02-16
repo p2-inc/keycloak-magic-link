@@ -1,17 +1,17 @@
 package io.phasetwo.keycloak.magic.auth;
 
-import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.*;
+import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.SESSION_CONFIRMED;
+import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.SESSION_EXPIRATION;
+import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.SESSION_INITIATED;
+import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.TIMEOUT;
 import static org.keycloak.services.validation.Validation.FIELD_USERNAME;
 
 import io.phasetwo.keycloak.magic.MagicLink;
 import io.phasetwo.keycloak.magic.auth.token.MagicLinkContinuationActionToken;
-import jakarta.mail.internet.AddressException;
-import jakarta.mail.internet.InternetAddress;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
 import java.time.ZonedDateTime;
 import java.util.Map;
-import java.util.OptionalInt;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.AuthenticationFlowError;
@@ -48,11 +48,11 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
       return;
     }
 
-    String attemptedUsername = getAttemptedUsername(context);
+    String attemptedUsername = MagicLink.getAttemptedUsername(context);
     String sessionConfirmed = context.getAuthenticationSession().getAuthNote(SESSION_CONFIRMED);
     if (StringUtil.isNotBlank(sessionConfirmed)) {
       UserModel user;
-      if (isValidEmail(attemptedUsername)) {
+      if (MagicLink.isValidEmail(attemptedUsername)) {
         user = context.getSession().users().getUserByEmail(context.getRealm(), attemptedUsername);
       } else {
         user =
@@ -91,11 +91,11 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
 
     MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
 
-    String email = trimToNull(formData.getFirst(AuthenticationManager.FORM_USERNAME));
+    String email = MagicLink.trimToNull(formData.getFirst(AuthenticationManager.FORM_USERNAME));
     // check for empty email
     if (email == null) {
       // - first check for email from previous authenticator
-      email = getAttemptedUsername(context);
+      email = MagicLink.getAttemptedUsername(context);
     }
     log.debugf("email in action is %s", email);
     // - throw error if still empty
@@ -122,7 +122,9 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
             MagicLink.registerEvent(event));
 
     // check for no/invalid email address
-    if (user == null || trimToNull(user.getEmail()) == null || !isValidEmail(user.getEmail())) {
+    if (user == null
+        || MagicLink.trimToNull(user.getEmail()) == null
+        || !MagicLink.isValidEmail(user.getEmail())) {
       context.getEvent().event(EventType.LOGIN_ERROR).error(Errors.INVALID_EMAIL);
       Response challengeResponse =
           challenge(context, getDefaultChallengeMessage(context), FIELD_USERNAME);
@@ -137,11 +139,14 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
       return; // the enabledUser method sets the challenge
     }
 
+    int timeout = getTimeout(context, 10);
+
+    int validityInSecs = 60 * timeout;
     MagicLinkContinuationActionToken token =
         MagicLink.createExpandedActionToken(
-            user, clientId, OptionalInt.empty(), context.getAuthenticationSession());
+            user, clientId, validityInSecs, context.getAuthenticationSession());
     String link = MagicLink.linkFromActionToken(context.getSession(), context.getRealm(), token);
-    boolean sent = MagicLink.sendMagicLinkEmail(context.getSession(), user, link);
+    boolean sent = MagicLink.sendMagicLinkContinuationEmail(context.getSession(), user, link);
     log.debugf("sent email to %s? %b. Link? %s", user.getEmail(), sent, link);
 
     context
@@ -149,7 +154,6 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
         .setAuthNote(AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME, email);
     context.getAuthenticationSession().setAuthNote(SESSION_INITIATED, "true");
 
-    int timeout = getTimeout(context, 10);
     String sessionExpiration =
         ZonedDateTime.now()
             .plusMinutes(timeout)
@@ -158,43 +162,6 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
     context.getAuthenticationSession().setAuthNote(SESSION_EXPIRATION, sessionExpiration);
 
     context.challenge(context.form().createForm("view-email-continuation.ftl"));
-  }
-
-  private static boolean isValidEmail(String email) {
-    try {
-      InternetAddress a = new InternetAddress(email);
-      a.validate();
-      return true;
-    } catch (AddressException e) {
-      return false;
-    }
-  }
-
-  private String getAttemptedUsername(AuthenticationFlowContext context) {
-    if (context.getUser() != null && context.getUser().getEmail() != null) {
-      return context.getUser().getEmail();
-    }
-    String username =
-        trimToNull(context.getAuthenticationSession().getAuthNote(ATTEMPTED_USERNAME));
-    if (username != null) {
-      if (isValidEmail(username)) {
-        return username;
-      }
-      UserModel user = context.getSession().users().getUserByUsername(context.getRealm(), username);
-      if (user != null && user.getEmail() != null) {
-        return user.getEmail();
-      }
-    }
-    return null;
-  }
-
-  private static String trimToNull(final String s) {
-    if (s == null) {
-      return null;
-    }
-    String trimmed = s.trim();
-    if ("".equalsIgnoreCase(trimmed)) trimmed = null;
-    return trimmed;
   }
 
   @Override

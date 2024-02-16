@@ -3,7 +3,7 @@
 # keycloak-magic-link
 
 Magic link implementation. Inspired by the [experiment](https://github.com/stianst/keycloak-experimental/tree/main/magic-link) by [@stianst](https://github.com/stianst).
-It comes in two flavours: magic link and magic link continuation;
+It comes in two types: magic link and magic link continuation;
 
 There is also a simple Email OTP authenticator implementation here.
 This extension is used in the [Phase Two](https://phasetwo.io) cloud offering, and is released here as part of its commitment to making its [core extensions](https://phasetwo.io/docs/introduction/open-source) open source. Please consult the [license](COPYING) for information regarding use.
