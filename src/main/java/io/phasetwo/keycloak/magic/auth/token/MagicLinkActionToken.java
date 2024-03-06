@@ -148,6 +148,7 @@ public class MagicLinkActionToken extends DefaultActionToken {
   }
 
   @Override
+  // Hot fix for https://github.com/keycloak/keycloak/issues/27627
   public String serialize(KeycloakSession session, RealmModel realm, UriInfo uri) {
     String stringUri = uri.getAbsolutePath().toString();
     String issuerUri = stringUri.substring(0, stringUri.lastIndexOf('/'));
