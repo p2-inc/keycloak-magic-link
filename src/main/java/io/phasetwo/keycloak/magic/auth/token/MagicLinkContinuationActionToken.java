@@ -1,8 +1,14 @@
 package io.phasetwo.keycloak.magic.auth.token;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+
+import jakarta.ws.rs.core.UriInfo;
+
 import java.util.UUID;
 import org.keycloak.authentication.actiontoken.DefaultActionToken;
+import org.keycloak.common.util.Time;
+import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.RealmModel;
 
 public class MagicLinkContinuationActionToken extends DefaultActionToken {
 
@@ -37,7 +43,8 @@ public class MagicLinkContinuationActionToken extends DefaultActionToken {
   }
 
   private MagicLinkContinuationActionToken() {
-    // Note that the class must have a private constructor without any arguments. This is necessary
+    // Note that the class must have a private constructor without any arguments.
+    // This is necessary
     // to deserialize the token class from JWT.
   }
 
@@ -71,5 +78,18 @@ public class MagicLinkContinuationActionToken extends DefaultActionToken {
 
   public void setRedirectUri(String redirectUri) {
     this.redirectUri = redirectUri;
+  }
+
+  @Override
+  public String serialize(KeycloakSession session, RealmModel realm, UriInfo uri) {
+    String stringUri = uri.getAbsolutePath().toString();
+    String issuerUri = stringUri.substring(0, stringUri.lastIndexOf('/'));
+
+    this.issuedAt(Time.currentTime())
+        .id(getActionVerificationNonce().toString())
+        .issuer(issuerUri)
+        .audience(issuerUri);
+
+    return session.tokens().encode(this);
   }
 }
