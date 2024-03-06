@@ -1,17 +1,8 @@
 package io.phasetwo.keycloak.magic.auth.token;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-
-import jakarta.ws.rs.core.UriInfo;
-
-import org.keycloak.common.util.Time;
-
 import java.util.UUID;
 import org.keycloak.authentication.actiontoken.DefaultActionToken;
-import org.keycloak.models.KeycloakSession;
-import org.keycloak.models.RealmModel;
-import org.keycloak.representations.JsonWebToken;
-import org.keycloak.services.Urls;
 
 public class MagicLinkActionToken extends DefaultActionToken {
 
@@ -86,8 +77,7 @@ public class MagicLinkActionToken extends DefaultActionToken {
   }
 
   private MagicLinkActionToken() {
-    // Note that the class must have a private constructor without any arguments.
-    // This is necessary
+    // Note that the class must have a private constructor without any arguments. This is necessary
     // to deserialize the token class from JWT.
   }
 
@@ -145,18 +135,5 @@ public class MagicLinkActionToken extends DefaultActionToken {
 
   public void setNonce(String value) {
     this.nonce = value;
-  }
-
-  @Override
-  public String serialize(KeycloakSession session, RealmModel realm, UriInfo uri) {
-    String stringUri = uri.getAbsolutePath().toString();
-    String issuerUri = stringUri.substring(0, stringUri.lastIndexOf('/'));
-    
-    this.issuedAt(Time.currentTime())
-        .id(getActionVerificationNonce().toString())
-        .issuer(issuerUri)
-        .audience(issuerUri);
-
-    return session.tokens().encode(this);
   }
 }
