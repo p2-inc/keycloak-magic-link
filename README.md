@@ -66,7 +66,7 @@ Parameters:
 | `nonce` | N | | OIDC `nonce` variable. |
 | `state` | N | | OIDC `state` variable. |
 | `remember_me` | N | false | If the user is treated as if they had checked "Remember Me" on login. Requires that it is enabled in the Realm. |
-| `reusable` | N | true | If the token can be reused multiple time during its validity |
+| `reusable` | N | true | If the token can be reused multiple times during its validity |
 
 Sample request (replace your access token):
 ```
