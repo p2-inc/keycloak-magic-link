@@ -1,7 +1,6 @@
 package io.phasetwo.keycloak.magic.auth.token;
 
 import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.SESSION_CONFIRMED;
-import static org.keycloak.services.util.CookieHelper.getCookie;
 
 import io.phasetwo.keycloak.magic.auth.model.MagicLinkContinuationBean;
 import io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants;
@@ -58,11 +57,7 @@ public class MagicLinkContinuationLinkActionTokenHandler
           rootAuthenticationSession.getAuthenticationSession(client, token.getTabId());
       if (authenticationFlowSession != null) {
         authenticationFlowSession.setAuthNote(SESSION_CONFIRMED, "true");
-
-        Cookie cookie =
-            getCookie(
-                session.getContext().getRequestHeaders().getCookies(),
-                MagicLinkConstants.AUTH_SESSION_ID);
+        Cookie cookie = session.getContext().getRequestHeaders().getCookies().get(MagicLinkConstants.AUTH_SESSION_ID);
 
         boolean sameBrowser = cookie != null && cookie.getValue().equals(token.getSessionId());
         MagicLinkContinuationBean magicLinkContinuationBean =
