@@ -4,7 +4,6 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Response;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.http.HttpRequest;
-import org.keycloak.http.HttpResponse;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.services.cors.Cors;
 import org.keycloak.services.resources.admin.AdminAuth;
@@ -36,6 +35,7 @@ public class CorsResource {
         .allowedOrigins(auth.getToken())
         .allowedMethods(METHODS)
         .exposedHeaders("Location")
-        .auth();
+        .auth()
+        .add();
   }
 }
