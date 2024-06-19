@@ -57,7 +57,12 @@ public class MagicLinkContinuationLinkActionTokenHandler
           rootAuthenticationSession.getAuthenticationSession(client, token.getTabId());
       if (authenticationFlowSession != null) {
         authenticationFlowSession.setAuthNote(SESSION_CONFIRMED, "true");
-        Cookie cookie = session.getContext().getRequestHeaders().getCookies().get(MagicLinkConstants.AUTH_SESSION_ID);
+        Cookie cookie =
+            session
+                .getContext()
+                .getRequestHeaders()
+                .getCookies()
+                .get(MagicLinkConstants.AUTH_SESSION_ID);
 
         boolean sameBrowser = cookie != null && cookie.getValue().equals(token.getSessionId());
         MagicLinkContinuationBean magicLinkContinuationBean =
