@@ -4,6 +4,7 @@ import static org.keycloak.services.validation.Validation.FIELD_USERNAME;
 
 import io.phasetwo.keycloak.magic.MagicLink;
 import io.phasetwo.keycloak.magic.auth.token.MagicLinkActionToken;
+import io.phasetwo.keycloak.magic.auth.util.AuthenticatorSharedUtils;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
 import java.util.Map;
@@ -125,32 +126,19 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
   }
 
   private boolean isForceCreate(AuthenticationFlowContext context, boolean defaultValue) {
-    return is(context, CREATE_NONEXISTENT_USER_CONFIG_PROPERTY, defaultValue);
+    return AuthenticatorSharedUtils.is(context, CREATE_NONEXISTENT_USER_CONFIG_PROPERTY, defaultValue);
   }
 
   private boolean isUpdateProfile(AuthenticationFlowContext context, boolean defaultValue) {
-    return is(context, UPDATE_PROFILE_ACTION_CONFIG_PROPERTY, defaultValue);
+    return AuthenticatorSharedUtils.is(context, UPDATE_PROFILE_ACTION_CONFIG_PROPERTY, defaultValue);
   }
 
   private boolean isUpdatePassword(AuthenticationFlowContext context, boolean defaultValue) {
-    return is(context, UPDATE_PASSWORD_ACTION_CONFIG_PROPERTY, defaultValue);
+    return AuthenticatorSharedUtils.is(context, UPDATE_PASSWORD_ACTION_CONFIG_PROPERTY, defaultValue);
   }
 
   private boolean isActionTokenPersistent(AuthenticationFlowContext context, boolean defaultValue) {
-    return is(context, ACTION_TOKEN_PERSISTENT_CONFIG_PROPERTY, defaultValue);
-  }
-
-  private boolean is(AuthenticationFlowContext context, String propName, boolean defaultValue) {
-    AuthenticatorConfigModel authenticatorConfig = context.getAuthenticatorConfig();
-    if (authenticatorConfig == null) return defaultValue;
-
-    Map<String, String> config = authenticatorConfig.getConfig();
-    if (config == null) return defaultValue;
-
-    String v = config.get(propName);
-    if (v == null || "".equals(v)) return defaultValue;
-
-    return v.trim().toLowerCase().equals("true");
+    return AuthenticatorSharedUtils.is(context, ACTION_TOKEN_PERSISTENT_CONFIG_PROPERTY, defaultValue);
   }
 
   @Override

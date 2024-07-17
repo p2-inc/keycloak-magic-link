@@ -8,6 +8,7 @@ import static org.keycloak.services.validation.Validation.FIELD_USERNAME;
 
 import io.phasetwo.keycloak.magic.MagicLink;
 import io.phasetwo.keycloak.magic.auth.token.MagicLinkContinuationActionToken;
+import io.phasetwo.keycloak.magic.auth.util.AuthenticatorSharedUtils;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
 import java.time.ZonedDateTime;
@@ -167,20 +168,7 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
   }
 
   private boolean isForceCreate(AuthenticationFlowContext context, boolean defaultValue) {
-    return is(context, CREATE_NONEXISTENT_USER_CONFIG_PROPERTY, defaultValue);
-  }
-
-  private boolean is(AuthenticationFlowContext context, String propName, boolean defaultValue) {
-    AuthenticatorConfigModel authenticatorConfig = context.getAuthenticatorConfig();
-    if (authenticatorConfig == null) return defaultValue;
-
-    Map<String, String> config = authenticatorConfig.getConfig();
-    if (config == null) return defaultValue;
-
-    String v = config.get(propName);
-    if (v == null || "".equals(v)) return defaultValue;
-
-    return v.trim().toLowerCase().equals("true");
+    return AuthenticatorSharedUtils.is(context, CREATE_NONEXISTENT_USER_CONFIG_PROPERTY, defaultValue);
   }
 
   @Override
