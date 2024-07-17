@@ -71,7 +71,7 @@ public class MagicLinkContinuationAuthenticatorFactory implements AuthenticatorF
     // Force create user property configuration
     ProviderConfigProperty createUser = new ProviderConfigProperty();
     createUser.setType(ProviderConfigProperty.BOOLEAN_TYPE);
-    createUser.setType(MagicLinkContinuationAuthenticator.CREATE_NONEXISTENT_USER_CONFIG_PROPERTY);
+    createUser.setName(MagicLinkContinuationAuthenticator.CREATE_NONEXISTENT_USER_CONFIG_PROPERTY);
     createUser.setLabel("Force create user");
     createUser.setHelpText(
             "Creates a new user when an email is provided that does not match an existing user.");

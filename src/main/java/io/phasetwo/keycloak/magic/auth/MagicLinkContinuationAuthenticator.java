@@ -32,7 +32,7 @@ import org.keycloak.utils.StringUtil;
 @JBossLog
 public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
 
-  static final String CREATE_NONEXISTENT_USER_CONFIG_PROPERTY = "ext-magic-create-nonexistent-user";
+  static final String CREATE_NONEXISTENT_USER_CONFIG_PROPERTY = "ext-magic-create-continuation-nonexistent-user";
 
   @Override
   public void authenticate(AuthenticationFlowContext context) {
@@ -119,7 +119,7 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
             context.getSession(),
             context.getRealm(),
             email,
-            isForceCreate(context, false),
+            isForceCreate(context, true),
             false,
             false,
             MagicLink.registerEvent(event));
