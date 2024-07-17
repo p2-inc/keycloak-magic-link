@@ -31,6 +31,8 @@ import org.keycloak.utils.StringUtil;
 @JBossLog
 public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
 
+  static final String CREATE_NONEXISTENT_USER_CONFIG_PROPERTY = "ext-magic-create-nonexistent-user";
+
   @Override
   public void authenticate(AuthenticationFlowContext context) {
     log.debug("MagicLinkContinuationAuthenticator.authenticate");
@@ -116,7 +118,7 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
             context.getSession(),
             context.getRealm(),
             email,
-            false,
+            isForceCreate(context, false),
             false,
             false,
             MagicLink.registerEvent(event));
@@ -162,6 +164,23 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
     context.getAuthenticationSession().setAuthNote(SESSION_EXPIRATION, sessionExpiration);
 
     context.challenge(context.form().createForm("view-email-continuation.ftl"));
+  }
+
+  private boolean isForceCreate(AuthenticationFlowContext context, boolean defaultValue) {
+    return is(context, CREATE_NONEXISTENT_USER_CONFIG_PROPERTY, defaultValue);
+  }
+
+  private boolean is(AuthenticationFlowContext context, String propName, boolean defaultValue) {
+    AuthenticatorConfigModel authenticatorConfig = context.getAuthenticatorConfig();
+    if (authenticatorConfig == null) return defaultValue;
+
+    Map<String, String> config = authenticatorConfig.getConfig();
+    if (config == null) return defaultValue;
+
+    String v = config.get(propName);
+    if (v == null || "".equals(v)) return defaultValue;
+
+    return v.trim().toLowerCase().equals("true");
   }
 
   @Override
