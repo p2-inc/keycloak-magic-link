@@ -119,7 +119,7 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
             context.getSession(),
             context.getRealm(),
             email,
-            isForceCreate(context, true),
+            isForceCreate(context, false),
             false,
             false,
             MagicLink.registerEvent(event));
