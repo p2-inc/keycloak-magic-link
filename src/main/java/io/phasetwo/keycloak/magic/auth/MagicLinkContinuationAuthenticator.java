@@ -1,5 +1,7 @@
 package io.phasetwo.keycloak.magic.auth;
 
+import static io.phasetwo.keycloak.magic.MagicLink.CREATE_NONEXISTENT_USER_CONFIG_PROPERTY;
+import static io.phasetwo.keycloak.magic.auth.util.Authenticators.is;
 import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.SESSION_CONFIRMED;
 import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.SESSION_EXPIRATION;
 import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.SESSION_INITIATED;
@@ -8,7 +10,6 @@ import static org.keycloak.services.validation.Validation.FIELD_USERNAME;
 
 import io.phasetwo.keycloak.magic.MagicLink;
 import io.phasetwo.keycloak.magic.auth.token.MagicLinkContinuationActionToken;
-import io.phasetwo.keycloak.magic.auth.util.AuthenticatorSharedUtils;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
 import java.time.ZonedDateTime;
@@ -31,8 +32,6 @@ import org.keycloak.utils.StringUtil;
 
 @JBossLog
 public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
-
-  static final String CREATE_NONEXISTENT_USER_CONFIG_PROPERTY = "ext-magic-create-continuation-nonexistent-user";
 
   @Override
   public void authenticate(AuthenticationFlowContext context) {
@@ -168,7 +167,7 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
   }
 
   private boolean isForceCreate(AuthenticationFlowContext context, boolean defaultValue) {
-    return AuthenticatorSharedUtils.is(context, CREATE_NONEXISTENT_USER_CONFIG_PROPERTY, defaultValue);
+    return is(context, CREATE_NONEXISTENT_USER_CONFIG_PROPERTY, defaultValue);
   }
 
   @Override

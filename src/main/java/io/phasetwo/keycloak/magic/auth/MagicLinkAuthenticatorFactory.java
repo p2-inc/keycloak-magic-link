@@ -1,8 +1,9 @@
 package io.phasetwo.keycloak.magic.auth;
 
+import static io.phasetwo.keycloak.magic.MagicLink.CREATE_NONEXISTENT_USER_CONFIG_PROPERTY;
+
 import com.google.auto.service.AutoService;
 import io.phasetwo.keycloak.magic.MagicLink;
-import java.util.Arrays;
 import java.util.List;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.Config;
@@ -71,7 +72,7 @@ public class MagicLinkAuthenticatorFactory implements AuthenticatorFactory {
   public List<ProviderConfigProperty> getConfigProperties() {
     ProviderConfigProperty createUser = new ProviderConfigProperty();
     createUser.setType(ProviderConfigProperty.BOOLEAN_TYPE);
-    createUser.setName(MagicLinkAuthenticator.CREATE_NONEXISTENT_USER_CONFIG_PROPERTY);
+    createUser.setName(CREATE_NONEXISTENT_USER_CONFIG_PROPERTY);
     createUser.setLabel("Force create user");
     createUser.setHelpText(
         "Creates a new user when an email is provided that does not match an existing user.");
@@ -99,7 +100,7 @@ public class MagicLinkAuthenticatorFactory implements AuthenticatorFactory {
         "Toggle whether magic link should be persistent until expired.");
     actionTokenPersistent.setDefaultValue(true);
 
-    return Arrays.asList(createUser, updateProfile, updatePassword, actionTokenPersistent);
+    return List.of(createUser, updateProfile, updatePassword, actionTokenPersistent);
   }
 
   @Override
