@@ -51,6 +51,9 @@ import org.keycloak.sessions.AuthenticationSessionModel;
 @JBossLog
 public class MagicLink {
 
+  public static final String CREATE_NONEXISTENT_USER_CONFIG_PROPERTY =
+      "ext-magic-create-nonexistent-user";
+
   public static Consumer<UserModel> registerEvent(final EventBuilder event) {
     return new Consumer<UserModel>() {
       @Override

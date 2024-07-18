@@ -1,12 +1,13 @@
 package io.phasetwo.keycloak.magic.auth;
 
+import static io.phasetwo.keycloak.magic.MagicLink.CREATE_NONEXISTENT_USER_CONFIG_PROPERTY;
+import static io.phasetwo.keycloak.magic.auth.util.Authenticators.is;
 import static org.keycloak.services.validation.Validation.FIELD_USERNAME;
 
 import io.phasetwo.keycloak.magic.MagicLink;
 import io.phasetwo.keycloak.magic.auth.token.MagicLinkActionToken;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
-import java.util.Map;
 import java.util.OptionalInt;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.AuthenticationFlowContext;
@@ -17,7 +18,6 @@ import org.keycloak.events.Errors;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.events.EventType;
 import org.keycloak.forms.login.LoginFormsProvider;
-import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.services.managers.AuthenticationManager;
 import org.keycloak.services.messages.Messages;
@@ -25,7 +25,6 @@ import org.keycloak.services.messages.Messages;
 @JBossLog
 public class MagicLinkAuthenticator extends UsernamePasswordForm {
 
-  static final String CREATE_NONEXISTENT_USER_CONFIG_PROPERTY = "ext-magic-create-nonexistent-user";
   static final String UPDATE_PROFILE_ACTION_CONFIG_PROPERTY = "ext-magic-update-profile-action";
   static final String UPDATE_PASSWORD_ACTION_CONFIG_PROPERTY = "ext-magic-update-password-action";
 
@@ -138,19 +137,6 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
 
   private boolean isActionTokenPersistent(AuthenticationFlowContext context, boolean defaultValue) {
     return is(context, ACTION_TOKEN_PERSISTENT_CONFIG_PROPERTY, defaultValue);
-  }
-
-  private boolean is(AuthenticationFlowContext context, String propName, boolean defaultValue) {
-    AuthenticatorConfigModel authenticatorConfig = context.getAuthenticatorConfig();
-    if (authenticatorConfig == null) return defaultValue;
-
-    Map<String, String> config = authenticatorConfig.getConfig();
-    if (config == null) return defaultValue;
-
-    String v = config.get(propName);
-    if (v == null || "".equals(v)) return defaultValue;
-
-    return v.trim().toLowerCase().equals("true");
   }
 
   @Override

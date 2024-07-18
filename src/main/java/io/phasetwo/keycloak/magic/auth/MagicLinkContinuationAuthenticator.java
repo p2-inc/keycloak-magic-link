@@ -1,5 +1,7 @@
 package io.phasetwo.keycloak.magic.auth;
 
+import static io.phasetwo.keycloak.magic.MagicLink.CREATE_NONEXISTENT_USER_CONFIG_PROPERTY;
+import static io.phasetwo.keycloak.magic.auth.util.Authenticators.is;
 import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.SESSION_CONFIRMED;
 import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.SESSION_EXPIRATION;
 import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.SESSION_INITIATED;
@@ -116,7 +118,7 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
             context.getSession(),
             context.getRealm(),
             email,
-            false,
+            isForceCreate(context, false),
             false,
             false,
             MagicLink.registerEvent(event));
@@ -162,6 +164,10 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
     context.getAuthenticationSession().setAuthNote(SESSION_EXPIRATION, sessionExpiration);
 
     context.challenge(context.form().createForm("view-email-continuation.ftl"));
+  }
+
+  private boolean isForceCreate(AuthenticationFlowContext context, boolean defaultValue) {
+    return is(context, CREATE_NONEXISTENT_USER_CONFIG_PROPERTY, defaultValue);
   }
 
   @Override
