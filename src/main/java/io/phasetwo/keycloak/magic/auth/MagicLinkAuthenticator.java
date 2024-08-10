@@ -84,10 +84,14 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
     if (user == null
         || MagicLink.trimToNull(user.getEmail()) == null
         || !MagicLink.isValidEmail(user.getEmail())) {
-      context.getEvent().event(EventType.LOGIN_ERROR).error(Errors.INVALID_EMAIL);
-      Response challengeResponse =
-          challenge(context, getDefaultChallengeMessage(context), FIELD_USERNAME);
-      context.failureChallenge(AuthenticationFlowError.INVALID_USER, challengeResponse);
+      context.getEvent()
+              .detail(AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME, email)
+              .event(EventType.LOGIN_ERROR).error(Errors.INVALID_EMAIL);
+      context
+              .getAuthenticationSession()
+              .setAuthNote(AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME, email);
+      log.debugf("user attempted to login with username/email: %s", email);
+      context.forceChallenge(context.form().createForm("view-email.ftl"));
       return;
     }
 
