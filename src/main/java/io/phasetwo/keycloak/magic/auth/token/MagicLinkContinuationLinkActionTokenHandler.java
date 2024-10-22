@@ -39,7 +39,7 @@ public class MagicLinkContinuationLinkActionTokenHandler
   public Response handleToken(
       MagicLinkContinuationActionToken token,
       ActionTokenContext<MagicLinkContinuationActionToken> tokenContext) {
-    log.infof("HandleToken for iss:%s, user:%s", token.getIssuedFor(), token.getUserId());
+    log.debugf("HandleToken for iss:%s, user:%s", token.getIssuedFor(), token.getUserId());
     UserModel user = tokenContext.getAuthenticationSession().getAuthenticatedUser();
 
     final AuthenticationSessionModel authSession = tokenContext.getAuthenticationSession();
@@ -83,7 +83,7 @@ public class MagicLinkContinuationLinkActionTokenHandler
   public AuthenticationSessionModel startFreshAuthenticationSession(
       MagicLinkContinuationActionToken token,
       ActionTokenContext<MagicLinkContinuationActionToken> tokenContext) {
-    log.infof("startFreshAuthenticationSession %s", token.getIssuedFor());
+    log.debugf("startFreshAuthenticationSession %s", token.getIssuedFor());
 
     ClientModel client =
         tokenContext
