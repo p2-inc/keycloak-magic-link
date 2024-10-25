@@ -2,13 +2,18 @@ package io.phasetwo.keycloak.magic.auth;
 
 import static io.phasetwo.keycloak.magic.MagicLink.CREATE_NONEXISTENT_USER_CONFIG_PROPERTY;
 import static io.phasetwo.keycloak.magic.auth.util.Authenticators.is;
+import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.SESSION_CONFIRMED;
+import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.SESSION_EXPIRATION;
+import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.SESSION_INITIATED;
+import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.TIMEOUT;
 import static org.keycloak.services.validation.Validation.FIELD_USERNAME;
 
 import io.phasetwo.keycloak.magic.MagicLink;
-import io.phasetwo.keycloak.magic.auth.token.MagicLinkActionToken;
+import io.phasetwo.keycloak.magic.auth.token.MagicLinkContinuationActionToken;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
-import java.util.OptionalInt;
+import java.time.ZonedDateTime;
+import java.util.Map;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.AuthenticationFlowError;
@@ -18,30 +23,68 @@ import org.keycloak.events.Errors;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.events.EventType;
 import org.keycloak.forms.login.LoginFormsProvider;
+import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.services.managers.AuthenticationManager;
+import org.keycloak.services.managers.AuthenticationSessionManager;
 import org.keycloak.services.messages.Messages;
+import org.keycloak.utils.StringUtil;
 
 @JBossLog
-public class MagicLinkAuthenticator extends UsernamePasswordForm {
-
-  static final String UPDATE_PROFILE_ACTION_CONFIG_PROPERTY = "ext-magic-update-profile-action";
-  static final String UPDATE_PASSWORD_ACTION_CONFIG_PROPERTY = "ext-magic-update-password-action";
-
-  static final String ACTION_TOKEN_PERSISTENT_CONFIG_PROPERTY = "ext-magic-allow-token-reuse";
+public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
 
   @Override
   public void authenticate(AuthenticationFlowContext context) {
-    log.debug("MagicLinkAuthenticator.authenticate");
+    log.debug("MagicLinkContinuationAuthenticator.authenticate");
+
+    if (sessionExpired(context)) {
+      AuthenticationSessionManager manager = new AuthenticationSessionManager(context.getSession());
+      manager.removeTabIdInAuthenticationSession(
+          context.getRealm(), context.getAuthenticationSession());
+
+      context.getEvent().error(Errors.SESSION_EXPIRED);
+      Response challengeResponse =
+          challenge(context, Messages.EXPIRED_ACTION_TOKEN_NO_SESSION, FIELD_USERNAME);
+      context.failureChallenge(
+          AuthenticationFlowError.GENERIC_AUTHENTICATION_ERROR, challengeResponse);
+      return;
+    }
+
     String attemptedUsername = MagicLink.getAttemptedUsername(context);
-    if (attemptedUsername == null) {
+    String sessionConfirmed = context.getAuthenticationSession().getAuthNote(SESSION_CONFIRMED);
+    if (StringUtil.isNotBlank(sessionConfirmed)) {
+      UserModel user;
+      if (MagicLink.isValidEmail(attemptedUsername)) {
+        user = context.getSession().users().getUserByEmail(context.getRealm(), attemptedUsername);
+      } else {
+        user =
+            context.getSession().users().getUserByUsername(context.getRealm(), attemptedUsername);
+      }
+      context.setUser(user);
+      context.getAuthenticationSession().setAuthenticatedUser(user);
+      context.success();
+    } else if (attemptedUsername == null) {
       super.authenticate(context);
     } else {
-      log.debugf(
-          "Found attempted username %s from previous authenticator, skipping login form",
-          attemptedUsername);
-      action(context);
+      String sessionInitiated = context.getAuthenticationSession().getAuthNote(SESSION_INITIATED);
+      if (StringUtil.isBlank(sessionInitiated)) {
+        log.debugf(
+            "Found attempted username %s from previous authenticator, skipping login form",
+            attemptedUsername);
+        action(context);
+      } else {
+        context.challenge(context.form().createForm("view-email-continuation.ftl"));
+      }
     }
+  }
+
+  private boolean sessionExpired(AuthenticationFlowContext context) {
+    String expiration = context.getAuthenticationSession().getAuthNote(SESSION_EXPIRATION);
+    if (StringUtil.isNotBlank(expiration)) {
+      ZonedDateTime expirationTime = ZonedDateTime.parse(expiration);
+      return expirationTime.isBefore(ZonedDateTime.now());
+    }
+    return false;
   }
 
   @Override
@@ -65,6 +108,7 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
       context.failureChallenge(AuthenticationFlowError.INVALID_USER, challengeResponse);
       return;
     }
+
     String clientId = context.getSession().getContext().getClient().getClientId();
 
     EventBuilder event = context.newEvent();
@@ -75,8 +119,8 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
             context.getRealm(),
             email,
             isForceCreate(context, false),
-            isUpdateProfile(context, false),
-            isUpdatePassword(context, false),
+            false,
+            false,
             MagicLink.registerEvent(event));
 
     // check for no/invalid email address
@@ -101,46 +145,33 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
       return; // the enabledUser method sets the challenge
     }
 
-    MagicLinkActionToken token =
-        MagicLink.createActionToken(
-            user,
-            clientId,
-            OptionalInt.empty(),
-            rememberMe(context),
-            context.getAuthenticationSession(),
-            isActionTokenPersistent(context, true));
+    int timeout = getTimeout(context, 10);
+
+    int validityInSecs = 60 * timeout;
+    MagicLinkContinuationActionToken token =
+        MagicLink.createExpandedActionToken(
+            user, clientId, validityInSecs, context.getAuthenticationSession());
     String link = MagicLink.linkFromActionToken(context.getSession(), context.getRealm(), token);
-    boolean sent = MagicLink.sendMagicLinkEmail(context.getSession(), user, link);
+    boolean sent = MagicLink.sendMagicLinkContinuationEmail(context.getSession(), user, link);
     log.debugf("sent email to %s? %b. Link? %s", user.getEmail(), sent, link);
 
     context
         .getAuthenticationSession()
         .setAuthNote(AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME, email);
-    context.challenge(context.form().createForm("view-email.ftl"));
-  }
+    context.getAuthenticationSession().setAuthNote(SESSION_INITIATED, "true");
 
-  private boolean rememberMe(AuthenticationFlowContext context) {
-    MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
-    String rememberMe = formData.getFirst("rememberMe");
-    return context.getRealm().isRememberMe()
-        && rememberMe != null
-        && rememberMe.equalsIgnoreCase("on");
+    String sessionExpiration =
+        ZonedDateTime.now()
+            .plusMinutes(timeout)
+            .plusSeconds(2) // clock skew
+            .toString();
+    context.getAuthenticationSession().setAuthNote(SESSION_EXPIRATION, sessionExpiration);
+
+    context.challenge(context.form().createForm("view-email-continuation.ftl"));
   }
 
   private boolean isForceCreate(AuthenticationFlowContext context, boolean defaultValue) {
     return is(context, CREATE_NONEXISTENT_USER_CONFIG_PROPERTY, defaultValue);
-  }
-
-  private boolean isUpdateProfile(AuthenticationFlowContext context, boolean defaultValue) {
-    return is(context, UPDATE_PROFILE_ACTION_CONFIG_PROPERTY, defaultValue);
-  }
-
-  private boolean isUpdatePassword(AuthenticationFlowContext context, boolean defaultValue) {
-    return is(context, UPDATE_PASSWORD_ACTION_CONFIG_PROPERTY, defaultValue);
-  }
-
-  private boolean isActionTokenPersistent(AuthenticationFlowContext context, boolean defaultValue) {
-    return is(context, ACTION_TOKEN_PERSISTENT_CONFIG_PROPERTY, defaultValue);
   }
 
   @Override
@@ -171,5 +202,18 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
     return context.getRealm().isLoginWithEmailAllowed()
         ? Messages.INVALID_USERNAME_OR_EMAIL
         : Messages.INVALID_USERNAME;
+  }
+
+  private int getTimeout(AuthenticationFlowContext context, int defaultValue) {
+    AuthenticatorConfigModel authenticatorConfig = context.getAuthenticatorConfig();
+    if (authenticatorConfig == null) return defaultValue;
+
+    Map<String, String> config = authenticatorConfig.getConfig();
+    if (config == null) return defaultValue;
+    try {
+      return Integer.parseInt(config.get(TIMEOUT));
+    } catch (NumberFormatException e) {
+      return defaultValue;
+    }
   }
 }

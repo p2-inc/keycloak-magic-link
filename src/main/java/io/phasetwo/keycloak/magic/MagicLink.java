@@ -1,9 +1,15 @@
 package io.phasetwo.keycloak.magic;
 
+import static org.keycloak.authentication.authenticators.browser.AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME;
+
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
+import io.phasetwo.keycloak.magic.auth.MagicLinkAuthenticatorFactory;
 import io.phasetwo.keycloak.magic.auth.token.MagicLinkActionToken;
+import io.phasetwo.keycloak.magic.auth.token.MagicLinkContinuationActionToken;
+import jakarta.mail.internet.AddressException;
+import jakarta.mail.internet.InternetAddress;
 import jakarta.ws.rs.core.UriBuilder;
 import jakarta.ws.rs.core.UriInfo;
 import java.net.URI;
@@ -14,7 +20,9 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.Config;
+import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.Authenticator;
+import org.keycloak.authentication.actiontoken.DefaultActionToken;
 import org.keycloak.common.util.Time;
 import org.keycloak.email.EmailException;
 import org.keycloak.email.EmailTemplateProvider;
@@ -42,6 +50,9 @@ import org.keycloak.sessions.AuthenticationSessionModel;
 /** common utilities for Magic Link authentication, used by the authenticator and resource */
 @JBossLog
 public class MagicLink {
+
+  public static final String CREATE_NONEXISTENT_USER_CONFIG_PROPERTY =
+      "ext-magic-create-nonexistent-user";
 
   public static Consumer<UserModel> registerEvent(final EventBuilder event) {
     return new Consumer<UserModel>() {
@@ -102,6 +113,26 @@ public class MagicLink {
       Boolean rememberMe,
       AuthenticationSessionModel authSession) {
     return createActionToken(user, clientId, validity, rememberMe, authSession, true);
+  }
+
+  public static MagicLinkContinuationActionToken createExpandedActionToken(
+      UserModel user, String clientId, int validityInSecs, AuthenticationSessionModel authSession) {
+    log.infof(
+        "Attempting MagicLinkContinuationAuthenticator for %s, %s, %s, %s",
+        user.getEmail(), clientId, authSession.getParentSession().getId(), authSession.getTabId());
+
+    String nonce = authSession.getClientNote(OIDCLoginProtocol.NONCE_PARAM);
+    int absoluteExpirationInSecs = Time.currentTime() + validityInSecs;
+    MagicLinkContinuationActionToken token =
+        new MagicLinkContinuationActionToken(
+            user.getId(),
+            absoluteExpirationInSecs,
+            clientId,
+            nonce,
+            authSession.getParentSession().getId(),
+            authSession.getTabId(),
+            authSession.getRedirectUri());
+    return token;
   }
 
   public static MagicLinkActionToken createActionToken(
@@ -197,7 +228,7 @@ public class MagicLink {
   }
 
   public static String linkFromActionToken(
-      KeycloakSession session, RealmModel realm, MagicLinkActionToken token) {
+      KeycloakSession session, RealmModel realm, DefaultActionToken token) {
     UriInfo uriInfo = session.getContext().getUri();
 
     // This is a workaround for situations where the realm you are using to call this (e.g. master)
@@ -262,6 +293,33 @@ public class MagicLink {
     return false;
   }
 
+  public static boolean sendMagicLinkContinuationEmail(
+      KeycloakSession session, UserModel user, String link) {
+    RealmModel realm = session.getContext().getRealm();
+    try {
+      EmailTemplateProvider emailTemplateProvider =
+          session.getProvider(EmailTemplateProvider.class);
+      String realmName = getRealmName(realm);
+      List<Object> subjAttr = ImmutableList.of(realmName);
+      Map<String, Object> bodyAttr = Maps.newHashMap();
+      bodyAttr.put("realmName", realmName);
+      bodyAttr.put("magicLink", link);
+      emailTemplateProvider
+          .setRealm(realm)
+          .setUser(user)
+          .setAttribute("realmName", realmName)
+          .send(
+              "magicLinkContinuationSubject",
+              subjAttr,
+              "magic-link-continuation-email.ftl",
+              bodyAttr);
+      return true;
+    } catch (EmailException e) {
+      log.error("Failed to send magic link continuation email", e);
+    }
+    return false;
+  }
+
   public static boolean sendOtpEmail(KeycloakSession session, UserModel user, String code) {
     RealmModel realm = session.getContext().getRealm();
     try {
@@ -293,8 +351,7 @@ public class MagicLink {
   public static final String IDP_REDIRECTOR_PROVIDER_ID =
       org.keycloak.authentication.authenticators.browser.IdentityProviderAuthenticatorFactory
           .PROVIDER_ID;
-  public static final String MAGIC_LINK_PROVIDER_ID =
-      io.phasetwo.keycloak.magic.auth.MagicLinkAuthenticatorFactory.PROVIDER_ID;
+  public static final String MAGIC_LINK_PROVIDER_ID = MagicLinkAuthenticatorFactory.PROVIDER_ID;
 
   public static void realmPostCreate(
       KeycloakSessionFactory factory, RealmModel.RealmPostCreateEvent event) {
@@ -404,5 +461,42 @@ public class MagicLink {
       execution.setAuthenticator(providerId);
       execution = realm.addAuthenticatorExecution(execution);
     }
+  }
+
+  public static boolean isValidEmail(String email) {
+    try {
+      InternetAddress a = new InternetAddress(email);
+      a.validate();
+      return true;
+    } catch (AddressException e) {
+      return false;
+    }
+  }
+
+  public static String getAttemptedUsername(AuthenticationFlowContext context) {
+    if (context.getUser() != null && context.getUser().getEmail() != null) {
+      return context.getUser().getEmail();
+    }
+    String username =
+        trimToNull(context.getAuthenticationSession().getAuthNote(ATTEMPTED_USERNAME));
+    if (username != null) {
+      if (MagicLink.isValidEmail(username)) {
+        return username;
+      }
+      UserModel user = context.getSession().users().getUserByUsername(context.getRealm(), username);
+      if (user != null && user.getEmail() != null) {
+        return user.getEmail();
+      }
+    }
+    return null;
+  }
+
+  public static String trimToNull(final String s) {
+    if (s == null) {
+      return null;
+    }
+    String trimmed = s.trim();
+    if ("".equalsIgnoreCase(trimmed)) trimmed = null;
+    return trimmed;
   }
 }
