@@ -88,6 +88,14 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
         authSession.setClientNote(OIDCLoginProtocol.NONCE_PARAM, token.getNonce());
         authSession.setUserSessionNote(OIDCLoginProtocol.NONCE_PARAM, token.getNonce());
       }
+
+      if (token.getCodeChallenge() != null) {
+        authSession.setClientNote(OIDCLoginProtocol.CODE_CHALLENGE_PARAM, token.getCodeChallenge());
+      }
+
+      if (token.getCodeChallengeMethod() != null) {
+        authSession.setClientNote(OIDCLoginProtocol.CODE_CHALLENGE_METHOD_PARAM, token.getCodeChallengeMethod());
+      }
     }
 
     if (token.getScope() != null) {

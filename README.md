@@ -65,6 +65,7 @@ Parameters:
 | `scope` | N | | OIDC `scope` variable. |
 | `nonce` | N | | OIDC `nonce` variable. |
 | `state` | N | | OIDC `state` variable. |
+| `code_challenge` | N | | OIDC `code_challenge` variable (for PKCE). |
 | `remember_me` | N | false | If the user is treated as if they had checked "Remember Me" on login. Requires that it is enabled in the Realm. |
 | `reusable` | N | true | If the token can be reused multiple times during its validity |
 
