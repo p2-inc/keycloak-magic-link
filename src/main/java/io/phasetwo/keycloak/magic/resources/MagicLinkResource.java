@@ -74,6 +74,7 @@ public class MagicLinkResource extends AbstractAdminResource {
             rep.getNonce(),
             rep.getState(),
             rep.getCodeChallenge(),
+            rep.getCodeChallengeMethod(),
             rep.getRememberMe(),
             rep.getActionTokenPersistent());
     String link = MagicLink.linkFromActionToken(session, realm, token);
