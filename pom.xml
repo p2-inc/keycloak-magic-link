@@ -30,8 +30,8 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <main.java.package>io.phasetwo.keycloak.magic</main.java.package>
     <junit.version>4.13.2</junit.version>
-    <keycloak.version>25.0.0</keycloak.version>
-    <lombok.version>1.18.32</lombok.version>
+    <keycloak.version>26.0.0</keycloak.version>
+    <lombok.version>1.18.34</lombok.version>
     <auto-service.version>1.1.1</auto-service.version>
     <ossrh.url>https://s01.oss.sonatype.org</ossrh.url>
   </properties>

@@ -117,7 +117,7 @@ public class MagicLink {
 
   public static MagicLinkContinuationActionToken createExpandedActionToken(
       UserModel user, String clientId, int validityInSecs, AuthenticationSessionModel authSession) {
-    log.infof(
+    log.debugf(
         "Attempting MagicLinkContinuationAuthenticator for %s, %s, %s, %s",
         user.getEmail(), clientId, authSession.getParentSession().getId(), authSession.getTabId());
 
@@ -146,9 +146,9 @@ public class MagicLink {
     String scope = authSession.getClientNote(OIDCLoginProtocol.SCOPE_PARAM);
     String state = authSession.getClientNote(OIDCLoginProtocol.STATE_PARAM);
     String nonce = authSession.getClientNote(OIDCLoginProtocol.NONCE_PARAM);
-    log.infof(
+    log.debugf(
         "Attempting MagicLinkAuthenticator for %s, %s, %s", user.getEmail(), clientId, redirectUri);
-    log.infof("MagicLinkAuthenticator extra vars %s %s %s %b", scope, state, nonce, rememberMe);
+    log.debugf("MagicLinkAuthenticator extra vars %s %s %s %b", scope, state, nonce, rememberMe);
     return createActionToken(
         user,
         clientId,
