@@ -157,7 +157,12 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
       return OptionalInt.empty();
     }
 
-    return OptionalInt.of(Integer.parseInt(lifespan));
+    try {
+      return OptionalInt.of(Integer.parseInt(lifespan));
+    } catch (NumberFormatException e) {
+      log.error("Failed to parse lifespan", e);
+      return OptionalInt.empty();
+    }
   }
 
   @Override

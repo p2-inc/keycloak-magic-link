@@ -104,10 +104,11 @@ public class MagicLinkAuthenticatorFactory implements AuthenticatorFactory {
     actionTokenLifeSpan.setType(ProviderConfigProperty.TEXT_TYPE);
     actionTokenLifeSpan.setName(MagicLinkAuthenticator.ACTION_TOKEN_LIFE_SPAN);
     actionTokenLifeSpan.setLabel("Token lifespan");
-    actionTokenLifeSpan.setHelpText("In seconds");
+    actionTokenLifeSpan.setHelpText(
+        "Amount of time the magic link is valid, in seconds. If this value is not specific, it will use the default 86400s (1 day)");
 
-
-    return List.of(createUser, updateProfile, updatePassword, actionTokenPersistent, actionTokenLifeSpan);
+    return List.of(
+        createUser, updateProfile, updatePassword, actionTokenPersistent, actionTokenLifeSpan);
   }
 
   @Override
