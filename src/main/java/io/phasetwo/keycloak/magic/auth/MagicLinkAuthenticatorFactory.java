@@ -101,7 +101,7 @@ public class MagicLinkAuthenticatorFactory implements AuthenticatorFactory {
     actionTokenPersistent.setDefaultValue(true);
 
     ProviderConfigProperty actionTokenLifeSpan = new ProviderConfigProperty();
-    actionTokenLifeSpan.setType(ProviderConfigProperty.TEXT_TYPE);
+    actionTokenLifeSpan.setType(ProviderConfigProperty.STRING_TYPE);
     actionTokenLifeSpan.setName(MagicLinkAuthenticator.ACTION_TOKEN_LIFE_SPAN);
     actionTokenLifeSpan.setLabel("Token lifespan");
     actionTokenLifeSpan.setHelpText(
