@@ -1,6 +1,7 @@
 package io.phasetwo.keycloak.magic.auth;
 
 import static io.phasetwo.keycloak.magic.MagicLink.CREATE_NONEXISTENT_USER_CONFIG_PROPERTY;
+import static io.phasetwo.keycloak.magic.auth.util.Authenticators.get;
 import static io.phasetwo.keycloak.magic.auth.util.Authenticators.is;
 import static org.keycloak.services.validation.Validation.FIELD_USERNAME;
 
@@ -29,6 +30,7 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
   static final String UPDATE_PASSWORD_ACTION_CONFIG_PROPERTY = "ext-magic-update-password-action";
 
   static final String ACTION_TOKEN_PERSISTENT_CONFIG_PROPERTY = "ext-magic-allow-token-reuse";
+  static final String ACTION_TOKEN_LIFE_SPAN = "ext-magic-token-life-span";
 
   @Override
   public void authenticate(AuthenticationFlowContext context) {
@@ -83,12 +85,14 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
     if (user == null
         || MagicLink.trimToNull(user.getEmail()) == null
         || !MagicLink.isValidEmail(user.getEmail())) {
-      context.getEvent()
-              .detail(AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME, email)
-              .event(EventType.LOGIN_ERROR).error(Errors.INVALID_EMAIL);
       context
-              .getAuthenticationSession()
-              .setAuthNote(AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME, email);
+          .getEvent()
+          .detail(AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME, email)
+          .event(EventType.LOGIN_ERROR)
+          .error(Errors.INVALID_EMAIL);
+      context
+          .getAuthenticationSession()
+          .setAuthNote(AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME, email);
       log.debugf("user attempted to login with username/email: %s", email);
       context.forceChallenge(context.form().createForm("view-email.ftl"));
       return;
@@ -101,11 +105,13 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
       return; // the enabledUser method sets the challenge
     }
 
+    OptionalInt lifespan = getActionTokenLifeSpan(context, "");
+
     MagicLinkActionToken token =
         MagicLink.createActionToken(
             user,
             clientId,
-            OptionalInt.empty(),
+            lifespan,
             rememberMe(context),
             context.getAuthenticationSession(),
             isActionTokenPersistent(context, true));
@@ -141,6 +147,22 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
 
   private boolean isActionTokenPersistent(AuthenticationFlowContext context, boolean defaultValue) {
     return is(context, ACTION_TOKEN_PERSISTENT_CONFIG_PROPERTY, defaultValue);
+  }
+
+  private OptionalInt getActionTokenLifeSpan(
+      AuthenticationFlowContext context, String defaultValue) {
+    String lifespan = get(context, ACTION_TOKEN_LIFE_SPAN, defaultValue);
+
+    if ("".equals(lifespan)) {
+      return OptionalInt.empty();
+    }
+
+    try {
+      return OptionalInt.of(Integer.parseInt(lifespan));
+    } catch (NumberFormatException e) {
+      log.error("Failed to parse lifespan", e);
+      return OptionalInt.empty();
+    }
   }
 
   @Override

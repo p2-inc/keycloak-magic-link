@@ -19,4 +19,18 @@ public final class Authenticators {
 
     return Boolean.parseBoolean(v.trim());
   }
+
+  public static String get(
+          AuthenticationFlowContext context, String propName, String defaultValue) {
+    AuthenticatorConfigModel authenticatorConfig = context.getAuthenticatorConfig();
+    if (authenticatorConfig == null) return defaultValue;
+
+    Map<String, String> config = authenticatorConfig.getConfig();
+    if (config == null) return defaultValue;
+
+    String v = config.get(propName);
+    if (Strings.isNullOrEmpty(v)) return defaultValue;
+
+    return v.trim();
+  }
 }
