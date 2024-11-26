@@ -1,2 +1,2 @@
 <#ftl output_format="plainText">
-${msg("magicLinkContinuationBody", realmName, magicLink)}
+${msg("magicLinkContinuationBody", loginSubjectName, magicLink)}

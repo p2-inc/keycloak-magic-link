@@ -16,6 +16,7 @@ import jakarta.ws.rs.core.UriInfo;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -34,6 +35,7 @@ import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.AuthenticationFlowModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.Constants;
+import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.models.KeycloakSessionTask;
@@ -309,19 +311,18 @@ public class MagicLink {
     try {
       EmailTemplateProvider emailTemplateProvider =
           session.getProvider(EmailTemplateProvider.class);
-      String realmName = getRealmName(realm);
+      String loginSubjectName = getLoginSubjectName(session.getContext());
       String clientName = getClientName(client);
       String clientId = client.getClientId();
-      List<Object> subjAttr = ImmutableList.of(realmName, clientName);
+      List<Object> subjAttr = ImmutableList.of(loginSubjectName);
       Map<String, Object> bodyAttr = Maps.newHashMap();
-      bodyAttr.put("realmName", realmName);
+      bodyAttr.put("loginSubjectName", loginSubjectName);
       bodyAttr.put("clientName", clientName);
       bodyAttr.put("clientId", clientId);
       bodyAttr.put("magicLink", link);
       emailTemplateProvider
           .setRealm(realm)
           .setUser(user)
-          .setAttribute("realmName", realmName)
           .setAttribute("clientName", clientName)
           .setAttribute("clientId", clientId)
           .send("magicLinkSubject", subjAttr, "magic-link-email.ftl", bodyAttr);
@@ -339,19 +340,19 @@ public class MagicLink {
     try {
       EmailTemplateProvider emailTemplateProvider =
           session.getProvider(EmailTemplateProvider.class);
-      String realmName = getRealmName(realm);
+      String loginSubjectName = getLoginSubjectName(session.getContext());
       String clientName = getClientName(client);
       String clientId = client.getClientId();
-      List<Object> subjAttr = ImmutableList.of(realmName, clientName);
+      List<Object> subjAttr = ImmutableList.of(loginSubjectName, clientName);
       Map<String, Object> bodyAttr = Maps.newHashMap();
-      bodyAttr.put("realmName", realmName);
+      bodyAttr.put("loginSubjectName", loginSubjectName);
       bodyAttr.put("clientName", clientName);
       bodyAttr.put("clientId", clientId);
       bodyAttr.put("magicLink", link);
       emailTemplateProvider
           .setRealm(realm)
           .setUser(user)
-          .setAttribute("realmName", realmName)
+          .setAttribute("loginSubjectName", loginSubjectName)
           .setAttribute("clientName", clientName)
           .setAttribute("clientId", clientId)
           .send(
@@ -372,15 +373,15 @@ public class MagicLink {
     try {
       EmailTemplateProvider emailTemplateProvider =
           session.getProvider(EmailTemplateProvider.class);
-      String realmName = getRealmName(realm);
+      String loginSubjectName = getLoginSubjectName(session.getContext());
       String clientName = getClientName(client);
-      List<Object> subjAttr = ImmutableList.of(realmName, clientName);
+      List<Object> subjAttr = ImmutableList.of(loginSubjectName, clientName);
       Map<String, Object> bodyAttr = Maps.newHashMap();
       bodyAttr.put("code", code);
       emailTemplateProvider
           .setRealm(realm)
           .setUser(user)
-          .setAttribute("realmName", realmName)
+          .setAttribute("loginSubjectName", loginSubjectName)
           .setAttribute("clientName", clientName)
           .send("otpSubject", subjAttr, "otp-email.ftl", bodyAttr);
       return true;
@@ -390,8 +391,14 @@ public class MagicLink {
     return false;
   }
 
-  public static String getRealmName(RealmModel realm) {
-    return Strings.isNullOrEmpty(realm.getDisplayName()) ? realm.getName() : realm.getDisplayName();
+  public static String getLoginSubjectName(KeycloakContext context) {
+    return Optional
+            .ofNullable(context.getClient())
+            .map(ClientModel::getName)
+            .orElseGet(() -> {
+              final var realm = context.getRealm();
+              return Strings.isNullOrEmpty(realm.getDisplayName()) ? realm.getName() : realm.getDisplayName();
+            });
   }
 
   public static String getClientName(ClientModel client) {
