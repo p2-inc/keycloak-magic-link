@@ -58,7 +58,7 @@ public class MagicLinkResource extends AbstractAdminResource {
             forceCreate,
             updateProfile,
             updatePassword,
-            MagicLink.registerEvent(event));
+            MagicLink.registerEvent(event, "magic"));
     if (user == null)
       throw new NotFoundException(
           String.format(

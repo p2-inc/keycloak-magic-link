@@ -121,7 +121,7 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
             isForceCreate(context, false),
             false,
             false,
-            MagicLink.registerEvent(event));
+            MagicLink.registerEvent(event, "magic"));
 
     // check for no/invalid email address
     if (user == null
