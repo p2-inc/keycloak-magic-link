@@ -51,16 +51,20 @@ import org.keycloak.sessions.AuthenticationSessionModel;
 @JBossLog
 public class MagicLink {
 
+  public static String MAGIC_LINK = "magic";
+  public static String EMAIL_OTP = "email-otp";
+
   public static final String CREATE_NONEXISTENT_USER_CONFIG_PROPERTY =
       "ext-magic-create-nonexistent-user";
 
-  public static Consumer<UserModel> registerEvent(final EventBuilder event) {
+  public static Consumer<UserModel> registerEvent(final EventBuilder event,
+                                                  String authenticatorName) {
     return new Consumer<UserModel>() {
       @Override
       public void accept(UserModel user) {
         event
             .event(EventType.REGISTER)
-            .detail(Details.REGISTER_METHOD, "magic")
+            .detail(Details.REGISTER_METHOD, authenticatorName)
             .detail(Details.USERNAME, user.getUsername())
             .detail(Details.EMAIL, user.getEmail())
             .user(user)
