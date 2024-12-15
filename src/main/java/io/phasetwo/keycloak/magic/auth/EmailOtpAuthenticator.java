@@ -9,12 +9,18 @@ import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.events.Errors;
+import org.keycloak.events.EventBuilder;
 import org.keycloak.forms.login.LoginFormsProvider;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.utils.FormMessage;
 import org.keycloak.services.messages.Messages;
+
+import static io.phasetwo.keycloak.magic.MagicLink.CREATE_NONEXISTENT_USER_CONFIG_PROPERTY;
+import static io.phasetwo.keycloak.magic.MagicLink.trimToNull;
+import static io.phasetwo.keycloak.magic.auth.util.Authenticators.is;
+import static org.keycloak.authentication.authenticators.browser.AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME;
 
 @JBossLog
 public class EmailOtpAuthenticator implements Authenticator {
@@ -27,7 +33,8 @@ public class EmailOtpAuthenticator implements Authenticator {
   }
 
   private void challenge(AuthenticationFlowContext context, FormMessage errorMessage) {
-    sendOtp(context);
+    var email = getAttemptedUsername(context);
+    sendOtp(context, email);
 
     LoginFormsProvider form = context.form().setExecution(context.getExecution().getId());
     if (errorMessage != null) {
@@ -38,15 +45,26 @@ public class EmailOtpAuthenticator implements Authenticator {
     context.challenge(response);
   }
 
-  private void sendOtp(AuthenticationFlowContext context) {
+  private void sendOtp(AuthenticationFlowContext context, String email) {
     if (context.getAuthenticationSession().getAuthNote(USER_AUTH_NOTE_OTP_CODE) != null) {
       log.debugf(
           "Skipping sending OTP email to %s because auth note isn't empty",
-          context.getUser().getEmail());
+              email);
       return;
     }
     String code = String.format("%06d", ThreadLocalRandom.current().nextInt(999999));
-    boolean sent = MagicLink.sendOtpEmail(context.getSession(), context.getUser(), code);
+    EventBuilder event = context.newEvent();
+    UserModel user =
+            MagicLink.getOrCreate(
+                    context.getSession(),
+                    context.getRealm(),
+                    email,
+                    isForceCreate(context, false),
+                    false,
+                    false,
+                    MagicLink.registerEvent(event, "email-otp"));
+    context.setUser(user);
+    boolean sent = MagicLink.sendOtpEmail(context.getSession(), user, code);
     if (sent) {
       log.debugf("Sent OTP code %s to email %s", code, context.getUser().getEmail());
       context.getAuthenticationSession().setAuthNote(USER_AUTH_NOTE_OTP_CODE, code);
@@ -81,7 +99,7 @@ public class EmailOtpAuthenticator implements Authenticator {
 
   @Override
   public boolean requiresUser() {
-    return true;
+    return false;
   }
 
   @Override
@@ -94,4 +112,26 @@ public class EmailOtpAuthenticator implements Authenticator {
 
   @Override
   public void close() {}
+
+  public static String getAttemptedUsername(AuthenticationFlowContext context) {
+    if (context.getUser() != null && context.getUser().getEmail() != null) {
+      return context.getUser().getEmail();
+    }
+    String username =
+            trimToNull(context.getAuthenticationSession().getAuthNote(ATTEMPTED_USERNAME));
+    if (username != null) {
+      if (MagicLink.isValidEmail(username)) {
+        return username;
+      }
+      UserModel user = context.getSession().users().getUserByUsername(context.getRealm(), username);
+      if (user != null && user.getEmail() != null) {
+        return user.getEmail();
+      }
+    }
+    return null;
+  }
+
+  private boolean isForceCreate(AuthenticationFlowContext context, boolean defaultValue) {
+    return is(context, CREATE_NONEXISTENT_USER_CONFIG_PROPERTY, defaultValue);
+  }
 }

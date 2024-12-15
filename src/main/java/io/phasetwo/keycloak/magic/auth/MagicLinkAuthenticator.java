@@ -79,7 +79,7 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
             isForceCreate(context, false),
             isUpdateProfile(context, false),
             isUpdatePassword(context, false),
-            MagicLink.registerEvent(event));
+            MagicLink.registerEvent(event, "magic"));
 
     // check for no/invalid email address
     if (user == null
