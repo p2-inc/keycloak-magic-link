@@ -15,6 +15,7 @@ import jakarta.ws.rs.core.UriInfo;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -33,6 +34,7 @@ import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.AuthenticationFlowModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.Constants;
+import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.models.KeycloakSessionTask;
@@ -259,15 +261,14 @@ public class MagicLink {
     try {
       EmailTemplateProvider emailTemplateProvider =
           session.getProvider(EmailTemplateProvider.class);
-      String realmName = getRealmName(realm);
-      List<Object> subjAttr = ImmutableList.of(realmName);
+      String loginSubjectName = getLoginSubjectName(session.getContext());
+      List<Object> subjAttr = ImmutableList.of(loginSubjectName);
       Map<String, Object> bodyAttr = Maps.newHashMap();
-      bodyAttr.put("realmName", realmName);
+      bodyAttr.put("loginSubjectName", loginSubjectName);
       bodyAttr.put("magicLink", link);
       emailTemplateProvider
           .setRealm(realm)
           .setUser(user)
-          .setAttribute("realmName", realmName)
           .send("magicLinkSubject", subjAttr, "magic-link-email.ftl", bodyAttr);
       return true;
     } catch (EmailException e) {
@@ -282,7 +283,7 @@ public class MagicLink {
     try {
       EmailTemplateProvider emailTemplateProvider =
           session.getProvider(EmailTemplateProvider.class);
-      String realmName = getRealmName(realm);
+      String realmName = getLoginSubjectName(session.getContext());
       List<Object> subjAttr = ImmutableList.of(realmName);
       Map<String, Object> bodyAttr = Maps.newHashMap();
       bodyAttr.put("realmName", realmName);
@@ -308,7 +309,7 @@ public class MagicLink {
     try {
       EmailTemplateProvider emailTemplateProvider =
           session.getProvider(EmailTemplateProvider.class);
-      String realmName = getRealmName(realm);
+      String realmName = getLoginSubjectName(session.getContext());
       List<Object> subjAttr = ImmutableList.of(realmName);
       Map<String, Object> bodyAttr = Maps.newHashMap();
       bodyAttr.put("code", code);
@@ -324,8 +325,14 @@ public class MagicLink {
     return false;
   }
 
-  public static String getRealmName(RealmModel realm) {
-    return Strings.isNullOrEmpty(realm.getDisplayName()) ? realm.getName() : realm.getDisplayName();
+  public static String getLoginSubjectName(KeycloakContext context) {
+    return Optional
+            .ofNullable(context.getClient())
+            .map(ClientModel::getName)
+            .orElseGet(() -> {
+              final var realm = context.getRealm();
+              return Strings.isNullOrEmpty(realm.getDisplayName()) ? realm.getName() : realm.getDisplayName();
+            });
   }
 
   public static final String MAGIC_LINK_AUTH_FLOW_ALIAS = "magic link";
