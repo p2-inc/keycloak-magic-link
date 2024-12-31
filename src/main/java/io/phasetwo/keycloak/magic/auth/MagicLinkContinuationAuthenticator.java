@@ -1,6 +1,7 @@
 package io.phasetwo.keycloak.magic.auth;
 
 import static io.phasetwo.keycloak.magic.MagicLink.CREATE_NONEXISTENT_USER_CONFIG_PROPERTY;
+import static io.phasetwo.keycloak.magic.MagicLink.MAGIC_LINK;
 import static io.phasetwo.keycloak.magic.auth.util.Authenticators.is;
 import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.SESSION_CONFIRMED;
 import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.SESSION_EXPIRATION;
@@ -121,7 +122,7 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
             isForceCreate(context, false),
             false,
             false,
-            MagicLink.registerEvent(event));
+            MagicLink.registerEvent(event, MAGIC_LINK));
 
     // check for no/invalid email address
     if (user == null
