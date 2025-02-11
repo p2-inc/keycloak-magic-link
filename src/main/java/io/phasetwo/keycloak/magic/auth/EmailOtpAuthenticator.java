@@ -31,6 +31,7 @@ public class EmailOtpAuthenticator implements Authenticator {
   public static final String USER_AUTH_NOTE_OTP_CODE = "user-auth-note-otp-code";
   public static final String FORM_PARAM_OTP_CODE = "otp";
 
+  @Override
   public void authenticate(AuthenticationFlowContext context) {
     challenge(context, null);
   }
@@ -80,6 +81,7 @@ public class EmailOtpAuthenticator implements Authenticator {
     }
   }
 
+  @Override
   public void action(AuthenticationFlowContext context) {
     log.debug("EmailOtpAuthenticator.action");
 
