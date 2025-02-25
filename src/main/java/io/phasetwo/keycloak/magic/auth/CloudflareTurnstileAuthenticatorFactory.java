@@ -1,6 +1,9 @@
 package io.phasetwo.keycloak.magic.auth;
 
+import com.google.auto.service.AutoService;
 import io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile;
+import java.util.List;
+import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.Config;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.authentication.AuthenticatorFactory;
@@ -8,9 +11,6 @@ import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.provider.ProviderConfigProperty;
-import lombok.extern.jbosslog.JBossLog;
-import java.util.List;
-import com.google.auto.service.AutoService;
 
 @JBossLog
 @AutoService(AuthenticatorFactory.class)
@@ -22,7 +22,7 @@ public class CloudflareTurnstileAuthenticatorFactory implements AuthenticatorFac
   public Authenticator create(KeycloakSession session) {
     return new CloudflareTurnstileAuthenticator();
   }
-  
+
   @Override
   public void init(Config.Scope config) {}
 
@@ -61,12 +61,14 @@ public class CloudflareTurnstileAuthenticatorFactory implements AuthenticatorFac
   public boolean isConfigurable() {
     return true;
   }
-  
+
   @Override
   public AuthenticationExecutionModel.Requirement[] getRequirementChoices() {
-    return new AuthenticationExecutionModel.Requirement[]{AuthenticationExecutionModel.Requirement.REQUIRED};
+    return new AuthenticationExecutionModel.Requirement[] {
+      AuthenticationExecutionModel.Requirement.REQUIRED
+    };
   }
-  
+
   @Override
   public boolean isUserSetupAllowed() {
     return false;
