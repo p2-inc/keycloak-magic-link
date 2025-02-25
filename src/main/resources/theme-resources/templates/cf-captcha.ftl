@@ -1,6 +1,6 @@
 <#import "template.ftl" as layout>
 <@layout.registrationLayout displayInfo=realm.password && realm.registrationAllowed && !registrationDisabled??; section>
-  <#if section = "header">
+  <#if section = "header" && auth.attemptedUsername?has_content>
     <div id="kc-username" class="${properties.kcFormGroupClass!}">
       <label id="kc-attempted-username">${auth.attemptedUsername}</label>
       <a id="reset-login" href="${url.loginRestartFlowUrl}" aria-label="${msg("restartLoginTooltip")}">
