@@ -14,13 +14,13 @@
   <form id="kc-form-login" class="${properties.kcFormClass!}" action="${url.loginAction}" method="post">
     <div class="form-group">
       <div class="${properties.kcInputWrapperClass!}">
-        <div class="g-recaptcha" data-callback="recaptcha_callback" data-size="compact" data-sitekey="${recaptchaSiteKey}"></div>
+        <div class="cf-turnstile" data-sitekey="${captchaSiteKey}" data-action="${captchaAction}" data-language="${captchaLanguage}" data-callback="recaptcha_callback" ></div>
       </div>
     </div>
     <div class="${properties.kcFormGroupClass!}">
       <div id="kc-form-buttons" class="${properties.kcFormButtonsClass!}">
         <input type="hidden" id="id-hidden-input" name="credentialId" <#if auth.selectedCredential?has_content>value="${auth.selectedCredential}"</#if>/>
-        <input tabindex="4" class="${properties.kcButtonClass!} ${properties.kcButtonPrimaryClass!} ${properties.kcButtonBlockClass!} ${properties.kcButtonLargeClass!}" name="login" id="kc-login" type="submit" value="${msg("doLogIn")}" disabled="disabled"/>
+        <input tabindex="4" class="${properties.kcButtonClass!} ${properties.kcButtonPrimaryClass!} ${properties.kcButtonBlockClass!} ${properties.kcButtonLargeClass!}" name="login" id="kc-login" type="submit" value="${msg("doContinue")}" disabled="disabled"/>
       </div>
     </div>
   </form>
