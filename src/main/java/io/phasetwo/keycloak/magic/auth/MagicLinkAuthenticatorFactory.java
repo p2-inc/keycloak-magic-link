@@ -100,7 +100,15 @@ public class MagicLinkAuthenticatorFactory implements AuthenticatorFactory {
         "Toggle whether magic link should be persistent until expired.");
     actionTokenPersistent.setDefaultValue(true);
 
-    return List.of(createUser, updateProfile, updatePassword, actionTokenPersistent);
+    ProviderConfigProperty actionTokenLifeSpan = new ProviderConfigProperty();
+    actionTokenLifeSpan.setType(ProviderConfigProperty.STRING_TYPE);
+    actionTokenLifeSpan.setName(MagicLinkAuthenticator.ACTION_TOKEN_LIFE_SPAN);
+    actionTokenLifeSpan.setLabel("Token lifespan");
+    actionTokenLifeSpan.setHelpText(
+        "Amount of time the magic link is valid, in seconds. If this value is not specific, it will use the default 86400s (1 day)");
+
+    return List.of(
+        createUser, updateProfile, updatePassword, actionTokenPersistent, actionTokenLifeSpan);
   }
 
   @Override

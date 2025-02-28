@@ -17,6 +17,8 @@ import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.UserModel;
 
+import static io.phasetwo.keycloak.magic.MagicLink.MAGIC_LINK;
+
 @JBossLog
 public class MagicLinkResource extends AbstractAdminResource {
 
@@ -58,7 +60,7 @@ public class MagicLinkResource extends AbstractAdminResource {
             forceCreate,
             updateProfile,
             updatePassword,
-            MagicLink.registerEvent(event));
+            MagicLink.registerEvent(event, MAGIC_LINK));
     if (user == null)
       throw new NotFoundException(
           String.format(
@@ -81,7 +83,7 @@ public class MagicLinkResource extends AbstractAdminResource {
     boolean sent = false;
     if (sendEmail) {
       sent = MagicLink.sendMagicLinkEmail(session, user, link);
-      log.infof("sent email to %s? %b. Link? %s", rep.getEmail(), sent, link);
+      log.debugf("sent email to %s? %b. Link? %s", rep.getEmail(), sent, link);
     }
 
     MagicLinkResponse resp = new MagicLinkResponse();
