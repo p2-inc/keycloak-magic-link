@@ -100,7 +100,7 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
 
     if (token.getScope() != null) {
       authSession.setClientNote(OAuth2Constants.SCOPE, token.getScope());
-      AuthenticationManager.setClientScopesInSession(authSession);
+      AuthenticationManager.setClientScopesInSession(tokenContext.getSession(), authSession);
     }
 
     if (token.getRememberMe() != null && token.getRememberMe()) {
