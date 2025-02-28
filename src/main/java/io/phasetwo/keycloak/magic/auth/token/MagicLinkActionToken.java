@@ -13,7 +13,8 @@ public class MagicLinkActionToken extends DefaultActionToken {
   private static final String JSON_FIELD_STATE = "state";
   private static final String JSON_FIELD_REMEMBER_ME = "rme";
   private static final String JSON_FIELD_STRING_NONCE = "nce";
-
+  private static final String JSON_FIELD_CODE_CHALLENGE = "cc";
+  private static final String JSON_FIELD_CODE_CHALLENGE_METHOD = "ccm";
   private static final String JSON_FIELD_REUSABLE = "ru";
 
   @JsonProperty(value = JSON_FIELD_REDIRECT_URI)
@@ -33,6 +34,12 @@ public class MagicLinkActionToken extends DefaultActionToken {
 
   @JsonProperty(value = JSON_FIELD_STRING_NONCE)
   private String nonce;
+
+  @JsonProperty(value = JSON_FIELD_CODE_CHALLENGE)
+  private String codeChallenge;
+
+  @JsonProperty(value = JSON_FIELD_CODE_CHALLENGE_METHOD)
+  private String codeChallengeMethod;
 
   public MagicLinkActionToken(
       String userId, int absoluteExpirationInSecs, String clientId, String redirectUri) {
@@ -66,13 +73,36 @@ public class MagicLinkActionToken extends DefaultActionToken {
       String state,
       Boolean rememberMe,
       Boolean isActionTokenPersistent) {
-    super(userId, TOKEN_TYPE, absoluteExpirationInSecs, nonce(nonce));
-    this.redirectUri = redirectUri;
-    this.issuedFor = clientId;
-    this.scopes = scope;
-    this.state = state;
+    this(userId, absoluteExpirationInSecs, clientId, redirectUri, scope, nonce, state);
     this.rememberMe = rememberMe;
     this.actionTokenPersistent = isActionTokenPersistent;
+    this.nonce = nonce;
+  }
+
+  public MagicLinkActionToken(
+      String userId,
+      int absoluteExpirationInSecs,
+      String clientId,
+      String redirectUri,
+      String scope,
+      String nonce,
+      String state,
+      String codeChallenge,
+      String codeChallengeMethod,
+      Boolean rememberMe,
+      Boolean isActionTokenPersistent) {
+    this(
+        userId,
+        absoluteExpirationInSecs,
+        clientId,
+        redirectUri,
+        scope,
+        nonce,
+        state,
+        rememberMe,
+        isActionTokenPersistent);
+    this.codeChallenge = codeChallenge;
+    this.codeChallengeMethod = codeChallengeMethod;
     this.nonce = nonce;
   }
 
@@ -135,5 +165,21 @@ public class MagicLinkActionToken extends DefaultActionToken {
 
   public void setNonce(String value) {
     this.nonce = value;
+  }
+
+  public String getCodeChallenge() {
+    return this.codeChallenge;
+  }
+
+  public void setCodeChallenge(String value) {
+    this.codeChallenge = value;
+  }
+
+  public String getCodeChallengeMethod() {
+    return this.codeChallengeMethod;
+  }
+
+  public void setCodeChallengeMethod(String value) {
+    this.codeChallengeMethod = value;
   }
 }
