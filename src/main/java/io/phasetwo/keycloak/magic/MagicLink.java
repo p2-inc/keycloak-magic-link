@@ -51,16 +51,20 @@ import org.keycloak.sessions.AuthenticationSessionModel;
 @JBossLog
 public class MagicLink {
 
+  public static String MAGIC_LINK = "magic";
+  public static String EMAIL_OTP = "email-otp";
+
   public static final String CREATE_NONEXISTENT_USER_CONFIG_PROPERTY =
       "ext-magic-create-nonexistent-user";
 
-  public static Consumer<UserModel> registerEvent(final EventBuilder event) {
+  public static Consumer<UserModel> registerEvent(final EventBuilder event,
+                                                  String authenticatorName) {
     return new Consumer<UserModel>() {
       @Override
       public void accept(UserModel user) {
         event
             .event(EventType.REGISTER)
-            .detail(Details.REGISTER_METHOD, "magic")
+            .detail(Details.REGISTER_METHOD, authenticatorName)
             .detail(Details.USERNAME, user.getUsername())
             .detail(Details.EMAIL, user.getEmail())
             .user(user)
@@ -117,7 +121,7 @@ public class MagicLink {
 
   public static MagicLinkContinuationActionToken createExpandedActionToken(
       UserModel user, String clientId, int validityInSecs, AuthenticationSessionModel authSession) {
-    log.infof(
+    log.debugf(
         "Attempting MagicLinkContinuationAuthenticator for %s, %s, %s, %s",
         user.getEmail(), clientId, authSession.getParentSession().getId(), authSession.getTabId());
 
@@ -148,9 +152,9 @@ public class MagicLink {
     String nonce = authSession.getClientNote(OIDCLoginProtocol.NONCE_PARAM);
     String codeChallenge = authSession.getClientNote(OIDCLoginProtocol.CODE_CHALLENGE_PARAM);
     String codeChallengeMethod = authSession.getClientNote(OIDCLoginProtocol.CODE_CHALLENGE_METHOD_PARAM);
-    log.infof(
+    log.debugf(
         "Attempting MagicLinkAuthenticator for %s, %s, %s", user.getEmail(), clientId, redirectUri);
-    log.infof("MagicLinkAuthenticator extra vars %s %s %s %b", scope, state, nonce, rememberMe);
+    log.debugf("MagicLinkAuthenticator extra vars %s %s %s %b", scope, state, nonce, rememberMe);
     return createActionToken(
         user,
         clientId,

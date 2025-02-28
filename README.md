@@ -20,7 +20,7 @@ This contains two pathways to get a Magic Link:
 
 ### Authenticator
 
-An Authenticator that can run as a form in your login flow. This takes an email, and can optionally create a user if none exists. This implementation sends the email using a theme-resources template, which you can override. Installation can be achieved by duplicating the Browser flow, and replacing the normal Username/Password/OTP forms with the Magic Link execution type ([@tstec-polypoly](https://github.com/tstec-polypoly) provides a great step-by-step guide for setting it up https://github.com/p2-inc/keycloak-magic-link/issues/6#issuecomment-1230675741). Note that you aren't required to use a *Username form* with this, as it extends `UsernamePasswordForm` and renders the username form page for you:
+An Authenticator that can run as a form in your login flow. This takes an email, and can optionally create a user if none exists. This implementation sends the email using a theme-resources template, which you can override. Installation can be achieved by duplicating the Browser flow, and replacing the normal Username/Password/OTP forms with the Magic Link execution type ([@tstec-polypoly](https://github.com/tstec-polypoly) provides a great step-by-step guide for setting it up https://github.com/p2-inc/keycloak-magic-link/issues/6#issuecomment-1230675741). Note that you aren't required to use a _Username form_ with this, as it extends `UsernamePasswordForm` and renders the username form page for you:
 
 ![Install Magic Link Authenticator in Browser Flow](docs/assets/magic-link-authenticator.png)
 
@@ -30,8 +30,7 @@ The authenticator can be configured to create a user with the given email addres
 
 ## Magic link continuation
 
-This Magic link continuation authenticator is similar to the Magic Link authenticator in implementation, but has a different behaviour. Instead of creating a session on the device where the link is clicked, the flow continues the login on the initial login page. The login page is polling the authentication page each 5 seconds until the session is confirmed or the authentication flow expires. The default expiration for the Magic link continuation flow is 10 minutes.
-
+This Magic link continuation authenticator is similar to the Magic Link authenticator in implementation, but has a different behavior. Instead of creating a session on the device where the link is clicked, the flow continues the login on the initial login page. The login page is polling the authentication page each 5 seconds until the session is confirmed or the authentication flow expires. The default expiration for the Magic link continuation flow is 10 minutes.
 
 ### Authenticator
 
@@ -44,7 +43,6 @@ The authenticator can be configured to set the expiration of the authentication 
 When the period is exceeded the authentication flow will reset.
 
 ![Magic Link continuation expired](docs/assets/magic-link-continuation-expiration.png)
-
 
 ### Resource
 
@@ -70,6 +68,7 @@ Parameters:
 | `reusable` | N | true | If the token can be reused multiple times during its validity |
 
 Sample request (replace your access token):
+
 ```
 curl --request POST https://keycloak.host/auth/realms/test/magic-link \
  --header "Accept: application/json" \
@@ -77,7 +76,9 @@ curl --request POST https://keycloak.host/auth/realms/test/magic-link \
  --header "Authorization: Bearer <access_token>" \
  --data '{"email":"foo@foo.com","client_id":"account-console","redirect_uri":"https://keycloak.host/auth/realms/test/account/","expiration_seconds":3600,"force_create":true,"update_profile":true,"update_password":true,"send_email":false}'
 ```
+
 Sample response:
+
 ```
 {
   "user_id": "386edecf-3e43-41fd-886c-c674eea41034",
@@ -88,12 +89,13 @@ Sample response:
 
 ## Email OTP
 
-There is a simple authenticator to email a 6-digit OTP to the users email address. This implementation sends the email using a theme-resources template, which you can override. It is recommended to use this in an Authentication flow following the *Username form*. An example flow looks like this:
+There is a simple authenticator to email a 6-digit OTP to the users email address. This implementation sends the email using a theme-resources template, which you can override. It is recommended to use this in an Authentication flow following the _Username form_. An example flow looks like this:
 ![Install Email OTP Authenticator in Browser Flow](docs/assets/email-otp-authenticator.png)
 
 ## Installation
 
 1. Build the jar:
+
 ```
 mvn clean install
 ```
@@ -105,6 +107,7 @@ mvn clean install
 Releases are tagged and published to [Maven Central](https://repo1.maven.org/maven2/io/phasetwo/keycloak/keycloak-magic-link/) after each merge to `main`. Jars can be downloaded from there.
 
 If you are depending on the library in your own Maven-built project, or using a bundling tool in Maven, you can add the dependency like this:
+
 ```xml
     <dependency>
       <groupId>io.phasetwo.keycloak</groupId>
@@ -112,7 +115,6 @@ If you are depending on the library in your own Maven-built project, or using a 
       <version>VERSION</version>
     </dependency>
 ```
-
 
 ## Implementation Notes
 
@@ -138,4 +140,3 @@ User contributed POC using Jupyter: https://github.com/tstec-polypoly/explore-ke
 ---
 
 All documentation, source code and other files in this repository are Copyright 2024 Phase Two, Inc.
-
