@@ -1,2 +1,2 @@
 <#ftl output_format="plainText">
-${msg("otpBody", realmName, code)}
+${msg("otpBody", loginSubjectName, code)}
