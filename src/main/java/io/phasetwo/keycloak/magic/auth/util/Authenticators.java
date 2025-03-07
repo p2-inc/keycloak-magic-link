@@ -21,7 +21,7 @@ public final class Authenticators {
   }
 
   public static String get(
-          AuthenticationFlowContext context, String propName, String defaultValue) {
+      AuthenticationFlowContext context, String propName, String defaultValue) {
     AuthenticatorConfigModel authenticatorConfig = context.getAuthenticatorConfig();
     if (authenticatorConfig == null) return defaultValue;
 
