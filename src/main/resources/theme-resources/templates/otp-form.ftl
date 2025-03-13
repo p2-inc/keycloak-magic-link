@@ -13,7 +13,7 @@
         </a>
       </div>
     <#elseif section = "form">
-      <p>Enter access code</p>
+      <p>${msg("enterAccessCode")}</p>
       <form id="kc-otp-login-form" class="${properties.kcFormClass!}" action="${url.loginAction}" method="post">
         <div class="${properties.kcFormGroupClass!}">
           <div class="${properties.kcLabelWrapperClass!}">
