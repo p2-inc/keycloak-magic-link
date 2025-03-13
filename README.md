@@ -92,6 +92,16 @@ Sample response:
 There is a simple authenticator to email a 6-digit OTP to the users email address. This implementation sends the email using a theme-resources template, which you can override. It is recommended to use this in an Authentication flow following the _Username form_. An example flow looks like this:
 ![Install Email OTP Authenticator in Browser Flow](docs/assets/email-otp-authenticator.png)
 
+## Captcha
+
+There is an implementation of the Cloudflare captcha authenticator that renders a standalone page with the [Cloudflare Turnstile](https://www.cloudflare.com/application-services/products/turnstile/) widget to challenge for non-human or bot users.
+
+The reason this is in this repository is that users of the Magic Link extension (with force create user enabed) have encountered issues with bots and automatic form submission, causing large numbers of illegitimate users to be created and large numbers of magic link emails to be sent. Using this before the Magic Link authenticator in your flow (or any authenticator with such issues) can help mitigate or prevent such issues. 
+
+You will need to create an account with Cloudflare and enable a widget in the Turnstile product in order to get the site key, secret and action.
+
+In order to allow Keycloak to frame the Cloudflare javascript, you must go to "Realm Settings" -> "Security Defenses" -> "Content-Security-Policy" and add `https://challenges.cloudflare.com` to `frame-src` (space-separated list).
+
 ## Installation
 
 1. Build the jar:
