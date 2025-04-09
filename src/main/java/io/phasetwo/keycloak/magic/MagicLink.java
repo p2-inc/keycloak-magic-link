@@ -91,7 +91,7 @@ public class MagicLink {
       boolean updateProfile,
       boolean updatePassword,
       Consumer<UserModel> onNew) {
-    UserModel user = KeycloakModelUtils.findUserByNameOrEmail(session, realm, email);
+	UserModel user = session.users().getUserByEmail(realm, email);
     if (user == null && forceCreate) {
       user = session.users().addUser(realm, email);
       user.setEnabled(true);
