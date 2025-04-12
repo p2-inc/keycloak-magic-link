@@ -479,7 +479,11 @@ public class MagicLink {
 
   public static String getAttemptedUsername(AuthenticationFlowContext context) {
     if (context.getUser() != null && context.getUser().getEmail() != null) {
-      return context.getUser().getEmail();
+      if(context.getRealm().isLoginWithEmailAllowed()) {
+        return context.getUser().getEmail();
+      }
+      // return username if realm does not allow login with email.
+      return context.getUser().getUsername();
     }
     String username =
         trimToNull(context.getAuthenticationSession().getAuthNote(ATTEMPTED_USERNAME));
