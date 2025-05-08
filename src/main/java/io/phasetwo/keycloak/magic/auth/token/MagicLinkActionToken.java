@@ -1,7 +1,10 @@
 package io.phasetwo.keycloak.magic.auth.token;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.UUID;
+
+import lombok.Getter;
 import org.keycloak.authentication.actiontoken.DefaultActionToken;
 
 public class MagicLinkActionToken extends DefaultActionToken {
@@ -41,8 +44,23 @@ public class MagicLinkActionToken extends DefaultActionToken {
   @JsonProperty(value = JSON_FIELD_CODE_CHALLENGE_METHOD)
   private String codeChallengeMethod;
 
-  public MagicLinkActionToken(
-      String userId, int absoluteExpirationInSecs, String clientId, String redirectUri) {
+  @Getter
+  @JsonProperty(value = "organization")
+  private String org;
+
+  @Getter
+  @JsonProperty(value = "organization_types")
+  private String module;
+
+  @Getter
+  @JsonProperty(value = "level")
+  private String level;
+
+  @Getter
+  @JsonProperty(value = "company")
+  private String companyId;
+
+  public MagicLinkActionToken(String userId, int absoluteExpirationInSecs, String clientId, String redirectUri) {
     super(userId, TOKEN_TYPE, absoluteExpirationInSecs, null);
     this.redirectUri = redirectUri;
     this.issuedFor = clientId;
@@ -55,7 +73,8 @@ public class MagicLinkActionToken extends DefaultActionToken {
       String redirectUri,
       String scope,
       String nonce,
-      String state) {
+      String state
+  ) {
     super(userId, TOKEN_TYPE, absoluteExpirationInSecs, nonce(nonce));
     this.redirectUri = redirectUri;
     this.issuedFor = clientId;
@@ -72,7 +91,8 @@ public class MagicLinkActionToken extends DefaultActionToken {
       String nonce,
       String state,
       Boolean rememberMe,
-      Boolean isActionTokenPersistent) {
+      Boolean isActionTokenPersistent
+  ) {
     this(userId, absoluteExpirationInSecs, clientId, redirectUri, scope, nonce, state);
     this.rememberMe = rememberMe;
     this.actionTokenPersistent = isActionTokenPersistent;
@@ -87,10 +107,40 @@ public class MagicLinkActionToken extends DefaultActionToken {
       String scope,
       String nonce,
       String state,
+      Boolean rememberMe,
+      Boolean isActionTokenPersistent,
+      String org,
+      String module,
+      String level,
+      String companyId
+  ) {
+    this(userId, absoluteExpirationInSecs, clientId, redirectUri, scope, nonce, state);
+    this.rememberMe = rememberMe;
+    this.actionTokenPersistent = isActionTokenPersistent;
+    this.nonce = nonce;
+    this.org = org;
+    this.module = module;
+    this.level = level;
+    this.companyId = companyId;
+  }
+
+  public MagicLinkActionToken(
+      String userId,
+      int absoluteExpirationInSecs,
+      String clientId,
+      String redirectUri,
+      String scope,
+      String nonce,
+      String state,
       String codeChallenge,
       String codeChallengeMethod,
       Boolean rememberMe,
-      Boolean isActionTokenPersistent) {
+      Boolean isActionTokenPersistent,
+      String org,
+      String module,
+      String level,
+      String companyId
+  ) {
     this(
         userId,
         absoluteExpirationInSecs,
@@ -100,7 +150,41 @@ public class MagicLinkActionToken extends DefaultActionToken {
         nonce,
         state,
         rememberMe,
-        isActionTokenPersistent);
+        isActionTokenPersistent,
+        org,
+        module,
+        level,
+        companyId
+    );
+    this.codeChallenge = codeChallenge;
+    this.codeChallengeMethod = codeChallengeMethod;
+    this.nonce = nonce;
+  }
+
+  public MagicLinkActionToken(
+      String userId,
+      int absoluteExpirationInSecs,
+      String clientId,
+      String redirectUri,
+      String scope,
+      String nonce,
+      String state,
+      String codeChallenge,
+      String codeChallengeMethod,
+      Boolean rememberMe,
+      Boolean isActionTokenPersistent
+  ) {
+    this(
+        userId,
+        absoluteExpirationInSecs,
+        clientId,
+        redirectUri,
+        scope,
+        nonce,
+        state,
+        rememberMe,
+        isActionTokenPersistent
+    );
     this.codeChallenge = codeChallenge;
     this.codeChallengeMethod = codeChallengeMethod;
     this.nonce = nonce;

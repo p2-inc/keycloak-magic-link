@@ -34,6 +34,18 @@ public class MagicLinkRequest {
   @JsonProperty("send_email")
   private boolean sendEmail = false;
 
+  @JsonProperty("org")
+  private String org = "";
+
+  @JsonProperty("level")
+  private String level = "";
+
+  @JsonProperty("module")
+  private String module = "";
+
+  @JsonProperty("companyId")
+  private String companyId = "";
+
   @JsonProperty("scope")
   private String scope = null;
 

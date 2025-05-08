@@ -3,9 +3,12 @@ package io.phasetwo.keycloak.magic.auth.token;
 import jakarta.ws.rs.core.Response;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.OAuth2Constants;
+import org.keycloak.authentication.AuthenticationProcessor;
 import org.keycloak.authentication.actiontoken.AbstractActionTokenHandler;
 import org.keycloak.authentication.actiontoken.ActionTokenContext;
-import org.keycloak.events.*;
+import org.keycloak.events.Details;
+import org.keycloak.events.Errors;
+import org.keycloak.events.EventType;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
@@ -14,6 +17,8 @@ import org.keycloak.services.managers.AuthenticationManager;
 import org.keycloak.services.messages.Messages;
 import org.keycloak.services.util.ResolveRelative;
 import org.keycloak.sessions.AuthenticationSessionModel;
+
+import static org.keycloak.services.resources.LoginActionsService.AUTHENTICATE_PATH;
 
 /**
  * Handles the magic link action token by logging the user in and forwarding to the redirect uri.
@@ -46,39 +51,32 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
   */
 
   @Override
-  public AuthenticationSessionModel startFreshAuthenticationSession(
-      MagicLinkActionToken token, ActionTokenContext<MagicLinkActionToken> tokenContext) {
+  public AuthenticationSessionModel startFreshAuthenticationSession(MagicLinkActionToken token, ActionTokenContext<MagicLinkActionToken> tokenContext) {
     return tokenContext.createAuthenticationSessionForClient(token.getIssuedFor());
   }
 
   @Override
-  public boolean canUseTokenRepeatedly(
-      MagicLinkActionToken token, ActionTokenContext<MagicLinkActionToken> tokenContext) {
-    return token
-        .getActionTokenPersistent(); // Invalidate action token after one use if configured to do so
+  public boolean canUseTokenRepeatedly(MagicLinkActionToken token, ActionTokenContext<MagicLinkActionToken> tokenContext) {
+    return token.getActionTokenPersistent(); // Invalidate action token after one use if configured to do so
   }
 
   @Override
-  public Response handleToken(
-      MagicLinkActionToken token, ActionTokenContext<MagicLinkActionToken> tokenContext) {
+  public Response handleToken(MagicLinkActionToken token, ActionTokenContext<MagicLinkActionToken> tokenContext) {
     log.debugf("handleToken for iss:%s, user:%s", token.getIssuedFor(), token.getUserId());
     UserModel user = tokenContext.getAuthenticationSession().getAuthenticatedUser();
 
     final AuthenticationSessionModel authSession = tokenContext.getAuthenticationSession();
+
     final ClientModel client = authSession.getClient();
     final String redirectUri =
         token.getRedirectUri() != null
             ? token.getRedirectUri()
-            : ResolveRelative.resolveRelativeUri(
-                tokenContext.getSession(), client.getRootUrl(), client.getBaseUrl());
+            : ResolveRelative.resolveRelativeUri(tokenContext.getSession(), client.getRootUrl(), client.getBaseUrl());
     log.debugf("Using redirect_uri %s", redirectUri);
 
-    String redirect =
-        RedirectUtils.verifyRedirectUri(
-            tokenContext.getSession(), redirectUri, authSession.getClient());
+    String redirect = RedirectUtils.verifyRedirectUri(tokenContext.getSession(), redirectUri, authSession.getClient());
     if (redirect != null) {
-      authSession.setAuthNote(
-          AuthenticationManager.SET_REDIRECT_URI_AFTER_REQUIRED_ACTIONS, "true");
+      authSession.setAuthNote(AuthenticationManager.SET_REDIRECT_URI_AFTER_REQUIRED_ACTIONS, "true");
       authSession.setRedirectUri(redirect);
       authSession.setClientNote(OIDCLoginProtocol.REDIRECT_URI_PARAM, redirectUri);
       if (token.getState() != null) {
@@ -103,6 +101,24 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
       AuthenticationManager.setClientScopesInSession(tokenContext.getSession(), authSession);
     }
 
+    if (token.getOrg() != null) {
+      authSession.setAuthNote(Details.ORG_ID, token.getOrg());
+      authSession.setUserSessionNote(Details.ORG_ID, token.getOrg());
+      tokenContext.getEvent().detail(Details.ORG_ID, token.getOrg());
+    }
+
+    if (token.getModule() != null) {
+      authSession.setAuthNote("module", token.getModule());
+      authSession.setUserSessionNote("module", token.getModule());
+      tokenContext.getEvent().detail("module", token.getModule());
+    }
+
+    if (token.getLevel() != null) {
+      authSession.setAuthNote("level", token.getLevel());
+      authSession.setUserSessionNote("level", token.getLevel());
+      tokenContext.getEvent().detail("level", token.getLevel());
+    }
+
     if (token.getRememberMe() != null && token.getRememberMe()) {
       authSession.setAuthNote(Details.REMEMBER_ME, "true");
       tokenContext.getEvent().detail(Details.REMEMBER_ME, "true");
@@ -111,18 +127,22 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
     }
 
     user.setEmailVerified(true);
+    authSession.setAuthNote("AUTH_SESSION_UPDATED", "true");
 
-    String nextAction =
-        AuthenticationManager.nextRequiredAction(
-            tokenContext.getSession(),
-            authSession,
-            tokenContext.getRequest(),
-            tokenContext.getEvent());
-    return AuthenticationManager.redirectToRequiredActions(
-        tokenContext.getSession(),
-        tokenContext.getRealm(),
-        authSession,
-        tokenContext.getUriInfo(),
-        nextAction);
+    return tokenContext.processFlow(false, AUTHENTICATE_PATH,
+        authSession.getRealm().getFlowByAlias("Magic Link Authenticator"), null, new AuthenticationProcessor());
+//    String nextAction = AuthenticationManager.nextRequiredAction(
+//        tokenContext.getSession(),
+//        authSession,
+//        tokenContext.getRequest(),
+//        tokenContext.getEvent()
+//    );
+//    return AuthenticationManager.redirectToRequiredActions(
+//        tokenContext.getSession(),
+//        tokenContext.getRealm(),
+//        authSession,
+//        tokenContext.getUriInfo(),
+//        nextAction
+//    );
   }
 }
