@@ -1,5 +1,9 @@
 package io.phasetwo.keycloak.magic.auth;
 
+import static io.phasetwo.keycloak.magic.MagicLink.CREATE_NONEXISTENT_USER_CONFIG_PROPERTY;
+import static io.phasetwo.keycloak.magic.MagicLink.EMAIL_OTP;
+import static io.phasetwo.keycloak.magic.auth.util.Authenticators.is;
+
 import com.google.common.collect.ImmutableList;
 import io.phasetwo.keycloak.magic.MagicLink;
 import jakarta.ws.rs.core.MultivaluedMap;
@@ -7,7 +11,6 @@ import jakarta.ws.rs.core.Response;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.AuthenticationFlowContext;
-import org.keycloak.authentication.AuthenticationFlowError;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.events.Errors;
 import org.keycloak.events.EventBuilder;
@@ -17,13 +20,6 @@ import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.utils.FormMessage;
 import org.keycloak.services.messages.Messages;
-
-import static io.phasetwo.keycloak.magic.MagicLink.CREATE_NONEXISTENT_USER_CONFIG_PROPERTY;
-import static io.phasetwo.keycloak.magic.MagicLink.EMAIL_OTP;
-import static io.phasetwo.keycloak.magic.MagicLink.trimToNull;
-import static io.phasetwo.keycloak.magic.auth.util.Authenticators.is;
-import static org.keycloak.authentication.authenticators.browser.AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME;
-import static org.keycloak.services.validation.Validation.FIELD_USERNAME;
 
 @JBossLog
 public class EmailOtpAuthenticator implements Authenticator {
@@ -50,24 +46,22 @@ public class EmailOtpAuthenticator implements Authenticator {
 
   private void sendOtp(AuthenticationFlowContext context, String email) {
     if (context.getAuthenticationSession().getAuthNote(USER_AUTH_NOTE_OTP_CODE) != null) {
-      log.debugf(
-          "Skipping sending OTP email to %s because auth note isn't empty",
-              email);
+      log.debugf("Skipping sending OTP email to %s because auth note isn't empty", email);
       return;
     }
     String code = String.format("%06d", ThreadLocalRandom.current().nextInt(999999));
     EventBuilder event = context.newEvent();
     UserModel user =
-            MagicLink.getOrCreate(
-                    context.getSession(),
-                    context.getRealm(),
-                    email,
-                    isForceCreate(context, false),
-                    false,
-                    false,
-                    MagicLink.registerEvent(event, EMAIL_OTP));
+        MagicLink.getOrCreate(
+            context.getSession(),
+            context.getRealm(),
+            email,
+            isForceCreate(context, false),
+            false,
+            false,
+            MagicLink.registerEvent(event, EMAIL_OTP));
 
-    if (user == null){
+    if (user == null) {
       log.debugf("User with email %s not found.", context.getUser().getEmail());
       return;
     }
