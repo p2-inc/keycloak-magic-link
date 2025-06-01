@@ -22,11 +22,14 @@ public class BoundMagicLinkActionTokenHandler extends MagicLinkActionTokenHandle
     if (token instanceof BoundMagicLinkActionToken boundToken) {
       // Check if the session ID in the cookie matches the one in the token
       Cookie cookie = tokenContext.getRequest().getHttpHeaders().getCookies().get(CookieType.AUTH_SESSION_ID.getName());
+
       if (cookie == null || !cookie.getValue().equals(boundToken.getCookieSid())) {
         log.warn("BoundMagicLinkActionTokenHandler Auth session cookie missing or doesn't match the token");
         tokenContext.getEvent().error(Errors.INVALID_CODE);
         return tokenContext.getSession().getProvider(org.keycloak.forms.login.LoginFormsProvider.class)
-            .setError("invalidMagicLinkCookie")
+            .setError("invalidMagicLinkCookie"+
+                " - Cookie: " + (cookie != null ? cookie.getValue() : "null") +
+                ", Token: " + boundToken.getCookieSid())
             .createErrorPage(Response.Status.BAD_REQUEST);
       }
       log.debug("BoundMagicLinkActionTokenHandler Cookie authentication successful");
