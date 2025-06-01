@@ -6,7 +6,7 @@ import org.keycloak.authentication.actiontoken.DefaultActionToken;
 
 public class MagicLinkActionToken extends DefaultActionToken {
 
-  public static final String TOKEN_TYPE = "ext-magic-link";
+  public static final String TOKEN_TYPE = "ext-bound-magic-link";
 
   private static final String JSON_FIELD_REDIRECT_URI = "rdu";
   private static final String JSON_FIELD_SCOPE = "scope";
