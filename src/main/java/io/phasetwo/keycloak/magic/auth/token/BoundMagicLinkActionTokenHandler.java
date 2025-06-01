@@ -27,9 +27,7 @@ public class BoundMagicLinkActionTokenHandler extends MagicLinkActionTokenHandle
         log.warn("BoundMagicLinkActionTokenHandler Auth session cookie missing or doesn't match the token");
         tokenContext.getEvent().error(Errors.INVALID_CODE);
         return tokenContext.getSession().getProvider(org.keycloak.forms.login.LoginFormsProvider.class)
-            .setError("invalidMagicLinkCookie"+
-                " - Cookie: " + (cookie != null ? cookie.getValue() : "null") +
-                ", Token: " + boundToken.getCookieSid())
+            .setError("Invalid or missing authentication session cookie. Are you using the same browser and device as when you requested the magic link?")
             .createErrorPage(Response.Status.BAD_REQUEST);
       }
       log.debug("BoundMagicLinkActionTokenHandler Cookie authentication successful");
