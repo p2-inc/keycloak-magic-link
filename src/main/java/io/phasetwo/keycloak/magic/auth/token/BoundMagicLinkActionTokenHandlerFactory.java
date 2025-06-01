@@ -8,7 +8,7 @@ import org.keycloak.models.KeycloakSessionFactory;
 
 @AutoService(ActionTokenHandlerFactory.class)
 public class BoundMagicLinkActionTokenHandlerFactory
-    implements ActionTokenHandlerFactory<MagicLinkActionToken> {
+    implements ActionTokenHandlerFactory<BoundMagicLinkActionToken> {
 
   public static final String PROVIDER_ID = "ext-bound-magic-link";
 

@@ -8,6 +8,7 @@ import com.google.common.collect.Maps;
 import io.phasetwo.keycloak.magic.auth.MagicLinkAuthenticatorFactory;
 import io.phasetwo.keycloak.magic.auth.token.MagicLinkActionToken;
 import io.phasetwo.keycloak.magic.auth.token.MagicLinkContinuationActionToken;
+import io.phasetwo.keycloak.magic.auth.token.BoundMagicLinkActionToken;
 import jakarta.mail.internet.AddressException;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.ws.rs.core.UriBuilder;
@@ -235,6 +236,91 @@ public class MagicLink {
       UserModel user, String clientId, String redirectUri, OptionalInt validity) {
     return createActionToken(
         user, clientId, redirectUri, validity, null, null, null, null, null, false, true);
+  }
+
+  // New methods for BoundMagicLinkActionToken creation
+  public static BoundMagicLinkActionToken createBoundActionToken(
+      UserModel user,
+      String clientId,
+      OptionalInt validity,
+      Boolean rememberMe,
+      AuthenticationSessionModel authSession,
+      Boolean isActionTokenPersistent) {
+    String redirectUri = authSession.getRedirectUri();
+    String scope = authSession.getClientNote(OIDCLoginProtocol.SCOPE_PARAM);
+    String state = authSession.getClientNote(OIDCLoginProtocol.STATE_PARAM);
+    String nonce = authSession.getClientNote(OIDCLoginProtocol.NONCE_PARAM);
+    String codeChallenge = authSession.getClientNote(OIDCLoginProtocol.CODE_CHALLENGE_PARAM);
+    String codeChallengeMethod = authSession.getClientNote(OIDCLoginProtocol.CODE_CHALLENGE_METHOD_PARAM);
+
+    // Get session ID for cookie binding
+    String cookieSid = authSession.getParentSession().getId();
+
+    // Get client connection info
+    String ip = authSession.getAuthenticatedUser().getFirstAttribute("loginIp");
+    if (ip == null) {
+      ip = "Unknown";
+    }
+
+    // User Agent comes from the HTTP headers which aren't in the session
+    // This will be set by the caller
+    String ua = "Unknown";
+
+    log.debugf("Attempting bound MagicLinkAuthenticator for %s, %s, %s", user.getEmail(), clientId, redirectUri);
+
+    return createBoundActionToken(
+        user,
+        clientId,
+        redirectUri,
+        validity,
+        scope,
+        nonce,
+        state,
+        codeChallenge,
+        codeChallengeMethod,
+        rememberMe,
+        isActionTokenPersistent,
+        cookieSid,
+        ip,
+        ua);
+  }
+
+  public static BoundMagicLinkActionToken createBoundActionToken(
+      UserModel user,
+      String clientId,
+      String redirectUri,
+      OptionalInt validity,
+      String scope,
+      String nonce,
+      String state,
+      String codeChallenge,
+      String codeChallengeMethod,
+      Boolean rememberMe,
+      Boolean isActionTokenPersistent,
+      String cookieSid,
+      String ip,
+      String ua) {
+    // build the action token
+    int validityInSecs = validity.orElse(300); // 5 minutes default
+    int absoluteExpirationInSecs = Time.currentTime() + validityInSecs;
+
+    BoundMagicLinkActionToken token = new BoundMagicLinkActionToken(
+        user.getId(),
+        absoluteExpirationInSecs,
+        clientId,
+        redirectUri,
+        scope,
+        nonce,
+        state,
+        codeChallenge,
+        codeChallengeMethod,
+        rememberMe,
+        isActionTokenPersistent,
+        cookieSid,
+        ip,
+        ua);
+
+    return token;
   }
 
   public static String linkFromActionToken(

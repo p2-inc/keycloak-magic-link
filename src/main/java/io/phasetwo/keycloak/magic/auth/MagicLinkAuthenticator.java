@@ -62,7 +62,7 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
       // - first check for email from previous authenticator
       email = MagicLink.getAttemptedUsername(context);
     }
-    log.debugf("email in action is %s", email);
+    log.debugf("MagicLinkAuthenticator email in action is %s", email);
     // - throw error if still empty
     if (email == null) {
       context.getEvent().error(Errors.USER_NOT_FOUND);
@@ -97,12 +97,12 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
       context
           .getAuthenticationSession()
           .setAuthNote(AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME, email);
-      log.debugf("user attempted to login with username/email: %s", email);
+      log.debugf("MagicLinkAuthenticator user attempted to login with username/email: %s", email);
       context.forceChallenge(context.form().createForm("view-email.ftl"));
       return;
     }
 
-    log.debugf("user is %s %s", user.getEmail(), user.isEnabled());
+    log.debugf("MagicLinkAuthenticator user is %s %s", user.getEmail(), user.isEnabled());
 
     // check for enabled user
     if (!enabledUser(context, user)) {
@@ -111,24 +111,27 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
 
     OptionalInt lifespan = getActionTokenLifeSpan(context, "300"); // Default to 5 minutes (300 seconds)
 
-    // Collect contextual information
+    // Get contextual information for the bound token
     String cookieSid = context.getAuthenticationSession().getParentSession().getId();
     String ip = context.getConnection().getRemoteAddr();
     String ua = context.getHttpRequest().getHttpHeaders().getHeaderString("User-Agent");
 
-    // Create a BoundMagicLinkActionToken instead of regular MagicLinkActionToken
-    BoundMagicLinkActionToken token =
-        new BoundMagicLinkActionToken(
-            user.getId(),
-            lifespan.orElse(300), // Default to 5 minutes if not specified
-            clientId,
-            null, // redirectUri
-            cookieSid,
-            ip,
-            ua);
-
-    token.setRememberMe(rememberMe(context));
-    token.setActionTokenPersistent(isActionTokenPersistent(context, true));
+    // Create the bound token using the factory method
+    BoundMagicLinkActionToken token = MagicLink.createBoundActionToken(
+        user,
+        clientId,
+        context.getAuthenticationSession().getRedirectUri(),
+        lifespan,
+        context.getAuthenticationSession().getClientNote("scope"),
+        context.getAuthenticationSession().getClientNote("nonce"),
+        context.getAuthenticationSession().getClientNote("state"),
+        context.getAuthenticationSession().getClientNote("code_challenge"),
+        context.getAuthenticationSession().getClientNote("code_challenge_method"),
+        rememberMe(context),
+        isActionTokenPersistent(context, true),
+        cookieSid,
+        ip,
+        ua);
 
     String link = MagicLink.linkFromActionToken(context.getSession(), context.getRealm(), token);
 
@@ -153,7 +156,7 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
     }
 
     boolean sent = MagicLink.sendMagicLinkEmail(context.getSession(), user, link, additionalAttributes);
-    log.debugf("sent email to %s? %b. Link? %s", user.getEmail(), sent, link);
+    log.debugf("MagicLinkAuthenticator sent email to %s? %b. Link? %s", user.getEmail(), sent, link);
 
     context
         .getAuthenticationSession()
@@ -231,3 +234,4 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
         : Messages.INVALID_USERNAME;
   }
 }
+

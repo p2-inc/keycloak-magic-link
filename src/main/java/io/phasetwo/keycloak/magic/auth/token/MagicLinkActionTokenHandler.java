@@ -19,49 +19,37 @@ import org.keycloak.sessions.AuthenticationSessionModel;
  * Handles the magic link action token by logging the user in and forwarding to the redirect uri.
  */
 @JBossLog
-public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<MagicLinkActionToken> {
+public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<BoundMagicLinkActionToken> {
 
   public MagicLinkActionTokenHandler() {
     super(
-        MagicLinkActionToken.TOKEN_TYPE,
-        MagicLinkActionToken.class,
+        BoundMagicLinkActionToken.TOKEN_TYPE,
+        BoundMagicLinkActionToken.class,
         Messages.INVALID_REQUEST,
         EventType.EXECUTE_ACTION_TOKEN,
         Errors.INVALID_REQUEST);
+    log.info("MagicLinkActionTokenHandler initialized");
   }
-
-  /*
-  @Override
-  public Predicate<? super MagicLinkActionToken>[] getVerifiers(
-      ActionTokenContext<MagicLinkActionToken> tokenContext) {
-    return TokenUtils.predicates(
-        TokenUtils.checkThat(
-            t ->
-                Objects.equals(
-                    t.getEmail(),
-                    tokenContext.getAuthenticationSession().getAuthenticatedUser().getEmail()),
-            Errors.INVALID_EMAIL,
-            getDefaultErrorMessage()));
-  }
-  */
 
   @Override
   public AuthenticationSessionModel startFreshAuthenticationSession(
-      MagicLinkActionToken token, ActionTokenContext<MagicLinkActionToken> tokenContext) {
+          BoundMagicLinkActionToken token, ActionTokenContext<BoundMagicLinkActionToken> tokenContext) {
+    log.info("Start fresh authentication session");
     return tokenContext.createAuthenticationSessionForClient(token.getIssuedFor());
   }
 
   @Override
   public boolean canUseTokenRepeatedly(
-      MagicLinkActionToken token, ActionTokenContext<MagicLinkActionToken> tokenContext) {
+          BoundMagicLinkActionToken token, ActionTokenContext<BoundMagicLinkActionToken> tokenContext) {
+    log.infof("MagicLinkActionTokenHandler canUseTokenRepeatedly for iss:%s, user:%s", token.getIssuedFor(), token.getUserId());
     return token
         .getActionTokenPersistent(); // Invalidate action token after one use if configured to do so
   }
 
   @Override
   public Response handleToken(
-      MagicLinkActionToken token, ActionTokenContext<MagicLinkActionToken> tokenContext) {
-    log.debugf("handleToken for iss:%s, user:%s", token.getIssuedFor(), token.getUserId());
+          BoundMagicLinkActionToken token, ActionTokenContext<BoundMagicLinkActionToken> tokenContext) {
+    log.infof("MagicLinkActionTokenHandler handleToken for iss:%s, user:%s", token.getIssuedFor(), token.getUserId());
     UserModel user = tokenContext.getAuthenticationSession().getAuthenticatedUser();
 
     final AuthenticationSessionModel authSession = tokenContext.getAuthenticationSession();
@@ -71,7 +59,7 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
             ? token.getRedirectUri()
             : ResolveRelative.resolveRelativeUri(
                 tokenContext.getSession(), client.getRootUrl(), client.getBaseUrl());
-    log.debugf("Using redirect_uri %s", redirectUri);
+    log.infof("MagicLinkActionTokenHandler Using redirect_uri %s", redirectUri);
 
     String redirect =
         RedirectUtils.verifyRedirectUri(
