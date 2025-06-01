@@ -19,6 +19,7 @@ import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.AuthenticationFlowError;
 import org.keycloak.authentication.authenticators.browser.AbstractUsernameFormAuthenticator;
 import org.keycloak.authentication.authenticators.browser.UsernamePasswordForm;
+import org.keycloak.cookie.CookieType;
 import org.keycloak.events.Errors;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.events.EventType;
@@ -112,7 +113,8 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
     OptionalInt lifespan = getActionTokenLifeSpan(context, "300"); // Default to 5 minutes (300 seconds)
 
     // Get contextual information for the bound token
-    String cookieSid = context.getAuthenticationSession().getParentSession().getId();
+    //String cookieSid = context.getAuthenticationSession().getParentSession().getId();
+    String cookieSid =  context.getHttpRequest().getHttpHeaders().getCookies().get(CookieType.AUTH_SESSION_ID.getName()).getValue();
     log.errorf("MagicLinkAuthenticator cookie sid: %s", cookieSid);
     String ip = context.getConnection().getRemoteAddr();
     String ua = context.getHttpRequest().getHttpHeaders().getHeaderString("User-Agent");
