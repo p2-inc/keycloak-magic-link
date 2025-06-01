@@ -106,7 +106,7 @@ public class MagicLinkActionToken extends DefaultActionToken {
     this.nonce = nonce;
   }
 
-  private MagicLinkActionToken() {
+  public MagicLinkActionToken() {
     // Note that the class must have a private constructor without any arguments. This is necessary
     // to deserialize the token class from JWT.
   }

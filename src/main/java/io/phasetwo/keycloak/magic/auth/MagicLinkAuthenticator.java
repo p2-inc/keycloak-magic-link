@@ -7,9 +7,12 @@ import static io.phasetwo.keycloak.magic.auth.util.Authenticators.is;
 import static org.keycloak.services.validation.Validation.FIELD_USERNAME;
 
 import io.phasetwo.keycloak.magic.MagicLink;
-import io.phasetwo.keycloak.magic.auth.token.MagicLinkActionToken;
+import io.phasetwo.keycloak.magic.auth.token.BoundMagicLinkActionToken;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
+import java.time.ZonedDateTime;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.OptionalInt;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.AuthenticationFlowContext;
@@ -106,18 +109,50 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
       return; // the enabledUser method sets the challenge
     }
 
-    OptionalInt lifespan = getActionTokenLifeSpan(context, "");
+    OptionalInt lifespan = getActionTokenLifeSpan(context, "300"); // Default to 5 minutes (300 seconds)
 
-    MagicLinkActionToken token =
-        MagicLink.createActionToken(
-            user,
+    // Collect contextual information
+    String cookieSid = context.getAuthenticationSession().getParentSession().getId();
+    String ip = context.getConnection().getRemoteAddr();
+    String ua = context.getHttpRequest().getHttpHeaders().getHeaderString("User-Agent");
+
+    // Create a BoundMagicLinkActionToken instead of regular MagicLinkActionToken
+    BoundMagicLinkActionToken token =
+        new BoundMagicLinkActionToken(
+            user.getId(),
+            lifespan.orElse(300), // Default to 5 minutes if not specified
             clientId,
-            lifespan,
-            rememberMe(context),
-            context.getAuthenticationSession(),
-            isActionTokenPersistent(context, true));
+            null, // redirectUri
+            cookieSid,
+            ip,
+            ua);
+
+    token.setRememberMe(rememberMe(context));
+    token.setActionTokenPersistent(isActionTokenPersistent(context, true));
+
     String link = MagicLink.linkFromActionToken(context.getSession(), context.getRealm(), token);
-    boolean sent = MagicLink.sendMagicLinkEmail(context.getSession(), user, link);
+
+    // Add contextual information to the email template
+    Map<String, Object> additionalAttributes = new HashMap<>();
+    additionalAttributes.put("ip", ip);
+    additionalAttributes.put("ua", ua);
+    additionalAttributes.put("time", ZonedDateTime.now().toString());
+
+    // Get location information from auth notes if available
+    String city = context.getAuthenticationSession().getAuthNote("login_city");
+    String country = context.getAuthenticationSession().getAuthNote("login_country");
+    if (city != null) {
+        additionalAttributes.put("city", city);
+    } else {
+        additionalAttributes.put("city", "Unknown");
+    }
+    if (country != null) {
+        additionalAttributes.put("country", country);
+    } else {
+        additionalAttributes.put("country", "Unknown");
+    }
+
+    boolean sent = MagicLink.sendMagicLinkEmail(context.getSession(), user, link, additionalAttributes);
     log.debugf("sent email to %s? %b. Link? %s", user.getEmail(), sent, link);
 
     context

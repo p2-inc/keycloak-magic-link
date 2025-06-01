@@ -282,6 +282,10 @@ public class MagicLink {
   }
 
   public static boolean sendMagicLinkEmail(KeycloakSession session, UserModel user, String link) {
+    return sendMagicLinkEmail(session, user, link, null);
+  }
+
+  public static boolean sendMagicLinkEmail(KeycloakSession session, UserModel user, String link, Map<String, Object> additionalAttributes) {
     RealmModel realm = session.getContext().getRealm();
     ClientModel client = session.getContext().getClient();
     try {
@@ -293,17 +297,24 @@ public class MagicLink {
       Map<String, Object> bodyAttr = Maps.newHashMap();
       bodyAttr.put("realmName", realmName);
       bodyAttr.put("magicLink", link);
+
+      // Add additional attributes if provided
+      if (additionalAttributes != null) {
+        bodyAttr.putAll(additionalAttributes);
+      }
+
       emailTemplateProvider
           .setRealm(realm)
           .setUser(user)
           .setAttribute("realmName", realmName)
           .setAttribute("clientName", clientName)
           .send("magicLinkSubject", subjAttr, "magic-link-email.ftl", bodyAttr);
+
       return true;
-    } catch (EmailException e) {
+    } catch (Exception e) {
       log.error("Failed to send magic link email", e);
+      return false;
     }
-    return false;
   }
 
   public static boolean sendMagicLinkContinuationEmail(
