@@ -113,6 +113,7 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
 
     // Get contextual information for the bound token
     String cookieSid = context.getAuthenticationSession().getParentSession().getId();
+    log.errorf("MagicLinkAuthenticator cookie sid: %s", cookieSid);
     String ip = context.getConnection().getRemoteAddr();
     String ua = context.getHttpRequest().getHttpHeaders().getHeaderString("User-Agent");
 
