@@ -4,7 +4,7 @@
   <groupId>io.phasetwo.keycloak</groupId>
   <artifactId>keycloak-magic-link</artifactId>
   <packaging>jar</packaging>
-  <version>0.42-SNAPSHOT</version>
+  <version>0.42</version>
 
   <parent>
     <groupId>com.github.xgp</groupId>
@@ -40,7 +40,7 @@
   <scm>
     <url>https://github.com/p2-inc/keycloak-magic-link</url>
     <connection>scm:git:git@github.com:p2-inc/keycloak-magic-link.git</connection>
-    <tag>HEAD</tag>
+    <tag>v0.42</tag>
   </scm>
 
   <build>
