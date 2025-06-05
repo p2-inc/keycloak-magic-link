@@ -48,6 +48,8 @@ When the period is exceeded the authentication flow will reset.
 
 A Resource you can call with `manage-users` role, which allows you to specify the email, clientId, redirectUri, tokenExpiry and optionally if the email is sent, or the link is just returned to the caller.
 
+Resources created with this API method return a URL that uses an Action Token. This will log a user in directly and skip any Authentication Flows defined. 
+
 Parameters:
 | Name | Required | Default | Description |
 | ----- | ----- | ----- | ----- |
