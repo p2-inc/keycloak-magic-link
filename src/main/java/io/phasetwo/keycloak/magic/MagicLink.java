@@ -289,15 +289,19 @@ public class MagicLink {
           session.getProvider(EmailTemplateProvider.class);
       String realmName = getRealmName(realm);
       String clientName = getClientName(client);
+      String clientId = client.getClientId();
       List<Object> subjAttr = ImmutableList.of(realmName, clientName);
       Map<String, Object> bodyAttr = Maps.newHashMap();
       bodyAttr.put("realmName", realmName);
+      bodyAttr.put("clientName", clientName);
+      bodyAttr.put("clientId", clientId);
       bodyAttr.put("magicLink", link);
       emailTemplateProvider
           .setRealm(realm)
           .setUser(user)
           .setAttribute("realmName", realmName)
           .setAttribute("clientName", clientName)
+          .setAttribute("clientId", clientId)
           .send("magicLinkSubject", subjAttr, "magic-link-email.ftl", bodyAttr);
       return true;
     } catch (EmailException e) {
@@ -315,15 +319,19 @@ public class MagicLink {
           session.getProvider(EmailTemplateProvider.class);
       String realmName = getRealmName(realm);
       String clientName = getClientName(client);
+      String clientId = client.getClientId();
       List<Object> subjAttr = ImmutableList.of(realmName, clientName);
       Map<String, Object> bodyAttr = Maps.newHashMap();
       bodyAttr.put("realmName", realmName);
+      bodyAttr.put("clientName", clientName);
+      bodyAttr.put("clientId", clientId);
       bodyAttr.put("magicLink", link);
       emailTemplateProvider
           .setRealm(realm)
           .setUser(user)
           .setAttribute("realmName", realmName)
           .setAttribute("clientName", clientName)
+          .setAttribute("clientId", clientId)
           .send(
               "magicLinkContinuationSubject",
               subjAttr,
