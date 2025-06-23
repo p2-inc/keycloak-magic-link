@@ -11,9 +11,11 @@ import jakarta.ws.rs.core.Response;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.AuthenticationFlowContext;
+import org.keycloak.authentication.AuthenticationFlowError;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.events.Errors;
 import org.keycloak.events.EventBuilder;
+import org.keycloak.events.EventType;
 import org.keycloak.forms.login.LoginFormsProvider;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
@@ -41,7 +43,12 @@ public class EmailOtpAuthenticator implements Authenticator {
     }
 
     Response response = form.createForm("otp-form.ftl");
-    context.challenge(response);
+
+    if(errorMessage != null) {
+      context.failureChallenge(AuthenticationFlowError.INVALID_CREDENTIALS, response);
+    } else {
+      context.challenge(response);
+    }
   }
 
   private void sendOtp(AuthenticationFlowContext context, String email) {
@@ -96,7 +103,9 @@ public class EmailOtpAuthenticator implements Authenticator {
     } catch (Exception e) {
       log.warn("Error comparing OTP code to form", e);
     }
-    context.getEvent().error(Errors.INVALID_USER_CREDENTIALS);
+
+    UserModel user = context.getUser();
+    context.getEvent().user(user).event(EventType.LOGIN_ERROR).error(Errors.INVALID_CODE);
     challenge(context, new FormMessage(Messages.INVALID_ACCESS_CODE));
   }
 
