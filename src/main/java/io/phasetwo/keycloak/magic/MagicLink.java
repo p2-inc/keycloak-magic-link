@@ -1,6 +1,7 @@
 package io.phasetwo.keycloak.magic;
 
 import static org.keycloak.authentication.authenticators.browser.AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME;
+import static org.keycloak.models.utils.KeycloakModelUtils.findUserByNameOrEmail;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
@@ -86,21 +87,24 @@ public class MagicLink {
   public static UserModel getOrCreate(
       KeycloakSession session,
       RealmModel realm,
-      String email,
+      String emailOrUsername,
       boolean forceCreate,
       boolean updateProfile,
       boolean updatePassword,
       Consumer<UserModel> onNew) {
-    UserModel user = null;
-    if (realm.isLoginWithEmailAllowed()) {
-      user = KeycloakModelUtils.findUserByNameOrEmail(session, realm, email);
-    } else {
-      user = session.users().getUserByEmail(realm, email);
-    }
-    if (user == null && forceCreate && realm.isLoginWithEmailAllowed()) {
-      user = session.users().addUser(realm, email);
+
+    // username or email is required, if not provided or empty, exit early and return null
+    if (trimToNull(emailOrUsername) == null) { return null; }
+    UserModel user = findUserByNameOrEmail(session, realm, emailOrUsername);
+    // If the user does not exist, we create it ONLY if forceCreate is true
+    if (user == null && forceCreate) {
+      user = session.users().addUser(realm, emailOrUsername);
       user.setEnabled(true);
-      user.setEmail(email);
+
+      if (MagicLink.isValidEmail(emailOrUsername)) {
+        user.setEmail(emailOrUsername);
+      }
+
       if (onNew != null) {
         onNew.accept(user);
       }
