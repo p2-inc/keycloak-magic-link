@@ -94,7 +94,9 @@ public class MagicLink {
       Consumer<UserModel> onNew) {
 
     // username or email is required, if not provided or empty, exit early and return null
-    if (trimToNull(emailOrUsername) == null) { return null; }
+    if (trimToNull(emailOrUsername) == null) {
+      return null;
+    }
     UserModel user = findUserByNameOrEmail(session, realm, emailOrUsername);
     // If the user does not exist, we create it ONLY if forceCreate is true
     if (user == null && forceCreate) {

@@ -21,6 +21,8 @@ import org.keycloak.sessions.AuthenticationSessionModel;
 @JBossLog
 public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<MagicLinkActionToken> {
 
+  public static final String LOGIN_METHOD = "login_method";
+
   public MagicLinkActionTokenHandler() {
     super(
         MagicLinkActionToken.TOKEN_TYPE,
@@ -111,7 +113,15 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
       authSession.removeAuthNote(Details.REMEMBER_ME);
     }
 
+    // Default to switching the email verified toggle to true since they clicked on this link in an
+    // email.
+    // Although, since a magic link can be created by API, we should revisit whether this should be
+    // the
+    // default.
     user.setEmailVerified(true);
+
+    // Create a user session note to indicate that a magic link was used for login.
+    authSession.setUserSessionNote(LOGIN_METHOD, MagicLinkActionTokenHandlerFactory.PROVIDER_ID);
 
     String nextAction =
         AuthenticationManager.nextRequiredAction(

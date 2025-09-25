@@ -8,7 +8,7 @@ import com.google.common.collect.ImmutableList;
 import io.phasetwo.keycloak.magic.MagicLink;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
-import java.util.concurrent.ThreadLocalRandom;
+import java.security.SecureRandom;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.AuthenticationFlowError;
@@ -34,7 +34,8 @@ public class EmailOtpAuthenticator implements Authenticator {
     challenge(context, null, false);
   }
 
-  private void challenge(AuthenticationFlowContext context, FormMessage errorMessage, boolean triggerBruteForce) {
+  private void challenge(
+      AuthenticationFlowContext context, FormMessage errorMessage, boolean triggerBruteForce) {
     var email = MagicLink.getAttemptedUsername(context);
     sendOtp(context, email);
 
@@ -63,16 +64,17 @@ public class EmailOtpAuthenticator implements Authenticator {
       log.debugf("Skipping sending OTP email to %s because auth note isn't empty", email);
       return;
     }
-    String code = String.format("%06d", ThreadLocalRandom.current().nextInt(999999));
+    String code = generateNumericOTP(6);
     EventBuilder event = context.newEvent();
-    UserModel user = MagicLink.getOrCreate(
-        context.getSession(),
-        context.getRealm(),
-        email,
-        isForceCreate(context, false),
-        false,
-        false,
-        MagicLink.registerEvent(event, EMAIL_OTP));
+    UserModel user =
+        MagicLink.getOrCreate(
+            context.getSession(),
+            context.getRealm(),
+            email,
+            isForceCreate(context, false),
+            false,
+            false,
+            MagicLink.registerEvent(event, EMAIL_OTP));
 
     if (user == null) {
       log.debugf("User with email %s not found.", context.getUser().getEmail());
@@ -135,12 +137,10 @@ public class EmailOtpAuthenticator implements Authenticator {
   }
 
   @Override
-  public void setRequiredActions(KeycloakSession session, RealmModel realm, UserModel user) {
-  }
+  public void setRequiredActions(KeycloakSession session, RealmModel realm, UserModel user) {}
 
   @Override
-  public void close() {
-  }
+  public void close() {}
 
   protected String disabledByBruteForceError(String error) {
     if (Errors.USER_TEMPORARILY_DISABLED.equals(error)) {
@@ -151,5 +151,20 @@ public class EmailOtpAuthenticator implements Authenticator {
 
   private boolean isForceCreate(AuthenticationFlowContext context, boolean defaultValue) {
     return is(context, CREATE_NONEXISTENT_USER_CONFIG_PROPERTY, defaultValue);
+  }
+
+  private static final SecureRandom secureRandom = new SecureRandom();
+
+  public static String generateNumericOTP(int numDigits) {
+    if (numDigits <= 0) {
+      throw new IllegalArgumentException("Number of digits must be positive");
+    }
+
+    StringBuilder sb = new StringBuilder(numDigits);
+    for (int i = 0; i < numDigits; i++) {
+      int digit = secureRandom.nextInt(10); // 0–9
+      sb.append(digit);
+    }
+    return sb.toString();
   }
 }
