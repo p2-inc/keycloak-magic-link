@@ -8,12 +8,12 @@ import com.google.common.collect.ImmutableList;
 import io.phasetwo.keycloak.magic.MagicLink;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
-import java.security.SecureRandom;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.AuthenticationFlowError;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.authentication.authenticators.util.AuthenticatorUtils;
+import org.keycloak.common.util.SecretGenerator;
 import org.keycloak.events.Errors;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.events.EventType;
@@ -64,7 +64,7 @@ public class EmailOtpAuthenticator implements Authenticator {
       log.debugf("Skipping sending OTP email to %s because auth note isn't empty", email);
       return;
     }
-    String code = generateNumericOTP(6);
+    String code = SecretGenerator.getInstance().randomString(6, SecretGenerator.DIGITS);
     EventBuilder event = context.newEvent();
     UserModel user =
         MagicLink.getOrCreate(
@@ -151,20 +151,5 @@ public class EmailOtpAuthenticator implements Authenticator {
 
   private boolean isForceCreate(AuthenticationFlowContext context, boolean defaultValue) {
     return is(context, CREATE_NONEXISTENT_USER_CONFIG_PROPERTY, defaultValue);
-  }
-
-  private static final SecureRandom secureRandom = new SecureRandom();
-
-  public static String generateNumericOTP(int numDigits) {
-    if (numDigits <= 0) {
-      throw new IllegalArgumentException("Number of digits must be positive");
-    }
-
-    StringBuilder sb = new StringBuilder(numDigits);
-    for (int i = 0; i < numDigits; i++) {
-      int digit = secureRandom.nextInt(10); // 0–9
-      sb.append(digit);
-    }
-    return sb.toString();
   }
 }
