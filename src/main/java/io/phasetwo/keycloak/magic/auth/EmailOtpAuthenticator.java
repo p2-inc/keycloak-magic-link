@@ -64,21 +64,27 @@ public class EmailOtpAuthenticator implements Authenticator {
       log.debugf("Skipping sending OTP email to %s because auth note isn't empty", email);
       return;
     }
+
     String code = SecretGenerator.getInstance().randomString(6, SecretGenerator.DIGITS);
     EventBuilder event = context.newEvent();
-    UserModel user =
-        MagicLink.getOrCreate(
-            context.getSession(),
-            context.getRealm(),
-            email,
-            isForceCreate(context, false),
-            false,
-            false,
-            MagicLink.registerEvent(event, EMAIL_OTP));
 
+    UserModel user = context.getUser();
     if (user == null) {
-      log.debugf("User with email %s not found.", context.getUser().getEmail());
-      return;
+      user = MagicLink.getOrCreate(
+        context.getSession(),
+        context.getRealm(),
+        email,
+        isForceCreate(context, false),
+        false,
+        false,
+        MagicLink.registerEvent(event, EMAIL_OTP));
+
+      if (user == null) {
+        log.debugf("User with email %s not found.", context.getUser().getEmail());
+        return;
+      }
+
+      context.setUser(user);
     }
 
     context.setUser(user);
