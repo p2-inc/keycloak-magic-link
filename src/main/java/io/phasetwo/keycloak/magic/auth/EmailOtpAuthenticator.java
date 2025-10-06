@@ -87,7 +87,6 @@ public class EmailOtpAuthenticator implements Authenticator {
       context.setUser(user);
     }
 
-    context.setUser(user);
     boolean sent = MagicLink.sendOtpEmail(context.getSession(), user, code);
     if (sent) {
       log.debugf("Sent OTP code %s to email %s", code, context.getUser().getEmail());
