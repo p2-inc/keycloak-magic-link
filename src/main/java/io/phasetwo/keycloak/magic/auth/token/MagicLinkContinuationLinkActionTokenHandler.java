@@ -1,11 +1,14 @@
 package io.phasetwo.keycloak.magic.auth.token;
 
+import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.MLC_STATE;
 import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.SESSION_CONFIRMED;
+import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.STATE_CONFIRMED;
 
 import io.phasetwo.keycloak.magic.auth.model.MagicLinkContinuationBean;
 import io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants;
 import jakarta.ws.rs.core.Cookie;
 import jakarta.ws.rs.core.Response;
+import java.net.URI;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.actiontoken.AbstractActionTokenHandler;
 import org.keycloak.authentication.actiontoken.ActionTokenContext;
@@ -56,7 +59,15 @@ public class MagicLinkContinuationLinkActionTokenHandler
       AuthenticationSessionModel authenticationFlowSession =
           rootAuthenticationSession.getAuthenticationSession(client, token.getTabId());
       if (authenticationFlowSession != null) {
+        log.debugf(
+            "[MLC] Magic link clicked! Setting SESSION_CONFIRMED and MLC_STATE=confirmed for tabId: %s",
+            token.getTabId());
         authenticationFlowSession.setAuthNote(SESSION_CONFIRMED, "true");
+        // Set MLC_STATE to confirmed for polling endpoint
+        authenticationFlowSession.setAuthNote(MLC_STATE, STATE_CONFIRMED);
+        log.debugf("[MLC] State set. SESSION_CONFIRMED=%s, MLC_STATE=%s", 
+            authenticationFlowSession.getAuthNote(SESSION_CONFIRMED),
+            authenticationFlowSession.getAuthNote(MLC_STATE));
         Cookie cookie =
             session
                 .getContext()
@@ -70,13 +81,16 @@ public class MagicLinkContinuationLinkActionTokenHandler
         tokenContext.getEvent().success();
 
         return loginFormsProvider
+            .setActionUri(URI.create("#"))
             .setAttribute("magicLinkContinuation", magicLinkContinuationBean)
             .createForm("email-confirmation.ftl");
       }
     }
 
     tokenContext.getEvent().error("Expired magic link continuation session!");
-    return loginFormsProvider.createForm("email-confirmation-error.ftl");
+    return loginFormsProvider
+        .setActionUri(URI.create("#"))
+        .createForm("email-confirmation-error.ftl");
   }
 
   @Override
@@ -100,6 +114,14 @@ public class MagicLinkContinuationLinkActionTokenHandler
       return authSession;
     }
 
+    AuthenticationSessionModel existingAuthSession =
+        rootAuthenticationSession.getAuthenticationSession(client, token.getTabId());
+    if (existingAuthSession != null) {
+      log.debugf("[MLC] Reusing existing auth session for tabId: %s", token.getTabId());
+      return existingAuthSession;
+    }
+
+    log.debugf("[MLC] Creating new auth session for tabId: %s", token.getTabId());
     AuthenticationSessionModel authSession =
         rootAuthenticationSession.createAuthenticationSession(client);
     return authSession;

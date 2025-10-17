@@ -3,9 +3,13 @@ package io.phasetwo.keycloak.magic.auth;
 import static io.phasetwo.keycloak.magic.MagicLink.CREATE_NONEXISTENT_USER_CONFIG_PROPERTY;
 import static io.phasetwo.keycloak.magic.MagicLink.MAGIC_LINK;
 import static io.phasetwo.keycloak.magic.auth.util.Authenticators.is;
+import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.AUTH_SESSION_EXP;
+import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.MLC_STATE;
 import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.SESSION_CONFIRMED;
 import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.SESSION_EXPIRATION;
 import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.SESSION_INITIATED;
+import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.STATE_EXPIRED;
+import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.STATE_PENDING;
 import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.TIMEOUT;
 import static org.keycloak.services.validation.Validation.FIELD_USERNAME;
 
@@ -74,7 +78,28 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
             attemptedUsername);
         action(context);
       } else {
-        context.challenge(context.form().createForm("view-email-continuation.ftl"));
+        // Pass tabId, sessionId and polling URL to template for JavaScript polling
+        String tabId = context.getAuthenticationSession().getTabId();
+        String sessionId = context.getAuthenticationSession().getParentSession().getId();
+        String baseUri = context.getUriInfo().getBaseUri().toString();
+        if (!baseUri.endsWith("/")) {
+          baseUri += "/";
+        }
+        String pollingUrl =
+            baseUri
+                + "realms/"
+                + context.getRealm().getName()
+                + "/magic-link-continuation/"
+                + sessionId
+                + "/"
+                + tabId
+                + "/status";
+        context.challenge(
+            context
+                .form()
+                .setAttribute("tabId", tabId)
+                .setAttribute("pollingUrl", pollingUrl)
+                .createForm("view-email-continuation.ftl"));
       }
     }
   }
@@ -83,7 +108,12 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
     String expiration = context.getAuthenticationSession().getAuthNote(SESSION_EXPIRATION);
     if (StringUtil.isNotBlank(expiration)) {
       ZonedDateTime expirationTime = ZonedDateTime.parse(expiration);
-      return expirationTime.isBefore(ZonedDateTime.now());
+      boolean expired = expirationTime.isBefore(ZonedDateTime.now());
+      if (expired) {
+        // Set MLC_STATE to expired when session expires
+        context.getAuthenticationSession().setAuthNote(MLC_STATE, STATE_EXPIRED);
+      }
+      return expired;
     }
     return false;
   }
@@ -91,6 +121,24 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
   @Override
   public void action(AuthenticationFlowContext context) {
     log.debug("MagicLinkAuthenticator.action");
+
+    // If session is already confirmed, complete the authentication
+    String sessionConfirmed = context.getAuthenticationSession().getAuthNote(SESSION_CONFIRMED);
+    if (StringUtil.isNotBlank(sessionConfirmed)) {
+      log.debugf("[MLC] Session already confirmed in action(), completing authentication");
+      String attemptedUsername = MagicLink.getAttemptedUsername(context);
+      UserModel user;
+      if (MagicLink.isValidEmail(attemptedUsername)) {
+        user = context.getSession().users().getUserByEmail(context.getRealm(), attemptedUsername);
+      } else {
+        user =
+            context.getSession().users().getUserByUsername(context.getRealm(), attemptedUsername);
+      }
+      context.setUser(user);
+      context.getAuthenticationSession().setAuthenticatedUser(user);
+      context.success();
+      return;
+    }
 
     MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
 
@@ -170,7 +218,33 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
             .toString();
     context.getAuthenticationSession().setAuthNote(SESSION_EXPIRATION, sessionExpiration);
 
-    context.challenge(context.form().createForm("view-email-continuation.ftl"));
+    // Set MLC_STATE to pending and auth_session_exp for polling endpoint
+    context.getAuthenticationSession().setAuthNote(MLC_STATE, STATE_PENDING);
+    long exp = (System.currentTimeMillis() / 1000L) + (timeout * 60);
+    context.getAuthenticationSession().setClientNote(AUTH_SESSION_EXP, String.valueOf(exp));
+
+    // Pass tabId, sessionId and polling URL to template for JavaScript polling
+    String tabId = context.getAuthenticationSession().getTabId();
+    String sessionId = context.getAuthenticationSession().getParentSession().getId();
+    String baseUri = context.getUriInfo().getBaseUri().toString();
+    if (!baseUri.endsWith("/")) {
+      baseUri += "/";
+    }
+    String pollingUrl =
+        baseUri
+            + "realms/"
+            + context.getRealm().getName()
+            + "/magic-link-continuation/"
+            + sessionId
+            + "/"
+            + tabId
+            + "/status";
+    context.challenge(
+        context
+            .form()
+            .setAttribute("tabId", tabId)
+            .setAttribute("pollingUrl", pollingUrl)
+            .createForm("view-email-continuation.ftl"));
   }
 
   private boolean isForceCreate(AuthenticationFlowContext context, boolean defaultValue) {
