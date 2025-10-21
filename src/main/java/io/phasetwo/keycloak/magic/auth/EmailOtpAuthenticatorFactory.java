@@ -1,7 +1,8 @@
 package io.phasetwo.keycloak.magic.auth;
 
+import static io.phasetwo.keycloak.magic.MagicLink.CREATE_NONEXISTENT_USER_CONFIG_PROPERTY;
+
 import com.google.auto.service.AutoService;
-import com.google.common.collect.ImmutableList;
 import java.util.List;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.Config;
@@ -11,8 +12,6 @@ import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.provider.ProviderConfigProperty;
-
-import static io.phasetwo.keycloak.magic.MagicLink.CREATE_NONEXISTENT_USER_CONFIG_PROPERTY;
 
 @JBossLog
 @AutoService(AuthenticatorFactory.class)
@@ -73,7 +72,7 @@ public class EmailOtpAuthenticatorFactory implements AuthenticatorFactory {
     createUser.setName(CREATE_NONEXISTENT_USER_CONFIG_PROPERTY);
     createUser.setLabel("Force create user");
     createUser.setHelpText(
-            "Creates a new user when an email is provided that does not match an existing user.");
+        "Creates a new user when an email is provided that does not match an existing user.");
     createUser.setDefaultValue(false);
 
     return List.of(createUser);

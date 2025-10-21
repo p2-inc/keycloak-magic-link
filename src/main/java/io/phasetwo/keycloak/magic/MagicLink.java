@@ -1,6 +1,7 @@
 package io.phasetwo.keycloak.magic;
 
 import static org.keycloak.authentication.authenticators.browser.AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME;
+import static org.keycloak.models.utils.KeycloakModelUtils.findUserByNameOrEmail;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
@@ -57,8 +58,8 @@ public class MagicLink {
   public static final String CREATE_NONEXISTENT_USER_CONFIG_PROPERTY =
       "ext-magic-create-nonexistent-user";
 
-  public static Consumer<UserModel> registerEvent(final EventBuilder event,
-                                                  String authenticatorName) {
+  public static Consumer<UserModel> registerEvent(
+      final EventBuilder event, String authenticatorName) {
     return new Consumer<UserModel>() {
       @Override
       public void accept(UserModel user) {
@@ -86,16 +87,26 @@ public class MagicLink {
   public static UserModel getOrCreate(
       KeycloakSession session,
       RealmModel realm,
-      String email,
+      String emailOrUsername,
       boolean forceCreate,
       boolean updateProfile,
       boolean updatePassword,
       Consumer<UserModel> onNew) {
-    UserModel user = KeycloakModelUtils.findUserByNameOrEmail(session, realm, email);
+
+    // username or email is required, if not provided or empty, exit early and return null
+    if (trimToNull(emailOrUsername) == null) {
+      return null;
+    }
+    UserModel user = findUserByNameOrEmail(session, realm, emailOrUsername);
+    // If the user does not exist, we create it ONLY if forceCreate is true
     if (user == null && forceCreate) {
-      user = session.users().addUser(realm, email);
+      user = session.users().addUser(realm, emailOrUsername);
       user.setEnabled(true);
-      user.setEmail(email);
+
+      if (MagicLink.isValidEmail(emailOrUsername)) {
+        user.setEmail(emailOrUsername);
+      }
+
       if (onNew != null) {
         onNew.accept(user);
       }
@@ -151,7 +162,8 @@ public class MagicLink {
     String state = authSession.getClientNote(OIDCLoginProtocol.STATE_PARAM);
     String nonce = authSession.getClientNote(OIDCLoginProtocol.NONCE_PARAM);
     String codeChallenge = authSession.getClientNote(OIDCLoginProtocol.CODE_CHALLENGE_PARAM);
-    String codeChallengeMethod = authSession.getClientNote(OIDCLoginProtocol.CODE_CHALLENGE_METHOD_PARAM);
+    String codeChallengeMethod =
+        authSession.getClientNote(OIDCLoginProtocol.CODE_CHALLENGE_METHOD_PARAM);
     log.debugf(
         "Attempting MagicLinkAuthenticator for %s, %s, %s", user.getEmail(), clientId, redirectUri);
     log.debugf("MagicLinkAuthenticator extra vars %s %s %s %b", scope, state, nonce, rememberMe);
@@ -277,18 +289,25 @@ public class MagicLink {
 
   public static boolean sendMagicLinkEmail(KeycloakSession session, UserModel user, String link) {
     RealmModel realm = session.getContext().getRealm();
+    ClientModel client = session.getContext().getClient();
     try {
       EmailTemplateProvider emailTemplateProvider =
           session.getProvider(EmailTemplateProvider.class);
       String realmName = getRealmName(realm);
-      List<Object> subjAttr = ImmutableList.of(realmName);
+      String clientName = getClientName(client);
+      String clientId = client.getClientId();
+      List<Object> subjAttr = ImmutableList.of(realmName, clientName);
       Map<String, Object> bodyAttr = Maps.newHashMap();
       bodyAttr.put("realmName", realmName);
+      bodyAttr.put("clientName", clientName);
+      bodyAttr.put("clientId", clientId);
       bodyAttr.put("magicLink", link);
       emailTemplateProvider
           .setRealm(realm)
           .setUser(user)
           .setAttribute("realmName", realmName)
+          .setAttribute("clientName", clientName)
+          .setAttribute("clientId", clientId)
           .send("magicLinkSubject", subjAttr, "magic-link-email.ftl", bodyAttr);
       return true;
     } catch (EmailException e) {
@@ -300,18 +319,25 @@ public class MagicLink {
   public static boolean sendMagicLinkContinuationEmail(
       KeycloakSession session, UserModel user, String link) {
     RealmModel realm = session.getContext().getRealm();
+    ClientModel client = session.getContext().getClient();
     try {
       EmailTemplateProvider emailTemplateProvider =
           session.getProvider(EmailTemplateProvider.class);
       String realmName = getRealmName(realm);
-      List<Object> subjAttr = ImmutableList.of(realmName);
+      String clientName = getClientName(client);
+      String clientId = client.getClientId();
+      List<Object> subjAttr = ImmutableList.of(realmName, clientName);
       Map<String, Object> bodyAttr = Maps.newHashMap();
       bodyAttr.put("realmName", realmName);
+      bodyAttr.put("clientName", clientName);
+      bodyAttr.put("clientId", clientId);
       bodyAttr.put("magicLink", link);
       emailTemplateProvider
           .setRealm(realm)
           .setUser(user)
           .setAttribute("realmName", realmName)
+          .setAttribute("clientName", clientName)
+          .setAttribute("clientId", clientId)
           .send(
               "magicLinkContinuationSubject",
               subjAttr,
@@ -326,17 +352,20 @@ public class MagicLink {
 
   public static boolean sendOtpEmail(KeycloakSession session, UserModel user, String code) {
     RealmModel realm = session.getContext().getRealm();
+    ClientModel client = session.getContext().getClient();
     try {
       EmailTemplateProvider emailTemplateProvider =
           session.getProvider(EmailTemplateProvider.class);
       String realmName = getRealmName(realm);
-      List<Object> subjAttr = ImmutableList.of(realmName);
+      String clientName = getClientName(client);
+      List<Object> subjAttr = ImmutableList.of(realmName, clientName);
       Map<String, Object> bodyAttr = Maps.newHashMap();
       bodyAttr.put("code", code);
       emailTemplateProvider
           .setRealm(realm)
           .setUser(user)
           .setAttribute("realmName", realmName)
+          .setAttribute("clientName", clientName)
           .send("otpSubject", subjAttr, "otp-email.ftl", bodyAttr);
       return true;
     } catch (EmailException e) {
@@ -347,6 +376,10 @@ public class MagicLink {
 
   public static String getRealmName(RealmModel realm) {
     return Strings.isNullOrEmpty(realm.getDisplayName()) ? realm.getName() : realm.getDisplayName();
+  }
+
+  public static String getClientName(ClientModel client) {
+    return Strings.isNullOrEmpty(client.getName()) ? client.getClientId() : client.getName();
   }
 
   public static final String MAGIC_LINK_AUTH_FLOW_ALIAS = "magic link";

@@ -5,6 +5,10 @@
   <packaging>jar</packaging>
   <version>${revision}</version>
 
+  <name>Phase Two Keycloak Magic link</name>
+  <description>Magic link implementation.</description>
+  <url>https://github.com/p2-inc/keycloak-magic-link</url>
+
   <parent>
     <groupId>com.github.xgp</groupId>
     <artifactId>oss-parent</artifactId>
@@ -30,10 +34,10 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <main.java.package>io.phasetwo.keycloak.magic</main.java.package>
     <junit.version>4.13.2</junit.version>
-    <keycloak.version>26.1.4</keycloak.version>
-    <lombok.version>1.18.36</lombok.version>
+    <keycloak.version>26.3.1</keycloak.version>
+    <lombok.version>1.18.38</lombok.version>
     <auto-service.version>1.1.1</auto-service.version>
-    <ossrh.url>https://s01.oss.sonatype.org</ossrh.url>
+    <ossrh.url>https://ossrh-staging-api.central.sonatype.com</ossrh.url>
   </properties>
 
   <scm>
@@ -126,12 +130,6 @@
       <groupId>org.keycloak</groupId>
       <artifactId>keycloak-services</artifactId>
       <version>${keycloak.version}</version>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.google.guava</groupId>
-      <artifactId>guava</artifactId>
-      <version>33.0.0-jre</version>
       <scope>provided</scope>
     </dependency>
     <dependency>
