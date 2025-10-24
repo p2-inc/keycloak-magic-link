@@ -12,12 +12,12 @@
     </div>
   <#elseif section = "form">
     ${msg("magicLinkContinuationConfirmation")}
+    <script>
+       (function (w, d) {
+          setTimeout(function(){
+             w.location.reload(1);
+          }, 5000);
+       })(window, document);
+    </script>
   </#if>
-  <script>
-     (function (w, d) {
-        setTimeout(function(){
-           w.location.reload(1);
-        }, 5000);
-     })(window, document);
-  </script>
 </@layout.registrationLayout>
