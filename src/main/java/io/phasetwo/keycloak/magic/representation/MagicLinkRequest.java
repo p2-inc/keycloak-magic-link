@@ -57,5 +57,5 @@ public class MagicLinkRequest {
   private Boolean actionTokenPersistent = true;
 
   @JsonProperty("response_mode")
-  private String responseMode = OIDCResponseMode.QUERY.value();
+  private String responseMode = null;
 }

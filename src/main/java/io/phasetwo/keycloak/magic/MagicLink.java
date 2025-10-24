@@ -41,7 +41,6 @@ import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
-import org.keycloak.protocol.oidc.utils.OIDCResponseMode;
 import org.keycloak.protocol.oidc.utils.RedirectUtils;
 import org.keycloak.provider.ProviderFactory;
 import org.keycloak.services.Urls;
@@ -180,7 +179,7 @@ public class MagicLink {
         codeChallengeMethod,
         rememberMe,
         isActionTokenPersistent,
-        OIDCResponseMode.QUERY.value());
+        null);
   }
 
   public static MagicLinkActionToken createActionToken(
@@ -206,7 +205,7 @@ public class MagicLink {
         codeChallengeMethod,
         rememberMe,
         true,
-        OIDCResponseMode.QUERY.value());
+        null);
   }
 
   public static MagicLinkActionToken createActionToken(
@@ -256,7 +255,7 @@ public class MagicLink {
             null,
             false,
             true,
-            OIDCResponseMode.QUERY.value());
+            null);
   }
 
   public static String linkFromActionToken(

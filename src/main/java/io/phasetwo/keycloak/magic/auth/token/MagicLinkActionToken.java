@@ -3,7 +3,6 @@ package io.phasetwo.keycloak.magic.auth.token;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.UUID;
 import org.keycloak.authentication.actiontoken.DefaultActionToken;
-import org.keycloak.protocol.oidc.utils.OIDCResponseMode;
 
 public class MagicLinkActionToken extends DefaultActionToken {
 
@@ -32,7 +31,7 @@ public class MagicLinkActionToken extends DefaultActionToken {
   private Boolean rememberMe = false;
 
   @JsonProperty(value = JSON_FIELD_RESPONSE_MODE)
-  private String responseMode = OIDCResponseMode.QUERY.value();
+  private String responseMode;
 
   @JsonProperty(value = JSON_FIELD_REUSABLE)
   private Boolean actionTokenPersistent = true;

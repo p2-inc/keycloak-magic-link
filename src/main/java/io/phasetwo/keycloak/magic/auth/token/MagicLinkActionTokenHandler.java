@@ -117,9 +117,9 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
     }
 
     if (OIDCResponseMode.FRAGMENT.value().equals(token.getResponseMode())) {
-        authSession.setClientNote(OIDCLoginProtocol.RESPONSE_MODE_PARAM, OIDCResponseMode.FRAGMENT.toString());
-    } else {
-        authSession.setClientNote(OIDCLoginProtocol.RESPONSE_MODE_PARAM, OIDCResponseMode.QUERY.value());
+      authSession.setClientNote(OIDCLoginProtocol.RESPONSE_MODE_PARAM, OIDCResponseMode.FRAGMENT.toString());
+    } else if (OIDCResponseMode.QUERY.value().equals(token.getResponseMode())) {
+      authSession.setClientNote(OIDCLoginProtocol.RESPONSE_MODE_PARAM, OIDCResponseMode.QUERY.value());
     }
 
     // Default to switching the email verified toggle to true since they clicked on this link in an
