@@ -3,6 +3,7 @@ package io.phasetwo.keycloak.magic.auth.token;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.UUID;
 import org.keycloak.authentication.actiontoken.DefaultActionToken;
+import org.keycloak.protocol.oidc.utils.OIDCResponseMode;
 
 public class MagicLinkActionToken extends DefaultActionToken {
 
@@ -16,6 +17,7 @@ public class MagicLinkActionToken extends DefaultActionToken {
   private static final String JSON_FIELD_CODE_CHALLENGE = "cc";
   private static final String JSON_FIELD_CODE_CHALLENGE_METHOD = "ccm";
   private static final String JSON_FIELD_REUSABLE = "ru";
+  private static final String JSON_FIELD_RESPONSE_MODE = "rm";
 
   @JsonProperty(value = JSON_FIELD_REDIRECT_URI)
   private String redirectUri;
@@ -28,6 +30,9 @@ public class MagicLinkActionToken extends DefaultActionToken {
 
   @JsonProperty(value = JSON_FIELD_REMEMBER_ME)
   private Boolean rememberMe = false;
+
+  @JsonProperty(value = JSON_FIELD_RESPONSE_MODE)
+  private String responseMode = OIDCResponseMode.QUERY.value();
 
   @JsonProperty(value = JSON_FIELD_REUSABLE)
   private Boolean actionTokenPersistent = true;
@@ -72,8 +77,10 @@ public class MagicLinkActionToken extends DefaultActionToken {
       String nonce,
       String state,
       Boolean rememberMe,
-      Boolean isActionTokenPersistent) {
+      Boolean isActionTokenPersistent,
+      String responseMode) {
     this(userId, absoluteExpirationInSecs, clientId, redirectUri, scope, nonce, state);
+    this.responseMode = responseMode;
     this.rememberMe = rememberMe;
     this.actionTokenPersistent = isActionTokenPersistent;
     this.nonce = nonce;
@@ -90,7 +97,8 @@ public class MagicLinkActionToken extends DefaultActionToken {
       String codeChallenge,
       String codeChallengeMethod,
       Boolean rememberMe,
-      Boolean isActionTokenPersistent) {
+      Boolean isActionTokenPersistent,
+      String responseMode) {
     this(
         userId,
         absoluteExpirationInSecs,
@@ -100,7 +108,8 @@ public class MagicLinkActionToken extends DefaultActionToken {
         nonce,
         state,
         rememberMe,
-        isActionTokenPersistent);
+        isActionTokenPersistent,
+        responseMode);
     this.codeChallenge = codeChallenge;
     this.codeChallengeMethod = codeChallengeMethod;
     this.nonce = nonce;
@@ -149,6 +158,14 @@ public class MagicLinkActionToken extends DefaultActionToken {
 
   public void setRememberMe(Boolean value) {
     this.rememberMe = value;
+  }
+
+  public String getResponseMode() {
+    return this.responseMode;
+  }
+
+  public void setResponseMode(String value) {
+    this.responseMode = value;
   }
 
   public Boolean getActionTokenPersistent() {
