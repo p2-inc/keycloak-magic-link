@@ -117,7 +117,7 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
     }
 
     if (OIDCResponseMode.FRAGMENT.value().equals(token.getResponseMode())) {
-      authSession.setClientNote(OIDCLoginProtocol.RESPONSE_MODE_PARAM, OIDCResponseMode.FRAGMENT.toString());
+      authSession.setClientNote(OIDCLoginProtocol.RESPONSE_MODE_PARAM, OIDCResponseMode.FRAGMENT.value());
     } else if (OIDCResponseMode.QUERY.value().equals(token.getResponseMode())) {
       authSession.setClientNote(OIDCLoginProtocol.RESPONSE_MODE_PARAM, OIDCResponseMode.QUERY.value());
     }
