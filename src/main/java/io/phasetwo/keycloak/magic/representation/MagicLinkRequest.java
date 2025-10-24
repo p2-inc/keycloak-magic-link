@@ -3,7 +3,6 @@ package io.phasetwo.keycloak.magic.representation;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
-import org.keycloak.protocol.oidc.utils.OIDCResponseMode;
 
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true)
