@@ -178,7 +178,8 @@ public class MagicLink {
         codeChallenge,
         codeChallengeMethod,
         rememberMe,
-        isActionTokenPersistent);
+        isActionTokenPersistent,
+        null);
   }
 
   public static MagicLinkActionToken createActionToken(
@@ -203,7 +204,8 @@ public class MagicLink {
         codeChallenge,
         codeChallengeMethod,
         rememberMe,
-        true);
+        true,
+        null);
   }
 
   public static MagicLinkActionToken createActionToken(
@@ -217,7 +219,8 @@ public class MagicLink {
       String codeChallenge,
       String codeChallengeMethod,
       Boolean rememberMe,
-      Boolean isActionTokenPersistent) {
+      Boolean isActionTokenPersistent,
+      String responseMode) {
     // build the action token
     int validityInSecs = validity.orElse(60 * 60 * 24); // 1 day
     int absoluteExpirationInSecs = Time.currentTime() + validityInSecs;
@@ -233,14 +236,26 @@ public class MagicLink {
             codeChallenge,
             codeChallengeMethod,
             rememberMe,
-            isActionTokenPersistent);
+            isActionTokenPersistent,
+            responseMode);
     return token;
   }
 
   public static MagicLinkActionToken createActionToken(
       UserModel user, String clientId, String redirectUri, OptionalInt validity) {
     return createActionToken(
-        user, clientId, redirectUri, validity, null, null, null, null, null, false, true);
+            user,
+            clientId,
+            redirectUri,
+            validity,
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            true,
+            null);
   }
 
   public static String linkFromActionToken(

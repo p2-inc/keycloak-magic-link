@@ -54,4 +54,7 @@ public class MagicLinkRequest {
 
   @JsonProperty("reusable")
   private Boolean actionTokenPersistent = true;
+
+  @JsonProperty("response_mode")
+  private String responseMode = null;
 }
