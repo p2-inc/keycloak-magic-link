@@ -40,8 +40,7 @@ public class MagicLinkResource extends AbstractAdminResource {
       sendEmail = false;
     }
 
-    UserModel user = MagicLink.getOrCreate(session, realm, emailOrUsername, false,
-            false, false, null);
+    UserModel user = MagicLink.findUser(session, realm, emailOrUsername);
 
     if (user != null) {
         if (!permissions.users().canManage(user))
