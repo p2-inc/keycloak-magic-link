@@ -1,38 +1,42 @@
-name: release version
+name: Main
 
-on:
-  push:
-    branches:
-      - main
+on: push
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    if: "!contains(github.event.head_commit.message, '[ci skip]')"
+
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v3
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          settings-path: ${{ github.workspace }}
+          cache: 'maven'
+
+      - name: set values
+        id: set-values
+        run: |
+          if [[ "$REF" == refs/tags/v* ]]; then
+            echo "version=${REF/refs\/tags\/v/}" >> $GITHUB_OUTPUT
+          else
+            echo "version=1.0-SNAPSHOT" >> $GITHUB_OUTPUT
+          fi
+        env:
+          REF: ${{ github.ref }}
+
+      - name: Build with Maven
+        run: mvn -B -Drevision=$VERSION package --file pom.xml
+        env:
+          VERSION: ${{ steps.set-values.outputs.version }}
 
       - name: Release
-        uses: qcastel/github-actions-maven-release@master
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/v')
         with:
-          release-branch-name: "main"
-          version-minor: true
-
-          git-release-bot-name: "phasetwo-bot"
-          git-release-bot-email: "support@phasetwo.io"
-
-          maven-args: "-B -Dmaven.test.skip=true -DskipITs -Dmaven.deploy.skip=true"
-
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-          gpg-enabled: true
-          gpg-key-id: BC6B4EADEB514AFD
-          gpg-key: ${{ secrets.GPG_KEY }}
-
-          docker-registry-id: ossrh
-          docker-registry-username: ${{ secrets.OSSRH_USERNAME }}
-          docker-registry-password: ${{ secrets.OSSRH_PASSWORD }}
-
-          maven-development-version-number: ${parsedVersion.majorVersion}.${parsedVersion.nextMinorVersion}-SNAPSHOT
-          maven-release-version-number: ${parsedVersion.majorVersion}.${parsedVersion.minorVersion}
+          files: 'target/keycloak-magic-link-*.jar'
