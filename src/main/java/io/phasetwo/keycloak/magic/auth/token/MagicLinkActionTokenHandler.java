@@ -5,10 +5,13 @@ import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.authentication.actiontoken.AbstractActionTokenHandler;
 import org.keycloak.authentication.actiontoken.ActionTokenContext;
-import org.keycloak.events.*;
+import org.keycloak.events.Details;
+import org.keycloak.events.Errors;
+import org.keycloak.events.EventType;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
+import org.keycloak.protocol.oidc.utils.OIDCResponseMode;
 import org.keycloak.protocol.oidc.utils.RedirectUtils;
 import org.keycloak.services.managers.AuthenticationManager;
 import org.keycloak.services.messages.Messages;
@@ -111,6 +114,10 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
       tokenContext.getEvent().detail(Details.REMEMBER_ME, "true");
     } else {
       authSession.removeAuthNote(Details.REMEMBER_ME);
+    }
+
+    if (OIDCResponseMode.FRAGMENT.value().equals(token.getResponseMode())) {
+      authSession.setClientNote(OIDCLoginProtocol.RESPONSE_MODE_PARAM, OIDCResponseMode.FRAGMENT.value());
     }
 
     // Default to switching the email verified toggle to true since they clicked on this link in an
