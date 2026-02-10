@@ -1,0 +1,88 @@
+{
+  "realm": "test-realm",
+  "displayName": "Test Realm Display Name",
+  "enabled": true,
+  "smtpServer": {
+    "host": "mailhog",
+    "port": 1025,
+    "from": "noreply@phasetwo.io",
+    "password": "**********",
+    "user": "username",
+    "auth": "true"
+  },
+  "authenticationFlows": [
+    {
+      "id": "3f3bc9f7-f97e-447f-9599-14cb617270bd",
+      "alias": "magic-link-flow",
+      "description": "magic link flow",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-cookie",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 0,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "identity-provider-redirector",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 0,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticatorFlow": true,
+          "requirement": "ALTERNATIVE",
+          "priority": 0,
+          "autheticatorFlow": true,
+          "flowAlias": "Magic Link forms",
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "id": "ccc21cd9-879c-4eef-8ef9-a8fe01cde4c5",
+      "alias": "Magic Link forms",
+      "description": "",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticatorConfig": "magic-link-config",
+          "authenticator": "ext-magic-form",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 0,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        }
+      ]
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "id": "2806f623-b7dc-4040-b1b7-91c50abd2368",
+      "alias": "magic-link-config",
+      "config": {
+        "ext-magic-create-nonexistent-user": "false"
+      }
+    }
+  ],
+  "browserFlow": "magic-link-flow",
+  "users": [
+    {
+      "username": "testuser@phasetwo.io",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "testuser@phasetwo.io",
+      "firstName": "R",
+      "lastName": "T"
+    }
+  ]
+}
