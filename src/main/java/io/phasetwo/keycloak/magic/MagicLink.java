@@ -84,6 +84,15 @@ public class MagicLink {
     return getOrCreate(session, realm, email, forceCreate, updateProfile, updatePassword, null);
   }
 
+  public static UserModel findUser(KeycloakSession session, RealmModel realm, String emailOrUsername) {
+    // username or email is required, if not provided or empty, exit early and return null
+    if (trimToNull(emailOrUsername) == null) {
+      return null;
+    }
+
+    return findUserByNameOrEmail(session, realm, emailOrUsername);
+  }
+
   public static UserModel getOrCreate(
       KeycloakSession session,
       RealmModel realm,
@@ -93,11 +102,7 @@ public class MagicLink {
       boolean updatePassword,
       Consumer<UserModel> onNew) {
 
-    // username or email is required, if not provided or empty, exit early and return null
-    if (trimToNull(emailOrUsername) == null) {
-      return null;
-    }
-    UserModel user = findUserByNameOrEmail(session, realm, emailOrUsername);
+    UserModel user = findUser(session, realm, emailOrUsername);
     // If the user does not exist, we create it ONLY if forceCreate is true
     if (user == null && forceCreate) {
       user = session.users().addUser(realm, emailOrUsername);
