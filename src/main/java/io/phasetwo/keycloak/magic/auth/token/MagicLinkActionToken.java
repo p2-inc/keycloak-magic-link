@@ -17,6 +17,8 @@ public class MagicLinkActionToken extends DefaultActionToken {
   private static final String JSON_FIELD_CODE_CHALLENGE_METHOD = "ccm";
   private static final String JSON_FIELD_REUSABLE = "ru";
   private static final String JSON_FIELD_RESPONSE_MODE = "rm";
+  private static final String JSON_FIELD_LOA = "loa";
+  private static final String JSON_FIELD_EXECUTION_ID = "eid";
 
   @JsonProperty(value = JSON_FIELD_REDIRECT_URI)
   private String redirectUri;
@@ -44,6 +46,12 @@ public class MagicLinkActionToken extends DefaultActionToken {
 
   @JsonProperty(value = JSON_FIELD_CODE_CHALLENGE_METHOD)
   private String codeChallengeMethod;
+
+  @JsonProperty(value = JSON_FIELD_LOA)
+  private Integer loa;
+
+  @JsonProperty(value = JSON_FIELD_EXECUTION_ID)
+  private String executionId;
 
   public MagicLinkActionToken(
       String userId, int absoluteExpirationInSecs, String clientId, String redirectUri) {
@@ -197,5 +205,21 @@ public class MagicLinkActionToken extends DefaultActionToken {
 
   public void setCodeChallengeMethod(String value) {
     this.codeChallengeMethod = value;
+  }
+
+  public Integer getLoa() {
+    return this.loa;
+  }
+
+  public void setLoa(Integer value) {
+    this.loa = value;
+  }
+
+  public String getExecutionId() {
+    return this.executionId;
+  }
+
+  public void setExecutionId(String value) {
+    this.executionId = value;
   }
 }
