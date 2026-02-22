@@ -116,6 +116,7 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
             rememberMe(context),
             context.getAuthenticationSession(),
             isActionTokenPersistent(context, true));
+    token.setExecutionId(context.getExecution().getId());
     String link = MagicLink.linkFromActionToken(context.getSession(), context.getRealm(), token);
     boolean sent = MagicLink.sendMagicLinkEmail(context.getSession(), user, link);
     log.debugf("sent email to %s? %b. Link? %s", user.getEmail(), sent, link);

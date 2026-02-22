@@ -57,4 +57,10 @@ public class MagicLinkRequest {
 
   @JsonProperty("response_mode")
   private String responseMode = null;
+
+  @JsonProperty("loa")
+  private Integer loa = null;
+
+  @JsonProperty("flow_alias")
+  private String flowAlias = null;
 }
