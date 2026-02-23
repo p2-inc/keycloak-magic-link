@@ -1,10 +1,11 @@
-package io.phasetwo.keycloak.magic;
+package io.phasetwo.keycloak.magic.web;
 
 import dasniko.testcontainers.keycloak.KeycloakContainer;
 import io.github.wimdeblauwe.testcontainers.cypress.CypressContainer;
 import io.github.wimdeblauwe.testcontainers.cypress.CypressTest;
 import io.github.wimdeblauwe.testcontainers.cypress.CypressTestResults;
 import io.github.wimdeblauwe.testcontainers.cypress.CypressTestSuite;
+import io.phasetwo.keycloak.magic.Helpers;
 import jakarta.ws.rs.core.Response;
 import lombok.extern.jbosslog.JBossLog;
 import org.hamcrest.CoreMatchers;
@@ -14,7 +15,6 @@ import org.jboss.shrinkwrap.resolver.api.maven.Maven;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.representations.idm.RealmRepresentation;
@@ -154,17 +154,9 @@ public abstract class AbstractMagicLinkTest {
         return importRealm(jsonRepresentationPath, null);
     }
 
-    public static <T> T loadJson(InputStream is, Class<T> type) {
-        try {
-            return JsonSerialization.readValue(is, type);
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to parse json", e);
-        }
-    }
-
     protected final RealmRepresentation importRealm(String jsonRepresentationPath, @Nullable String realmOverride) {
         RealmRepresentation realm =
-                loadJson(getClass().getResourceAsStream(jsonRepresentationPath),
+                Helpers.loadJson(getClass().getResourceAsStream(jsonRepresentationPath),
                         RealmRepresentation.class);
         if (realmOverride != null) {
             realm.setRealm(realmOverride);

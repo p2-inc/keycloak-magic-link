@@ -1,4 +1,4 @@
-package io.phasetwo.keycloak.magic;
+package io.phasetwo.keycloak.magic.web;
 
 import lombok.extern.jbosslog.JBossLog;
 import org.junit.jupiter.api.DisplayName;
