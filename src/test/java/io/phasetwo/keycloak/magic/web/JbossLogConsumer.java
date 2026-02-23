@@ -1,4 +1,4 @@
-package io.phasetwo.keycloak.magic;
+package io.phasetwo.keycloak.magic.web;
 
 import org.jboss.logging.Logger;
 import org.testcontainers.containers.output.OutputFrame;
