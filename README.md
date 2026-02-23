@@ -102,9 +102,9 @@ Parameters:
 | `reusable` | N | true | If the token can be reused multiple times during its validity |
 | `response_mode` | N | query | Determines how the authorization response is returned to the client: in the URL query string (query) or in the URL fragment (fragment). |
 | `loa` | N | | Level of Assurance to set on the user session (e.g. `1`). Sets the `acr` claim in OIDC tokens. See [LOA section](#level-of-assurance-loa) for browser flow requirements. |
-| `flow_alias` | N | | Alias of the browser flow that contains the `Magic Link` (`ext-magic-form`) execution (searched recursively through sub-flows). Use the **root flow alias** (e.g. `"browser"`), visible in **Authentication → Flows** in the Keycloak Admin UI. Required to populate the `amr` claim in OIDC tokens. The execution's `Authenticator Reference` and `Authenticator Reference Max Age` config values are used automatically. |
+| `flow_id` | N | | ID of the browser flow that contains the `Magic Link` (`ext-magic-form`) execution (searched recursively through sub-flows). The flow ID is the internal UUID of the flow, visible in the URL when editing a flow in the Keycloak Admin UI (e.g. `…/authentication/flows/<flow-id>/…`) or via the Admin REST API (`GET /auth/admin/realms/{realm}/authentication/flows`). Required to populate the `amr` claim in OIDC tokens. The execution's `Authenticator Reference` and `Authenticator Reference Max Age` config values are used automatically. |
 
-> **Note on `flow_alias`, AMR and LOA:** When using the API to create magic links (instead of the browser flow authenticator), AMR and LOA are not set automatically because there is no active authentication context. By providing `flow_alias`, the API resolves the `ext-magic-form` execution in the given flow and:
+> **Note on `flow_id`, AMR and LOA:** When using the API to create magic links (instead of the browser flow authenticator), AMR and LOA are not set automatically because there is no active authentication context. By providing `flow_id`, the API resolves the `ext-magic-form` execution in the given flow and:
 > - **AMR**: registers the execution as completed — enabling the standard AMR Protocol Mapper to emit the `amr` claim using the `Authenticator Reference` value from the execution config.
 > - **LOA**: reads the level from a sibling `Condition - Level of Authentication` execution in the same sub-flow — setting the `acr` claim on the session.
 >
@@ -129,7 +129,7 @@ curl --request POST https://keycloak.host/auth/realms/test/magic-link \
  --header "Accept: application/json" \
  --header "Content-Type: application/json" \
  --header "Authorization: Bearer <access_token>" \
- --data '{"email":"foo@foo.com","client_id":"my-app","redirect_uri":"https://app.example.com/callback","flow_alias":"browser"}'
+ --data '{"email":"foo@foo.com","client_id":"my-app","redirect_uri":"https://app.example.com/callback","flow_id":"550e8400-e29b-41d4-a716-446655440000"}'
 ```
 
 Sample response:
