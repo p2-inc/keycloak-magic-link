@@ -61,6 +61,6 @@ public class MagicLinkRequest {
   @JsonProperty("loa")
   private Integer loa = null;
 
-  @JsonProperty("flow_alias")
-  private String flowAlias = null;
+  @JsonProperty("flow_id")
+  private String flowId = null;
 }

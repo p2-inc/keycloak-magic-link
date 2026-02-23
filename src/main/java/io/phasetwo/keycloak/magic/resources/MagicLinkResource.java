@@ -18,7 +18,6 @@ import java.util.OptionalInt;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.AuthenticatorUtil;
 import org.keycloak.models.AuthenticationExecutionModel;
-import org.keycloak.models.AuthenticationFlowModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.UserModel;
@@ -87,15 +86,12 @@ public class MagicLinkResource extends AbstractAdminResource {
     if (rep.getLoa() != null) {
       token.setLoa(rep.getLoa());
     }
-    if (rep.getFlowAlias() != null) {
-      AuthenticationFlowModel flow = realm.getFlowByAlias(rep.getFlowAlias());
-      if (flow == null)
-        throw new NotFoundException(String.format("Flow with alias '%s' not found.", rep.getFlowAlias()));
+    if (rep.getFlowId() != null) {
       List<AuthenticationExecutionModel> executions = AuthenticatorUtil.getExecutionsByType(
-          realm, flow.getId(), io.phasetwo.keycloak.magic.auth.MagicLinkAuthenticatorFactory.PROVIDER_ID);
+          realm, rep.getFlowId(), io.phasetwo.keycloak.magic.auth.MagicLinkAuthenticatorFactory.PROVIDER_ID);
       if (executions.isEmpty())
         throw new NotFoundException(String.format(
-            "No ext-magic-form execution found in flow '%s'.", rep.getFlowAlias()));
+            "No ext-magic-form execution found in flow with ID '%s'.", rep.getFlowId()));
       token.setExecutionId(executions.get(0).getId());
     }
     String link = MagicLink.linkFromActionToken(session, realm, token);
