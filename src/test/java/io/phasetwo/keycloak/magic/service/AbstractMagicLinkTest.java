@@ -36,11 +36,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 @JBossLog
 public abstract class AbstractMagicLinkTest {
-    protected static final ObjectMapper mapper;
-    static {
-        mapper = new ObjectMapper();
-        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-    }
 
     public static final String KEYCLOAK_IMAGE =
             String.format(
@@ -127,38 +122,9 @@ public abstract class AbstractMagicLinkTest {
         return container.getAuthServerUrl();
     }
 
-    public static UserRepresentation createUser(Keycloak keycloak,
-                                                String realm,
-                                                String username,
-                                                String email) {
-        UserRepresentation user = new UserRepresentation();
-        user.setEnabled(true);
-        user.setUsername(username);
-        user.setEmail(email);
-
-        keycloak.realm(realm).users().create(user);
-        return keycloak.realm(realm).users().search(user.getUsername()).get(0);
-    }
-
     protected Response postRequest(Keycloak keycloak, Object body, String realm)
             throws JsonProcessingException {
-
-        return given()
-                .baseUri(container.getAuthServerUrl())
-                .basePath("realms/" + realm + "/")
-                .contentType("application/json")
-                .auth()
-                .oauth2(keycloak.tokenManager().getAccessTokenString())
-                .and()
-                .body(toJsonString(body))
-                .post("magic-link")
-                .then()
-                .extract()
-                .response();
-    }
-
-    private static String toJsonString(Object representation) throws JsonProcessingException {
-        return mapper.writer().withDefaultPrettyPrinter().writeValueAsString(representation);
+        return Helpers.postRequest(container.getAuthServerUrl(), keycloak, body, realm);
     }
 
     private RealmRepresentation setupTestKeycloakInstance() {
