@@ -1,5 +1,6 @@
 package io.phasetwo.keycloak.magic.service;
 
+import io.phasetwo.keycloak.magic.Helpers;
 import io.phasetwo.keycloak.magic.representation.MagicLinkRequest;
 import io.phasetwo.keycloak.magic.representation.MagicLinkResponse;
 import jakarta.ws.rs.core.Response;
@@ -26,7 +27,7 @@ public class MagicLinkResourceTest extends AbstractMagicLinkTest {
         RealmRepresentation testRealm = importRealm("/realms/magic-link-basic-setup.json");
 
         // create  user
-        UserRepresentation user = createUser(keycloak, testRealm.getRealm(), "user1", "user1@gmail.com");
+        UserRepresentation user = Helpers.createUser(keycloak, testRealm.getRealm(), "user1", "user1@gmail.com");
         // add magic link
         MagicLinkRequest request = new MagicLinkRequest();
 
@@ -48,8 +49,8 @@ public class MagicLinkResourceTest extends AbstractMagicLinkTest {
        var response =  postRequest(keycloak, request, testRealm.getRealm());
        assertThat(response.getStatusCode(), CoreMatchers.is(Response.Status.OK.getStatusCode()));
 
-       MagicLinkResponse magicLinkResponse =
-               mapper.readValue(response.getBody().asString(), MagicLinkResponse.class);
+       MagicLinkResponse magicLinkResponse = Helpers.mapper()
+               .readValue(response.getBody().asString(), MagicLinkResponse.class);
        assertNotNull(magicLinkResponse);
        assertTrue(magicLinkResponse.getUserId().equals(user.getId()));
        assertNotNull(magicLinkResponse.getLink());
