@@ -1,6 +1,9 @@
 package io.phasetwo.keycloak.magic.auth;
 
 import static io.phasetwo.keycloak.magic.MagicLink.CREATE_NONEXISTENT_USER_CONFIG_PROPERTY;
+import static io.phasetwo.keycloak.magic.auth.MagicLinkAuthenticator.AUTO_ASSIGN_TO_ORGANIZATION_CONFIG_PROPERTY;
+import static io.phasetwo.keycloak.magic.auth.MagicLinkAuthenticator.REQUIRE_ORGANIZATION_DOMAIN_CONFIG_PROPERTY;
+import static io.phasetwo.keycloak.magic.auth.MagicLinkAuthenticator.UNKNOWN_DOMAIN_REDIRECT_ERROR_CONFIG_PROPERTY;
 
 import com.google.auto.service.AutoService;
 import io.phasetwo.keycloak.magic.MagicLink;
@@ -107,8 +110,39 @@ public class MagicLinkAuthenticatorFactory implements AuthenticatorFactory {
     actionTokenLifeSpan.setHelpText(
         "Amount of time the magic link is valid, in seconds. If this value is not specific, it will use the default 86400s (1 day)");
 
+    ProviderConfigProperty requireOrgDomain = new ProviderConfigProperty();
+    requireOrgDomain.setType(ProviderConfigProperty.BOOLEAN_TYPE);
+    requireOrgDomain.setName(REQUIRE_ORGANIZATION_DOMAIN_CONFIG_PROPERTY);
+    requireOrgDomain.setLabel("Require organization domain");
+    requireOrgDomain.setHelpText(
+        "When enabled, only create users if the email domain matches a Keycloak Organization's domain. Users with unrecognized domains will be redirected with an error.");
+    requireOrgDomain.setDefaultValue(false);
+
+    ProviderConfigProperty autoAssignOrg = new ProviderConfigProperty();
+    autoAssignOrg.setType(ProviderConfigProperty.BOOLEAN_TYPE);
+    autoAssignOrg.setName(AUTO_ASSIGN_TO_ORGANIZATION_CONFIG_PROPERTY);
+    autoAssignOrg.setLabel("Auto-assign to organization");
+    autoAssignOrg.setHelpText(
+        "When enabled (and domain matches), automatically add newly created users as members of the matching organization.");
+    autoAssignOrg.setDefaultValue(true);
+
+    ProviderConfigProperty unknownDomainError = new ProviderConfigProperty();
+    unknownDomainError.setType(ProviderConfigProperty.STRING_TYPE);
+    unknownDomainError.setName(UNKNOWN_DOMAIN_REDIRECT_ERROR_CONFIG_PROPERTY);
+    unknownDomainError.setLabel("Unknown domain error code");
+    unknownDomainError.setHelpText(
+        "The error parameter value sent to the client redirect_uri when the email domain doesn't match any organization (e.g., 'unknown_domain').");
+    unknownDomainError.setDefaultValue("unknown_domain");
+
     return List.of(
-        createUser, updateProfile, updatePassword, actionTokenPersistent, actionTokenLifeSpan);
+        createUser,
+        updateProfile,
+        updatePassword,
+        actionTokenPersistent,
+        actionTokenLifeSpan,
+        requireOrgDomain,
+        autoAssignOrg,
+        unknownDomainError);
   }
 
   @Override
