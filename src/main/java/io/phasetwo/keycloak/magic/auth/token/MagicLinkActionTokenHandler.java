@@ -35,6 +35,7 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
 
   public static final String LOGIN_METHOD = "login_method";
 
+
   public MagicLinkActionTokenHandler() {
     super(
         MagicLinkActionToken.TOKEN_TYPE,
@@ -145,9 +146,9 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
     // We replicate both by using the execution ID stored in the token:
     //   - AMR: updateCompletedExecutions() registers the execution; AmrProtocolMapper reads
     //          Authenticator Reference + Authenticator Reference Max Age from its AuthenticatorConfig.
-    //   - LOA: we read the level from the sibling ConditionalLoaAuthenticator in the same parent flow,
-    //          so the LOA value is defined in exactly one place (the Condition config) and not duplicated
-    //          in the Magic Link execution config.
+    //   - LOA: token.getLoa() always takes priority (explicitly set by API caller). Only if token.getLoa()
+    //          is null, the level is read from the sibling ConditionalLoaAuthenticator in the same parent
+    //          flow as a fallback, so the LOA value can be defined in one place (the Condition config).
     //   - API fallback: if no executionId is in the token, token.getLoa() is used directly (set by
     //          MagicLinkResource when flow_alias is not provided or ConditionalLoaAuthenticator is absent).
     //
@@ -172,7 +173,7 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
         if (!loaConditions.isEmpty()) {
           Integer levelFromFlow = LoAUtil.getLevelFromLoaConditionConfiguration(
               tokenContext.getRealm().getAuthenticatorConfigById(loaConditions.get(0).getAuthenticatorConfig()));
-          if (levelFromFlow != null) {
+          if (levelFromFlow != null && loaLevel == null) {
             loaLevel = levelFromFlow;
             log.debugf("[MagicLink] LOA level %d read from ConditionalLoaAuthenticator in parent flow", loaLevel);
           }
@@ -233,8 +234,11 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
    * Merges the existing UserSession's LOA_MAP and authenticators-completed into the new
    * AuthSession so the new UserSession inherits the combined state.
    *
-   * <p>This preserves higher LOA levels and all previous AMR values from the existing session.
-   * If the magic link's LOA is higher than the existing session's LOA, the magic link LOA wins.
+   * <p>The effective session LoA is max(existing, magicLink). {@link Constants#LOA_MAP} always
+   * receives the effective LoA — Keycloak's ConditionalLoaAuthenticator reads this note for its
+   * own step-up evaluation, so it must reflect a level that actually has a condition in the flow.
+   * Storing a lower level (e.g. the magic link's requested LoA) would cause "No condition found"
+   * errors when the flow only defines conditions for higher levels.
    */
   private void mergeExistingSessionIntoAuthSession(
       UserSessionModel existingSession,
@@ -242,10 +246,9 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
       Integer magicLinkLoa,
       org.keycloak.models.KeycloakSession keycloakSession) {
 
-    // --- LOA: carry over the existing LOA_MAP note, then apply magic link LOA on top ---
+    // --- LOA ---
     String existingLoaMap = existingSession.getNote(Constants.LOA_MAP);
     if (existingLoaMap != null && !existingLoaMap.isEmpty()) {
-      // Write the existing LOA_MAP into the auth note so AcrStore can read/merge it
       authSession.setAuthNote(Constants.LOA_MAP, existingLoaMap);
       log.debugf("[MagicLink] Carried over existing LOA_MAP into new auth session: %s", existingLoaMap);
     }
@@ -255,13 +258,10 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
     int effectiveLoa = magicLinkLoa != null ? magicLinkLoa : Constants.NO_LOA;
     if (existingLoa != Constants.NO_LOA && existingLoa > effectiveLoa) {
       effectiveLoa = existingLoa;
-      log.debugf(
-          "[MagicLink] Existing session LOA %d > magic link LOA %s — using existing LOA",
-          existingLoa, magicLinkLoa);
+      log.debugf("[MagicLink] Existing session LOA %d > magic link LOA %s — preserving existing LOA",
+          (Object) existingLoa, magicLinkLoa);
     } else {
-      log.debugf(
-          "[MagicLink] Using magic link LOA %d (existing session LOA: %d)",
-          effectiveLoa, existingLoa);
+      log.debugf("[MagicLink] Using magic link LOA %d (existing session LOA: %d)", effectiveLoa, existingLoa);
     }
 
     if (effectiveLoa != Constants.NO_LOA) {
