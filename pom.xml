@@ -4,7 +4,7 @@
   <groupId>io.phasetwo.keycloak</groupId>
   <artifactId>keycloak-magic-link</artifactId>
   <packaging>jar</packaging>
-  <version>0.55-SNAPSHOT</version>
+  <version>0.57-SNAPSHOT</version>
 
   <name>Phase Two Keycloak Magic link</name>
   <description>Magic link implementation.</description>

@@ -1,4 +1,4 @@
-package io.phasetwo.keycloak.magic;
+package io.phasetwo.keycloak.magic.web;
 
 import lombok.extern.jbosslog.JBossLog;
 import org.junit.jupiter.api.DisplayName;
@@ -10,12 +10,13 @@ import org.testcontainers.Testcontainers;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeoutException;
 
 @JBossLog
 @org.testcontainers.junit.jupiter.Testcontainers
 @EnabledIfSystemProperty(named = "include.cypress", matches = "true")
-public class MagicLinkAuthenticatorTest extends AbstractMagicLinkTest {
+public class MagicLinkSentInEmailTest extends AbstractMagicLinkWithMailhogTest {
 
     @TestFactory
     @DisplayName("Basic tests magic link authentication flow")
@@ -30,7 +31,7 @@ public class MagicLinkAuthenticatorTest extends AbstractMagicLinkTest {
                 .getFirst();
         client.setName("Account Console");
         keycloak.realms().realm(testRealm.getRealm()).clients().get(client.getId()).update(client);
-        return runCypressTests("cypress/e2e/base.cy.ts");
+        return runCypressTests("cypress/e2e/base.cy.ts", Map.of("MAILHOG_URL", "http://mailhog:8025"));
     }
 
     private RealmRepresentation setupTestKeycloakInstance() {
