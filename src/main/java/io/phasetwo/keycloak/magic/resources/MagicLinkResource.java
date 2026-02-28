@@ -13,8 +13,11 @@ import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
+import java.util.List;
 import java.util.OptionalInt;
 import lombok.extern.jbosslog.JBossLog;
+import org.keycloak.authentication.AuthenticatorUtil;
+import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.UserModel;
@@ -80,6 +83,17 @@ public class MagicLinkResource extends AbstractAdminResource {
             rep.getRememberMe(),
             rep.getActionTokenPersistent(),
             rep.getResponseMode());
+    if (rep.getLoa() != null) {
+      token.setLoa(rep.getLoa());
+    }
+    if (rep.getFlowId() != null) {
+      List<AuthenticationExecutionModel> executions = AuthenticatorUtil.getExecutionsByType(
+          realm, rep.getFlowId(), io.phasetwo.keycloak.magic.auth.MagicLinkAuthenticatorFactory.PROVIDER_ID);
+      if (executions.isEmpty())
+        throw new NotFoundException(String.format(
+            "No ext-magic-form execution found in flow with ID '%s'.", rep.getFlowId()));
+      token.setExecutionId(executions.get(0).getId());
+    }
     String link = MagicLink.linkFromActionToken(session, realm, token);
     boolean sent = false;
     if (sendEmail) {

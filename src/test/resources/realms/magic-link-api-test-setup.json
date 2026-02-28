@@ -1,0 +1,86 @@
+{
+  "realm": "test-realm-api",
+  "displayName": "API Test Realm",
+  "enabled": true,
+  "smtpServer": {
+    "host": "mailhog",
+    "port": 1025,
+    "from": "noreply@phasetwo.io",
+    "password": "**********",
+    "user": "username",
+    "auth": "true"
+  },
+  "clients": [
+    {
+      "clientId": "api-test-client",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "redirectUris": ["http://localhost/*"],
+      "webOrigins": ["+"]
+    }
+  ],
+  "authenticationFlows": [
+    {
+      "alias": "magic-link-loa-flow",
+      "description": "Magic link flow with LOA condition for integration tests. The conditional-loa-authenticator and ext-magic-form are direct siblings so MagicLinkActionTokenHandler can find both via getExecutionsByType() on the same parentFlow.",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-cookie",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 0,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "conditional-level-of-authentication",
+          "authenticatorConfig": "loa-level2-config",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 1,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "ext-magic-form",
+          "authenticatorConfig": "magic-link-config",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 2,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        }
+      ]
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "alias": "loa-level2-config",
+      "config": {
+        "loa-condition-level": "2",
+        "loa-max-age": "0"
+      }
+    },
+    {
+      "alias": "magic-link-config",
+      "config": {
+        "ext-magic-create-nonexistent-user": "false"
+      }
+    }
+  ],
+  "browserFlow": "magic-link-loa-flow",
+  "users": [
+    {
+      "username": "testuser@phasetwo.io",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "testuser@phasetwo.io",
+      "firstName": "R",
+      "lastName": "T"
+    }
+  ]
+}

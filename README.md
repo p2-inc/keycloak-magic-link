@@ -28,6 +28,34 @@ The authenticator can be configured to create a user with the given email addres
 
 ![Configure Magic Link Authenticator with options](docs/assets/magic-link-config.png)
 
+### How Action Tokens interact with Keycloak Sessions
+
+Understanding this is important context for the sections below.
+
+A standard Keycloak login flow (browser flow) runs as an `AuthenticationSession` that is eventually promoted to a `UserSession` once all authenticators succeed. Each authenticator in the flow can contribute to session state — writing to `authenticators-completed` (for AMR), updating the `LOA_MAP` (for step-up auth), or setting other session notes.
+
+**Action Tokens bypass this flow entirely.** When a Magic Link is clicked, Keycloak calls `MagicLinkActionTokenHandler.handleToken()` directly — no browser flow is executed, no authenticators run, and no `onTopFlowSuccess()` callbacks fire. This has several consequences:
+
+1. **AMR is never populated** — `authenticators-completed` is not written because no authenticator called `AuthenticatorUtils.updateCompletedExecutions()`.
+2. **LOA is never set** — `ConditionalLoaAuthenticator.onTopFlowSuccess()` never runs, so `AcrStore.setLevelAuthenticated()` is never called and the session has no `acr` claim.
+3. **A brand-new `UserSession` is always created** — Keycloak's `redirectAfterSuccessfulFlow()` unconditionally removes the existing identity cookie and replaces it with a new one. There is no built-in mechanism to reuse or update an existing session.
+
+The Magic Link handler compensates for all three of these limitations explicitly in code, which is why the `handleToken()` implementation is more complex than a typical action token handler.
+
+### Session Continuity
+
+When a Magic Link is redeemed in a browser that already has an active Keycloak session (identity cookie), the handler **merges** the existing session state into the new session rather than replacing it. This is important for App-to-Browser SSO scenarios (e.g. a mobile app opening a Magic Link in the browser where the user is already logged in at a higher assurance level).
+
+The following state is carried over from the existing session:
+
+| State | Behaviour |
+|---|---|
+| **LOA** (`acr` claim) | `max(existing LOA, magic link LOA)` — the higher level always wins. A Magic Link with LOA 1 will never downgrade a session that already has LOA 2. |
+| **AMR** (`amr` claim) | All previously completed authenticators are preserved and the Magic Link execution is added. A session with `amr: [pwd, otp]` becomes `amr: [pwd, otp, magic_link]`. |
+| **Remember Me** | Inherited from the existing session if the Magic Link request did not explicitly set `remember_me`. The explicit token value takes precedence. |
+
+> **Note:** The merge is implemented by reading the relevant notes from the old `UserSession` and writing them into the new `AuthenticationSession` before `redirectAfterSuccessfulFlow()` runs — so the new `UserSession` that Keycloak creates is a continuation of the old one, not a clean slate.
+
 ## Magic link continuation
 
 This Magic link continuation authenticator is similar to the Magic Link authenticator in implementation, but has a different behavior. Instead of creating a session on the device where the link is clicked, the flow continues the login on the initial login page. The login page is polling the authentication page each 5 seconds until the session is confirmed or the authentication flow expires. The default expiration for the Magic link continuation flow is 10 minutes.
@@ -73,6 +101,16 @@ Parameters:
 | `remember_me` | N | false | If the user is treated as if they had checked "Remember Me" on login. Requires that it is enabled in the Realm. |
 | `reusable` | N | true | If the token can be reused multiple times during its validity |
 | `response_mode` | N | query | Determines how the authorization response is returned to the client: in the URL query string (query) or in the URL fragment (fragment). |
+| `loa` | N | | Level of Assurance to set on the user session (e.g. `1`). Sets the `acr` claim in OIDC tokens. See [LOA section](#level-of-assurance-loa) for browser flow requirements. |
+| `flow_id` | N | | ID of the browser flow that contains the `Magic Link` (`ext-magic-form`) execution (searched recursively through sub-flows). The flow ID is the internal UUID of the flow, visible in the URL when editing a flow in the Keycloak Admin UI (e.g. `…/authentication/flows/<flow-id>/…`) or via the Admin REST API (`GET /auth/admin/realms/{realm}/authentication/flows`). Required to populate the `amr` claim in OIDC tokens. The execution's `Authenticator Reference` and `Authenticator Reference Max Age` config values are used automatically. |
+
+> **Note on `flow_id`, AMR and LOA:** When using the API to create magic links (instead of the browser flow authenticator), AMR and LOA are not set automatically because there is no active authentication context. By providing `flow_id`, the API resolves the `ext-magic-form` execution in the given flow and:
+> - **AMR**: registers the execution as completed — enabling the standard AMR Protocol Mapper to emit the `amr` claim using the `Authenticator Reference` value from the execution config.
+> - **LOA**: reads the level from a sibling `Condition - Level of Authentication` execution in the same sub-flow — setting the `acr` claim on the session.
+>
+> The `loa` parameter can be provided additionally to override or supplement the LOA value derived from the flow (e.g. when no `Condition - Level of Authentication` is present in the sub-flow).
+>
+> The `ext-magic-form` execution can be set to `DISABLED` in the flow if it should never be triggered interactively; it only needs to exist with a valid `AuthenticatorConfig` (Authenticator Reference + Max Age).
 
 Sample request (replace your access token):
 
@@ -82,6 +120,16 @@ curl --request POST https://keycloak.host/auth/realms/test/magic-link \
  --header "Content-Type: application/json" \
  --header "Authorization: Bearer <access_token>" \
  --data '{"email":"foo@foo.com","client_id":"account-console","redirect_uri":"https://keycloak.host/auth/realms/test/account/","expiration_seconds":3600,"force_create":true,"update_profile":true,"update_password":true,"send_email":false}'
+```
+
+With LOA and AMR (requires a browser flow containing a configured `ext-magic-form` execution):
+
+```
+curl --request POST https://keycloak.host/auth/realms/test/magic-link \
+ --header "Accept: application/json" \
+ --header "Content-Type: application/json" \
+ --header "Authorization: Bearer <access_token>" \
+ --data '{"email":"foo@foo.com","client_id":"my-app","redirect_uri":"https://app.example.com/callback","flow_id":"550e8400-e29b-41d4-a716-446655440000"}'
 ```
 
 Sample response:
