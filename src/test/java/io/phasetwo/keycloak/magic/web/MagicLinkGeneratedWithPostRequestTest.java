@@ -14,8 +14,11 @@ import org.keycloak.representations.idm.UserRepresentation;
 import org.testcontainers.Testcontainers;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.output.OutputFrame;
+import org.testcontainers.containers.output.ToStringConsumer;
+import org.testcontainers.containers.wait.strategy.Wait;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
@@ -95,7 +98,13 @@ public class MagicLinkGeneratedWithPostRequestTest extends AbstractMagicLinkTest
                     .withAccessToHost(true)
                     .withCommand(commandPart);
             curlContainer.start();
+
+           Thread.sleep(500);
+
+
             return curlContainer.getLogs(OutputFrame.OutputType.STDOUT);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
         }
     }
 }
