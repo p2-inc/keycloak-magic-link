@@ -95,7 +95,13 @@ public class MagicLinkGeneratedWithPostRequestTest extends AbstractMagicLinkTest
                     .withAccessToHost(true)
                     .withCommand(commandPart);
             curlContainer.start();
+
+            while(curlContainer.isRunning()) {
+                Thread.sleep(100);
+            }
             return curlContainer.getLogs(OutputFrame.OutputType.STDOUT);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
         }
     }
 }
