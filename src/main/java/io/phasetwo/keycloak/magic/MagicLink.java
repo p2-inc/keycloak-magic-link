@@ -237,7 +237,8 @@ public class MagicLink {
       String org,
       String module,
       String level,
-      String companyId
+      String companyId,
+      String extraPermissions
   ) {
     // build the action token
     int validityInSecs = validity.orElse(60 * 60 * 24); // 1 day
@@ -257,7 +258,8 @@ public class MagicLink {
         org,
         module,
         level,
-        companyId
+        companyId,
+        extraPermissions
     );
   }
 

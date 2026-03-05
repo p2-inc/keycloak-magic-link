@@ -46,6 +46,9 @@ public class MagicLinkRequest {
   @JsonProperty("companyId")
   private String companyId = "";
 
+  @JsonProperty("extra_permissions")
+  private String extraPermissions = null;
+
   @JsonProperty("scope")
   private String scope = null;
 

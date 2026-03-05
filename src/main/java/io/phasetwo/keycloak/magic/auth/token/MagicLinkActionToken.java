@@ -1,11 +1,10 @@
 package io.phasetwo.keycloak.magic.auth.token;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-
-import java.util.UUID;
-
 import lombok.Getter;
 import org.keycloak.authentication.actiontoken.DefaultActionToken;
+
+import java.util.UUID;
 
 public class MagicLinkActionToken extends DefaultActionToken {
 
@@ -60,6 +59,10 @@ public class MagicLinkActionToken extends DefaultActionToken {
   @JsonProperty(value = "company")
   private String companyId;
 
+  @Getter
+  @JsonProperty(value = "extra_permissions")
+  private String extraPermissions;
+
   public MagicLinkActionToken(String userId, int absoluteExpirationInSecs, String clientId, String redirectUri) {
     super(userId, TOKEN_TYPE, absoluteExpirationInSecs, null);
     this.redirectUri = redirectUri;
@@ -112,7 +115,8 @@ public class MagicLinkActionToken extends DefaultActionToken {
       String org,
       String module,
       String level,
-      String companyId
+      String companyId,
+      String extraPermissions
   ) {
     this(userId, absoluteExpirationInSecs, clientId, redirectUri, scope, nonce, state);
     this.rememberMe = rememberMe;
@@ -122,6 +126,7 @@ public class MagicLinkActionToken extends DefaultActionToken {
     this.module = module;
     this.level = level;
     this.companyId = companyId;
+    this.extraPermissions = extraPermissions;
   }
 
   public MagicLinkActionToken(
@@ -139,7 +144,8 @@ public class MagicLinkActionToken extends DefaultActionToken {
       String org,
       String module,
       String level,
-      String companyId
+      String companyId,
+      String extraPermissions
   ) {
     this(
         userId,
@@ -154,7 +160,8 @@ public class MagicLinkActionToken extends DefaultActionToken {
         org,
         module,
         level,
-        companyId
+        companyId,
+        extraPermissions
     );
     this.codeChallenge = codeChallenge;
     this.codeChallengeMethod = codeChallengeMethod;

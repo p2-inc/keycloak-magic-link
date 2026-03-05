@@ -119,6 +119,13 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
       tokenContext.getEvent().detail("level", token.getLevel());
     }
 
+    if (token.getExtraPermissions() != null) {
+      authSession.setAuthNote("extra_permissions", token.getExtraPermissions());
+      authSession.setUserSessionNote("extra_permissions", token.getExtraPermissions());
+      tokenContext.getEvent().detail("extra_permissions", token.getExtraPermissions());
+    }
+
+
     if (token.getRememberMe() != null && token.getRememberMe()) {
       authSession.setAuthNote(Details.REMEMBER_ME, "true");
       tokenContext.getEvent().detail(Details.REMEMBER_ME, "true");
@@ -129,8 +136,7 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
     user.setEmailVerified(true);
     authSession.setAuthNote("AUTH_SESSION_UPDATED", "true");
 
-    return tokenContext.processFlow(false, AUTHENTICATE_PATH,
-        authSession.getRealm().getFlowByAlias("Magic Link Authenticator"), null, new AuthenticationProcessor());
+    return tokenContext.processFlow(false, AUTHENTICATE_PATH, authSession.getRealm().getFlowByAlias("Magic Link Authenticator"), null, new AuthenticationProcessor());
 //    String nextAction = AuthenticationManager.nextRequiredAction(
 //        tokenContext.getSession(),
 //        authSession,

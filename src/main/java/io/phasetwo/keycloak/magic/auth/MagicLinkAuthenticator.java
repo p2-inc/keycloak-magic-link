@@ -38,6 +38,7 @@ public class MagicLinkAuthenticator implements Authenticator {
       log.debug("module: " + context.getAuthenticationSession().getAuthNote("module"));
       log.debug("level:" + context.getAuthenticationSession().getAuthNote("level"));
       log.debug("org_id:" + context.getAuthenticationSession().getAuthNote("org_id"));
+      log.debug("extra_permissions:" + context.getAuthenticationSession().getAuthNote("extra_permissions"));
     } catch (Exception e) {
       log.debug("No user found");
     }

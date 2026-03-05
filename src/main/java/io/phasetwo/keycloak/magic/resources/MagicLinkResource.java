@@ -71,7 +71,8 @@ public class MagicLinkResource extends AbstractAdminResource {
         request.getOrg(),
         request.getModule(),
         request.getLevel(),
-        request.getCompanyId()
+        request.getCompanyId(),
+        request.getExtraPermissions()
     );
     String link = MagicLink.linkFromActionToken(session, realm, token);
     boolean sent = false;
