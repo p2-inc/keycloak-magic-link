@@ -1,9 +1,8 @@
-package io.phasetwo.keycloak.magic;
+package io.phasetwo.keycloak.magic.service;
 
 import lombok.extern.jbosslog.JBossLog;
 import org.junit.jupiter.api.Test;
 import org.keycloak.util.JsonSerialization;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.io.IOException;
 import java.net.URI;
@@ -31,7 +30,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * </ul>
  */
 @JBossLog
-@Testcontainers
 class MagicLinkApiTest extends AbstractMagicLinkTest {
 
     private static final String TEST_REALM   = "test-realm-api";
