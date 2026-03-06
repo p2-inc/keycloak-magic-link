@@ -1,0 +1,14 @@
+{
+  "name": "e2e",
+  "version": "1.0.0",
+  "description": "",
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "cypress": "^15.10.0",
+    "cypress-multi-reporters": "^2.0.5",
+    "mocha": "^11.7.5",
+    "mochawesome": "^7.1.4",
+    "typescript": "^5.9.3"
+  }
+}
