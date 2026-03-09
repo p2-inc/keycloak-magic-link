@@ -11,6 +11,18 @@
       </a>
     </div>
   <#elseif section = "form">
-    ${msg("magicLinkConfirmation")}
+    <p>${msg("magicLinkConfirmation")}</p>
+    <form action="${url.loginAction}" method="post">
+      <div class="${properties.kcFormGroupClass!}">
+        <div id="kc-form-buttons" class="${properties.kcFormButtonsClass!}">
+          <button
+            type="submit"
+            class="${properties.kcButtonClass!} ${properties.kcButtonDefaultClass!} ${properties.kcButtonBlockClass!} ${properties.kcButtonLargeClass!}"
+          >
+            ${msg("doResend")}
+          </button>
+        </div>
+      </div>
+    </form>
   </#if>
 </@layout.registrationLayout>
