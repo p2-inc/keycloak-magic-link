@@ -32,6 +32,47 @@ describe('Basic tests with the Magic Link Provider', () => {
       cy.contains('Personal')
    })
 
+   it('Resend button on the waiting page sends a second magic link that can be used to log in', () => {
+      // Start with empty inbox so we can assert exact counts
+      cy.request('DELETE', mailhogBaseUrl + '/api/v1/messages');
+
+      // Submit email - arrive at waiting page
+      cy.visit(testRealmLoginUri);
+      cy.get('#username').type(user1.username);
+      cy.get('#kc-login').click();
+      cy.contains('Check your email, and click on the link to log in!');
+
+      // Wait for first email to arrive, then click Resend
+      cy.wrap(null).then(() => fetchLoginEmail(user1.username));
+      cy.contains('Resend').click();
+      cy.contains('Check your email, and click on the link to log in!');
+
+      // Fetch second (most recent) email - Mailhog returns newest first
+      cy.wrap(null)
+          .then(() => fetchLoginEmail(user1.username))
+          .then((mail) => {
+              const body =
+                  mail.Content.Body ||
+                  mail.Content.Headers['Content-Type']?.includes('text/html')
+                      ? mail.Content.Body
+                      : ''
+
+              expect(body).to.contain('Someone requested a login link to Test Realm Display Name')
+
+              const loginLink = extractLoginLink(body)
+              cy.log(`Resent login link: ${loginLink}`)
+              cy.visit(loginLink)
+          });
+
+      // Both the original and resent email should be in Mailhog
+      cy.request(mailhogBaseUrl + '/api/v2/messages').then((response) => {
+          expect(response.body.total).to.equal(2);
+      });
+
+      cy.url().should('contain', 'test-realm');
+      cy.contains('Personal');
+   });
+
    it('Non-existent user should see the check your email message but no email should be sent', () => {
       // 1. delete everything from mailhog
       cy.request('DELETE', mailhogBaseUrl + '/api/v1/messages');
