@@ -57,4 +57,20 @@ public class MagicLinkRequest {
 
   @JsonProperty("response_mode")
   private String responseMode = null;
+
+  /**
+   * Forces the resulting session to receive the provided Level of Authentication. This value is
+   * set directly in the AcrStore and ignores the level configured on the
+   * {@code Condition - Level of Authentication} in the browser flow.
+   */
+  @JsonProperty("loa")
+  private Integer forceSessionLoa = null;
+
+  /**
+   * Requested ACR values (space-separated). Works exactly like {@code acr_values} in a normal
+   * OIDC authorization request: the browser flow's {@code Condition - Level of Authentication}
+   * steps evaluate which levels need to run based on this value.
+   */
+  @JsonProperty("acr_values")
+  private String acrValues = null;
 }

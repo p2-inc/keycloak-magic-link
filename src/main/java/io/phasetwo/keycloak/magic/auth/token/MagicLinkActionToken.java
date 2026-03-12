@@ -17,6 +17,8 @@ public class MagicLinkActionToken extends DefaultActionToken {
   private static final String JSON_FIELD_CODE_CHALLENGE_METHOD = "ccm";
   private static final String JSON_FIELD_REUSABLE = "ru";
   private static final String JSON_FIELD_RESPONSE_MODE = "rm";
+  private static final String JSON_FIELD_FORCE_SESSION_LOA = "fsl";
+  private static final String JSON_FIELD_ACR_VALUES = "acr";
 
   @JsonProperty(value = JSON_FIELD_REDIRECT_URI)
   private String redirectUri;
@@ -44,6 +46,12 @@ public class MagicLinkActionToken extends DefaultActionToken {
 
   @JsonProperty(value = JSON_FIELD_CODE_CHALLENGE_METHOD)
   private String codeChallengeMethod;
+
+  @JsonProperty(value = JSON_FIELD_FORCE_SESSION_LOA)
+  private Integer forceSessionLoa;
+
+  @JsonProperty(value = JSON_FIELD_ACR_VALUES)
+  private String acrValues;
 
   public MagicLinkActionToken(
       String userId, int absoluteExpirationInSecs, String clientId, String redirectUri) {
@@ -112,6 +120,38 @@ public class MagicLinkActionToken extends DefaultActionToken {
     this.codeChallenge = codeChallenge;
     this.codeChallengeMethod = codeChallengeMethod;
     this.nonce = nonce;
+  }
+
+  public MagicLinkActionToken(
+      String userId,
+      int absoluteExpirationInSecs,
+      String clientId,
+      String redirectUri,
+      String scope,
+      String nonce,
+      String state,
+      String codeChallenge,
+      String codeChallengeMethod,
+      Boolean rememberMe,
+      Boolean isActionTokenPersistent,
+      String responseMode,
+      Integer forceSessionLoa,
+      String acrValues) {
+    this(
+        userId,
+        absoluteExpirationInSecs,
+        clientId,
+        redirectUri,
+        scope,
+        nonce,
+        state,
+        codeChallenge,
+        codeChallengeMethod,
+        rememberMe,
+        isActionTokenPersistent,
+        responseMode);
+    this.forceSessionLoa = forceSessionLoa;
+    this.acrValues = acrValues;
   }
 
   private MagicLinkActionToken() {
@@ -197,5 +237,30 @@ public class MagicLinkActionToken extends DefaultActionToken {
 
   public void setCodeChallengeMethod(String value) {
     this.codeChallengeMethod = value;
+  }
+
+  /**
+   * Forces the resulting session LOA to this level, ignoring the level configured on the
+   * {@code Condition - Level of Authentication} in the browser flow.
+   */
+  public Integer getForceSessionLoa() {
+    return this.forceSessionLoa;
+  }
+
+  public void setForceSessionLoa(Integer value) {
+    this.forceSessionLoa = value;
+  }
+
+  /**
+   * Requested ACR values (space-separated). Works like {@code acr_values} in a normal OIDC
+   * request: the browser flow's {@code Condition - Level of Authentication} steps evaluate
+   * which levels need to run based on this value.
+   */
+  public String getAcrValues() {
+    return this.acrValues;
+  }
+
+  public void setAcrValues(String value) {
+    this.acrValues = value;
   }
 }

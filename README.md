@@ -16,17 +16,40 @@ The easiest way to get started is our [Docker image](https://quay.io/repository/
 
 This implementation differs from the original in that it creates an ActionToken that is sent as the link. This is convenient, as it does not require the user to click on the link from the same device. A common use case we heard was users entering their email address on the desktop, but then clicking on the link on their mobile, so we wanted to solve for that case.
 
+> **Important distinction:** The magic link flow involves two separate authenticator roles:
+> - **Magic Link Generator** (`ext-magic-form`) — shows an email input form and sends the link. It only *generates* a link; it does not authenticate the user itself.
+> - **Magic Link Verifier** (`ext-magic-link-browser-flow`) — validates the link token inside the browser flow and performs the actual authentication. See the [Magic Link Verifier](#magic-link-verifier) section below.
+
 This contains two pathways to get a Magic Link:
 
-### Authenticator
+### Magic Link Generator (`ext-magic-form`)
 
-An Authenticator that can run as a form in your login flow. This takes an email, and can optionally create a user if none exists. This implementation sends the email using a theme-resources template, which you can override. Installation can be achieved by duplicating the Browser flow, and replacing the normal Username/Password/OTP forms with the Magic Link execution type ([@tstec-polypoly](https://github.com/tstec-polypoly) provides a great step-by-step guide for setting it up https://github.com/p2-inc/keycloak-magic-link/issues/6#issuecomment-1230675741). Note that you aren't required to use a _Username form_ with this, as it extends `UsernamePasswordForm` and renders the username form page for you:
+An execution that can run as a form in your login flow. It takes an email address, generates a signed magic link, and sends it to the user. The link delivery and generation happen here — the actual authentication is performed by the **Magic Link Verifier** when the user clicks the link.
+
+This execution can optionally create a user if none exists. It sends the email using a theme-resources template, which you can override. Installation can be achieved by duplicating the Browser flow and replacing the normal Username/Password/OTP forms with the Magic Link Generator execution type ([@tstec-polypoly](https://github.com/tstec-polypoly) provides a great step-by-step guide: https://github.com/p2-inc/keycloak-magic-link/issues/6#issuecomment-1230675741).
 
 ![Install Magic Link Authenticator in Browser Flow](docs/assets/magic-link-authenticator.png)
 
-The authenticator can be configured to create a user with the given email address as username/email if none exists. It is also possible to force `UPDATE_PROFILE` and `UPDATE_PASSWORD` required actions when the user is created by this Authenticator:
+The execution can be configured to create a user with the given email address as username/email if none exists. It is also possible to force `UPDATE_PROFILE` and `UPDATE_PASSWORD` required actions when the user is created by this Authenticator:
 
 ![Configure Magic Link Authenticator with options](docs/assets/magic-link-config.png)
+
+### Magic Link Verifier
+
+The **Magic Link Verifier** (`ext-magic-link-browser-flow`) is the authenticator that performs the actual authentication when a magic link is clicked. It is the counterpart to the **Magic Link Generator** (`ext-magic-form`) and to backends that generate links via the REST API.
+
+**Key distinction:** The Magic Link Generator (or REST API) only *creates and delivers* the link. The Magic Link Verifier *validates* it and authenticates the user — and it does so entirely within the Keycloak browser flow, enabling step-up authentication (LOA) in a single browser session without a second `ASWebAuthenticationSession` on iOS.
+
+### How it works
+
+When the magic link action token is clicked, the `MagicLinkActionTokenHandler`:
+
+1. Validates the signed JWT action token.
+2. Stores a short-lived resume token (max 5 minutes, single-use) in Keycloak's Infinispan cache.
+3. Redirects to the standard OIDC authorization endpoint with all original parameters and `login_hint=mlbf-resume:{id}`.
+4. The browser flow starts — `acr_values`, `Condition – Level of Authentication`, and all standard step-up logic work natively.
+5. The **Magic Link Verifier** reads the `login_hint`, consumes the resume token atomically, sets the user and LOA, and calls `context.success()`.
+6. Any subsequent step-up authenticators in the flow (e.g. Email OTP for LOA=2) run in the same browser session.
 
 ## Magic link continuation
 
@@ -73,6 +96,8 @@ Parameters:
 | `remember_me` | N | false | If the user is treated as if they had checked "Remember Me" on login. Requires that it is enabled in the Realm. |
 | `reusable` | N | true | If the token can be reused multiple times during its validity |
 | `response_mode` | N | query | Determines how the authorization response is returned to the client: in the URL query string (query) or in the URL fragment (fragment). |
+| `loa` | N | | Forces the resulting session to the specified Level of Assurance. When set, this value is applied directly via `AcrStore` and overrides any LOA level configured on the browser-flow authenticator. Use together with `acr_values` to control step-up behavior. |
+| `acr_values` | N | | Requested ACR values (space-separated). Forwarded as the `acr_values` OIDC parameter to the authorization endpoint, so the browser flow's `Condition – Level of Authentication` steps evaluate exactly as they would in a standard OIDC request. |
 
 Sample request (replace your access token):
 
@@ -93,7 +118,6 @@ Sample response:
   "sent": false
 }
 ```
-
 ## Email OTP
 
 There is a simple authenticator to email a 6-digit OTP to the users email address. This implementation sends the email using a theme-resources template, which you can override. It is recommended to use this in an Authentication flow following the _Username form_. An example flow looks like this:

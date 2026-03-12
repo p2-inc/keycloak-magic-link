@@ -103,6 +103,14 @@
           "userSetupAllowed": false
         },
         {
+          "authenticator": "ext-magic-link-browser-flow",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 1,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
           "authenticator": "identity-provider-redirector",
           "authenticatorFlow": false,
           "requirement": "ALTERNATIVE",

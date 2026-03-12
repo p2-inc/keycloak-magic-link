@@ -60,12 +60,14 @@ public class MagicLinkAuthenticatorFactory implements AuthenticatorFactory {
 
   @Override
   public String getDisplayType() {
-    return "Magic Link";
+    return "Magic Link Generator";
   }
 
   @Override
   public String getHelpText() {
-    return "Sign in with a magic link that will be sent to your email.";
+    return "Shows an email input form, generates a magic link and sends it to the user. "
+        + "This authenticator generates and delivers the link — the actual authentication "
+        + "is performed by the Magic Link Verifier (ext-magic-link-browser-flow) in the browser flow.";
   }
 
   @Override

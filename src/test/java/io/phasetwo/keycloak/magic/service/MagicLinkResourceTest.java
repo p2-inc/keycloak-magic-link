@@ -1,6 +1,7 @@
 package io.phasetwo.keycloak.magic.service;
 
 import io.phasetwo.keycloak.magic.Helpers;
+import io.phasetwo.keycloak.magic.auth.MagicLinkBFAuthenticator;
 import io.phasetwo.keycloak.magic.representation.MagicLinkRequest;
 import io.phasetwo.keycloak.magic.representation.MagicLinkResponse;
 import jakarta.ws.rs.core.Response;
@@ -45,6 +46,8 @@ public class MagicLinkResourceTest extends AbstractMagicLinkTest {
         request.setCodeChallenge(null);
         request.setCodeChallengeMethod(null);
         request.setRememberMe(false);
+        request.setForceSessionLoa(1);
+        request.setAcrValues("2");
 
        var response =  postRequest(keycloak, request, testRealm.getRealm());
        assertThat(response.getStatusCode(), CoreMatchers.is(Response.Status.OK.getStatusCode()));
@@ -55,4 +58,4 @@ public class MagicLinkResourceTest extends AbstractMagicLinkTest {
        assertTrue(magicLinkResponse.getUserId().equals(user.getId()));
        assertNotNull(magicLinkResponse.getLink());
     }
-}
+  }

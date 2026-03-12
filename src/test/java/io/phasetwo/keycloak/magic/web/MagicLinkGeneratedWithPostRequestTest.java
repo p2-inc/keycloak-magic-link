@@ -51,6 +51,8 @@ public class MagicLinkGeneratedWithPostRequestTest extends AbstractMagicLinkTest
         request.setCodeChallenge(null);
         request.setCodeChallengeMethod(null);
         request.setRememberMe(false);
+        request.setForceSessionLoa(1);
+        request.setAcrValues("1");
 
         final var requestAsString = Helpers.toJsonString(request);
 
@@ -89,7 +91,7 @@ public class MagicLinkGeneratedWithPostRequestTest extends AbstractMagicLinkTest
         );
     }
 
-    private static String runHttpRequestWithCurl(String... commandPart) {
+      private static String runHttpRequestWithCurl(String... commandPart) {
         try (GenericContainer<?> curlContainer = new GenericContainer<>(CURL_IMAGE)) {
             curlContainer.withNetwork(network)
                     .withAccessToHost(true)

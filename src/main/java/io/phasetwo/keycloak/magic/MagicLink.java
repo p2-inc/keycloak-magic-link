@@ -222,24 +222,56 @@ public class MagicLink {
       Boolean rememberMe,
       Boolean isActionTokenPersistent,
       String responseMode) {
-    // build the action token
+    return createActionToken(
+        user, clientId, redirectUri, validity, scope, nonce, state,
+        codeChallenge, codeChallengeMethod, rememberMe, isActionTokenPersistent, responseMode,
+        null, null);
+  }
+
+  /**
+   * Creates a {@link MagicLinkActionToken} with optional {@code forceSessionLoa} and
+   * {@code acrValues} parameters.
+   *
+   * <p>{@code forceSessionLoa} — when non-null, the browser-flow authenticator sets this level
+   * directly in the AcrStore, ignoring the level configured on the
+   * {@code Condition - Level of Authentication}.
+   *
+   * <p>{@code acrValues} — when non-null, stored as the {@code acr_values} client note on the
+   * auth session, so the browser flow's conditional LOA steps evaluate exactly as they would for
+   * a normal OIDC request carrying the same {@code acr_values} parameter.
+   */
+  public static MagicLinkActionToken createActionToken(
+      UserModel user,
+      String clientId,
+      String redirectUri,
+      OptionalInt validity,
+      String scope,
+      String nonce,
+      String state,
+      String codeChallenge,
+      String codeChallengeMethod,
+      Boolean rememberMe,
+      Boolean isActionTokenPersistent,
+      String responseMode,
+      Integer forceSessionLoa,
+      String acrValues) {
     int validityInSecs = validity.orElse(60 * 60 * 24); // 1 day
     int absoluteExpirationInSecs = Time.currentTime() + validityInSecs;
-    MagicLinkActionToken token =
-        new MagicLinkActionToken(
-            user.getId(),
-            absoluteExpirationInSecs,
-            clientId,
-            redirectUri,
-            scope,
-            nonce,
-            state,
-            codeChallenge,
-            codeChallengeMethod,
-            rememberMe,
-            isActionTokenPersistent,
-            responseMode);
-    return token;
+    return new MagicLinkActionToken(
+        user.getId(),
+        absoluteExpirationInSecs,
+        clientId,
+        redirectUri,
+        scope,
+        nonce,
+        state,
+        codeChallenge,
+        codeChallengeMethod,
+        rememberMe,
+        isActionTokenPersistent,
+        responseMode,
+        forceSessionLoa,
+        acrValues);
   }
 
   public static MagicLinkActionToken createActionToken(
