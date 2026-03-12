@@ -98,7 +98,7 @@
           "authenticator": "auth-cookie",
           "authenticatorFlow": false,
           "requirement": "ALTERNATIVE",
-          "priority": 0,
+          "priority": 10,
           "autheticatorFlow": false,
           "userSetupAllowed": false
         },
@@ -106,7 +106,7 @@
           "authenticator": "ext-magic-link-browser-flow",
           "authenticatorFlow": false,
           "requirement": "ALTERNATIVE",
-          "priority": 1,
+          "priority": 20,
           "autheticatorFlow": false,
           "userSetupAllowed": false
         },
@@ -114,14 +114,14 @@
           "authenticator": "identity-provider-redirector",
           "authenticatorFlow": false,
           "requirement": "ALTERNATIVE",
-          "priority": 0,
+          "priority": 30,
           "autheticatorFlow": false,
           "userSetupAllowed": false
         },
         {
           "authenticatorFlow": true,
           "requirement": "ALTERNATIVE",
-          "priority": 0,
+          "priority": 40,
           "autheticatorFlow": true,
           "flowAlias": "Magic Link forms",
           "userSetupAllowed": false
