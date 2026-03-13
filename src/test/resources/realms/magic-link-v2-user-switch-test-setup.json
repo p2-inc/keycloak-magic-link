@@ -1,0 +1,69 @@
+{
+  "realm": "test-realm-v2-user-switch",
+  "displayName": "Magic Link v2 User Switch Test Realm",
+  "enabled": true,
+  "clients": [
+    {
+      "clientId": "v2-user-switch-client",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "redirectUris": ["http://localhost/*", "http://host.testcontainers.internal:*"],
+      "webOrigins": ["+"],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "basic",
+        "email"
+      ]
+    }
+  ],
+  "authenticationFlows": [
+    {
+      "alias": "magic-link-v2-user-switch-flow",
+      "description": "Browser flow with Magic Link v2 Verifier placed BEFORE Cookie — required for user-switch detection.",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "ext-magic-link-browser-flow",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "auth-cookie",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 20,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        }
+      ]
+    }
+  ],
+  "browserFlow": "magic-link-v2-user-switch-flow",
+  "users": [
+    {
+      "username": "usera@phasetwo.io",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "usera@phasetwo.io",
+      "firstName": "User",
+      "lastName": "A"
+    },
+    {
+      "username": "userb@phasetwo.io",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "userb@phasetwo.io",
+      "firstName": "User",
+      "lastName": "B"
+    }
+  ]
+}
