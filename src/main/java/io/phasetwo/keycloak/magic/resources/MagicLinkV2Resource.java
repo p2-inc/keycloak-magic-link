@@ -125,6 +125,9 @@ public class MagicLinkV2Resource extends AbstractAdminResource {
     if (Boolean.TRUE.equals(req.getSetEmailVerified())) {
       notes.put(KEY_SEV, "true");
     }
+    if (Boolean.TRUE.equals(req.getConfirmUserSwitch())) {
+      notes.put(KEY_CONFIRM_USER_SWITCH, "true");
+    }
 
     SingleUseObjectProvider singleUse = session.getProvider(SingleUseObjectProvider.class);
     singleUse.put(MagicLinkBFAuthenticator.DATA_KEY_PREFIX + tokenId,
@@ -143,12 +146,21 @@ public class MagicLinkV2Resource extends AbstractAdminResource {
             .path("realms/{realm}/protocol/openid-connect/auth")
             .queryParam(OIDCLoginProtocol.CLIENT_ID_PARAM, req.getClientId())
             .queryParam(OIDCLoginProtocol.RESPONSE_TYPE_PARAM, OAuth2Constants.CODE)
-            .queryParam(
-                OIDCLoginProtocol.LOGIN_HINT_PARAM,
-                MagicLinkBFAuthenticator.RESUME_PREFIX + tokenId);
+            .queryParam(OIDCLoginProtocol.LOGIN_HINT_PARAM,
+                MagicLinkBFAuthenticator.RESUME_PREFIX + tokenId)
+            // prompt=login prevents Keycloak from pre-populating the auth session with the
+            // existing cookie user before the flow starts. Without it, Keycloak sets
+            // authenticatedUser=UserA in the auth session, causing an
+            // "already authenticated as different user" error when our verifier tries to
+            // authenticate UserB. With the verifier placed before Cookie in the flow,
+            // context.success() is called immediately and no re-auth banner is shown.
+            .queryParam(OIDCLoginProtocol.PROMPT_PARAM, OIDCLoginProtocol.PROMPT_VALUE_LOGIN);
 
     if (req.getAdditionalParameters() != null) {
-      req.getAdditionalParameters().forEach(authUri::queryParam);
+      req.getAdditionalParameters().forEach(authUri::replaceQueryParam);
+    }
+    if (req.getRedirectUri() != null) {
+      authUri.replaceQueryParam(OIDCLoginProtocol.REDIRECT_URI_PARAM, req.getRedirectUri());
     }
 
     String link = authUri.build(realm.getName()).toString();
