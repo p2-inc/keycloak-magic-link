@@ -56,9 +56,16 @@ public class MagicLinkV2Request {
   private Boolean reusable = false;
 
   /**
+   * Redirect URI appended to the returned OIDC authorization URL. Takes precedence over the same
+   * key in {@code additional_parameters} if both are set.
+   */
+  @JsonProperty("redirect_uri")
+  private String redirectUri;
+
+  /**
    * Additional query parameters appended verbatim to the returned OIDC authorization URL. Use
-   * this to pass {@code redirect_uri}, {@code scope}, {@code state}, {@code nonce},
-   * {@code code_challenge}, {@code acr_values}, etc.
+   * this to pass {@code scope}, {@code state}, {@code nonce}, {@code code_challenge},
+   * {@code acr_values}, etc.
    */
   @JsonProperty("additional_parameters")
   private Map<String, String> additionalParameters;
@@ -69,4 +76,12 @@ public class MagicLinkV2Request {
    */
   @JsonProperty("set_email_verified")
   private Boolean setEmailVerified = false;
+
+  /**
+   * When {@code true} and a different user is already logged in on the device, a confirmation
+   * screen is shown asking the user to confirm the logout. When {@code false} (default), the
+   * existing session is silently logged out and the magic link is processed automatically.
+   */
+  @JsonProperty("confirm_user_switch")
+  private Boolean confirmUserSwitch = false;
 }

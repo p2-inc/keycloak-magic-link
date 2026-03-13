@@ -141,26 +141,28 @@ User (or app) opens the URL
 
 ### Browser flow setup
 
-Add the **Magic Link Verifier** (`ext-magic-link-browser-flow`) as an **ALTERNATIVE** execution alongside username/password in your browser flow. When `login_hint` does not start with `mlv2:`, the verifier passes through silently and lets other alternatives handle the request.
+Add the **Magic Link Verifier** (`ext-magic-link-browser-flow`) as an **ALTERNATIVE** execution **before Cookie** in your browser flow. When `login_hint` does not start with `mlv2:`, the verifier calls `context.attempted()` and lets the next alternative (Cookie, then Username/Password) handle the request normally.
+
+Placing the verifier _before_ Cookie is important: if Cookie runs first and finds an active session, Keycloak stops there and never reaches the verifier — meaning a magic link for User B would silently return User A's token.
 
 ```
 Browser Flow
+├── Magic Link Verifier (ext-magic-link-browser-flow)  [ALTERNATIVE]  ← add this, before Cookie
 ├── Cookie  [ALTERNATIVE]
 ├── Kerberos  [ALTERNATIVE]
-└── Forms  [ALTERNATIVE]
-    ├── Magic Link Verifier (ext-magic-link-browser-flow)  [ALTERNATIVE]  ← add this
-    └── Username/Password Form  [ALTERNATIVE]
+└── Username/Password Form  [ALTERNATIVE]
 ```
 
 For step-up / LOA flows, place the verifier inside a Conditional sub-flow:
 
 ```
 Browser Flow
+├── Magic Link Verifier (ext-magic-link-browser-flow)  [ALTERNATIVE]  ← before Cookie
 ├── Cookie  [ALTERNATIVE]
 └── Authentication  [ALTERNATIVE]
     ├── LOA=1 sub-flow  [CONDITIONAL]
     │   ├── Condition – Level of Authentication  (loa=1)
-    │   └── Magic Link Verifier  [ALTERNATIVE]   ← authenticates at LOA=1
+    │   └── Magic Link Verifier  [ALTERNATIVE]   ← also here for LOA=1
     └── LOA=2 sub-flow  [CONDITIONAL]
         ├── Condition – Level of Authentication  (loa=2)
         └── Email OTP / TOTP  [REQUIRED]          ← runs after the verifier
@@ -185,9 +187,26 @@ Requires `manage-users` role (same as `/magic-link`).
 | `force_create` | N | false | Create the user if they do not exist (email only). |
 | `reusable` | N | false | Allow the token to be used more than once within its validity window. |
 | `set_email_verified` | N | false | When `true`, marks the user's email as verified after the token is successfully validated. |
-| `additional_parameters` | N | | Key/value map of extra query parameters appended verbatim to the returned URL (e.g. `redirect_uri`, `scope`, `state`, `nonce`, `code_challenge`, `acr_values`). |
+| `confirm_user_switch` | N | false | Controls behaviour when a different user is already logged in on the device. When `false` (default), the existing session is silently logged out and the magic link is processed automatically. When `true`, a confirmation screen is shown asking the user to approve the logout before continuing. |
+| `redirect_uri` | N | | Redirect URI appended to the returned OIDC authorization URL. Takes precedence over the same key in `additional_parameters`. |
+| `additional_parameters` | N | | Key/value map of extra query parameters appended to the returned URL (e.g. `scope`, `state`, `nonce`, `code_challenge`, `acr_values`). Values override defaults, including `prompt`. |
 
 *One of `email` or `username` is required.
+
+> **Important: place the Magic Link (v2) Verifier before the Cookie authenticator in your flow.**
+> Keycloak evaluates ALTERNATIVE executions in order and stops at the first success. If Cookie
+> runs before the Verifier and an active session exists, Keycloak silently returns that session's
+> token — even if it belongs to a different user than the one in the magic link. Placing the
+> Verifier first ensures it always gets to evaluate `login_hint` before Cookie can short-circuit
+> the flow:
+>
+> ```
+> Browser Flow
+> ├── Magic Link (v2) Verifier  [ALTERNATIVE]  ← must be first
+> ├── Cookie                    [ALTERNATIVE]
+> ├── Kerberos                  [ALTERNATIVE]
+> └── Username/Password         [ALTERNATIVE]
+> ```
 
 **Sample request:**
 
@@ -232,6 +251,18 @@ The caller opens `link` in the browser (or sends it to the user by email/SMS). A
 }
 ```
 
+### User-switch behaviour
+
+When a magic link is opened for User B while User A is already logged in on the same device, the verifier detects the session conflict and handles it based on the `confirm_user_switch` parameter:
+
+**Default (`confirm_user_switch: false`) — automatic logout:**
+The existing session cookies are silently expired and the browser is redirected to a fresh OIDC authorization request. The magic link token is still valid (single-use mark is not set until authentication completes), so the fresh flow picks it up and logs User B in transparently — no screen is shown.
+
+**`confirm_user_switch: true` — confirmation screen:**
+A confirmation page is shown informing the user that they are currently signed in on this device and asking whether they want to continue. Two options are presented:
+- **Sign out and continue** — performs the same automatic logout and redirect as the default behaviour.
+- **Cancel** — aborts the flow and redirects back to the client with `error=access_denied`.
+
 ### Differences from Magic Link v1
 
 | | Magic Link (v1) | Magic Link v2 |
@@ -241,8 +272,10 @@ The caller opens `link` in the browser (or sends it to the user by email/SMS). A
 | Authentication | Direct — bypasses browser flow | Via browser flow — full flow executes |
 | `acr_values` / step-up | Not supported | Fully supported |
 | OIDC params in request | Supplied in API body | Supplied via `additional_parameters` or appended to URL |
-| `redirect_uri` in request | Required | Optional — caller appends to URL |
+| `redirect_uri` in request | Required | Optional — top-level field or via `additional_parameters` |
+| `prompt=login` | Not set | Always set — prevents silent session reuse |
 | `reusable` default | `true` | `false` (single-use) |
+| User-switch (different user already logged in) | Not handled | Auto-logout by default; optional confirmation screen via `confirm_user_switch` |
 | Flow authenticator required | No | Yes — Magic Link Verifier must be in the flow |
 | Breaking change risk | — | None — v1 and v2 coexist independently |
 
