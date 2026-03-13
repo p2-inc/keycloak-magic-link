@@ -25,9 +25,14 @@ public class MagicLinkV2Token {
   public static final String KEY_CLIENT_ID    = "clientId";
   public static final String KEY_EXPIRY       = "expiry";
   public static final String KEY_LOA          = "loa";
-  public static final String KEY_REMEMBER_ME  = "rememberMe";
-  public static final String KEY_REUSABLE     = "reusable";
-  public static final String KEY_SEV          = "sev";
+  public static final String KEY_REMEMBER_ME         = "rememberMe";
+  public static final String KEY_REUSABLE            = "reusable";
+  public static final String KEY_SEV                 = "sev";
+  /**
+   * When {@code "true"}, show the user-switch confirmation form instead of performing an automatic
+   * logout. Default (absent / {@code "false"}) is auto-logout.
+   */
+  public static final String KEY_CONFIRM_USER_SWITCH = "confirmUserSwitch";
 
   private String userId;
   private String clientId;
