@@ -6,6 +6,7 @@ export default defineConfig({
     env: {
       mailhogUrl: process.env.MAILHOG_URL || 'undefined',
       generatedMagicLink: process.env.GENERATED_MAGIC_LINK || 'undefined',
+      generatedMagicLinkV2: process.env.GENERATED_MAGIC_LINK_V2 || 'undefined',
     },
     reporter: 'cypress-multi-reporters',
     reporterOptions: {

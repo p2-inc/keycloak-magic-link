@@ -46,13 +46,13 @@ When the period is exceeded the authentication flow will reset.
 
 ### Keycloakify Theme Templates
 
-If you are using Keycloakify and need the templates, you can find them in our Keycloakify Starter [fork](https://github.com/p2-inc/keycloakify-starter/tree/p2/magic-link-extension-templates) (go into the [pages](https://github.com/p2-inc/keycloakify-starter/tree/p2/magic-link-extension-templates/src/login/pages) folder). 
+If you are using Keycloakify and need the templates, you can find them in our Keycloakify Starter [fork](https://github.com/p2-inc/keycloakify-starter/tree/p2/magic-link-extension-templates) (go into the [pages](https://github.com/p2-inc/keycloakify-starter/tree/p2/magic-link-extension-templates/src/login/pages) folder).
 
 ### Resource
 
 A Resource you can call with `manage-users` role, which allows you to specify the email, clientId, redirectUri, tokenExpiry and optionally if the email is sent, or the link is just returned to the caller.
 
-Resources created with this API method return a URL that uses an Action Token. This will log a user in directly and skip any Authentication Flows defined. 
+Resources created with this API method return a URL that uses an Action Token. This will log a user in directly and skip any Authentication Flows defined.
 
 Parameters:
 | Name | Required | Default | Description |
@@ -93,6 +93,160 @@ Sample response:
   "sent": false
 }
 ```
+
+---
+
+## Magic Link v2
+
+Magic Link v2 is a drop-in parallel implementation that can be deployed alongside the existing Magic Link without any breaking changes or flow migration.
+
+### Why v2?
+
+The original Magic Link authenticates the user *directly* via the action-token handler, bypassing the standard Keycloak browser flow entirely. This means:
+
+- `acr_values` / step-up authentication cannot be evaluated natively.
+- Subsequent authenticators (e.g. TOTP for LOA=2) cannot run in the same browser session.
+
+Magic Link v2 solves this by returning a **standard OIDC authorization URL** instead of an action-token URL. The credential is stored server-side in Infinispan; only a short UUID reference (`mlv2:{uuid}`) is placed in `login_hint`. The standard browser flow runs in full — `acr_values`, `Condition – Level of Authentication`, and all step-up logic work natively.
+
+### How it works
+
+```
+POST /realms/{realm}/magic-link-v2
+  → credential data (userId, clientId, expiry, optional LOA/rememberMe)
+    stored in Infinispan under key "mlv2:data:{uuid}" with the requested TTL
+  → returns: https://keycloak.host/realms/{realm}/protocol/openid-connect/auth
+              ?client_id=myapp&response_type=code&login_hint=mlv2:{uuid}
+              [+ any additional_parameters you supplied]
+
+User (or app) opens the URL
+  → standard OIDC browser flow starts
+  → Magic Link Verifier (ext-magic-link-browser-flow) resolves the credential:
+      1. Strips "mlv2:" prefix from login_hint to get the UUID
+      2. Looks up credential data in Infinispan by "mlv2:data:{uuid}"
+      3. Checks expiry (TTL-enforced by Infinispan + explicit timestamp check)
+      4. Verifies stored clientId matches the current OIDC client
+      5. Enforces single-use via putIfAbsent("mlv2:used:{uuid}", ttl)
+         (unless reusable=true)
+      6. Sets user, optional LOA, optional remember-me
+      7. context.success() → flow continues normally
+  → Any subsequent step-up authenticators run in the same browser session
+```
+
+> **Why UUID instead of a signed JWT?**  Keycloak silently ignores OIDC parameters longer than
+> 255 characters. A typical HS512/RS256 JWT is 500–700 characters and would be dropped, causing
+> authentication to fail silently. The UUID reference (`mlv2:{uuid}`) is ~42 characters.
+> Security is equivalent to v1 action tokens: 128-bit random UUID entropy + Infinispan TTL +
+> atomic single-use tracking.
+
+### Browser flow setup
+
+Add the **Magic Link Verifier** (`ext-magic-link-browser-flow`) as an **ALTERNATIVE** execution alongside username/password in your browser flow. When `login_hint` does not start with `mlv2:`, the verifier passes through silently and lets other alternatives handle the request.
+
+```
+Browser Flow
+├── Cookie  [ALTERNATIVE]
+├── Kerberos  [ALTERNATIVE]
+└── Forms  [ALTERNATIVE]
+    ├── Magic Link Verifier (ext-magic-link-browser-flow)  [ALTERNATIVE]  ← add this
+    └── Username/Password Form  [ALTERNATIVE]
+```
+
+For step-up / LOA flows, place the verifier inside a Conditional sub-flow:
+
+```
+Browser Flow
+├── Cookie  [ALTERNATIVE]
+└── Authentication  [ALTERNATIVE]
+    ├── LOA=1 sub-flow  [CONDITIONAL]
+    │   ├── Condition – Level of Authentication  (loa=1)
+    │   └── Magic Link Verifier  [ALTERNATIVE]   ← authenticates at LOA=1
+    └── LOA=2 sub-flow  [CONDITIONAL]
+        ├── Condition – Level of Authentication  (loa=2)
+        └── Email OTP / TOTP  [REQUIRED]          ← runs after the verifier
+```
+
+When placed inside a Conditional sub-flow, the verifier automatically reads the configured LOA level from the sibling `Condition – Level of Authentication` as a fallback (overridden by `loa` in the API request).
+
+### REST API — `/magic-link-v2`
+
+Requires `manage-users` role (same as `/magic-link`).
+
+**Parameters:**
+
+| Name | Required | Default | Description |
+| ----- | ----- | ----- | ----- |
+| `email` | Y* | | Email address of the user. Mutually exclusive with `username`. |
+| `username` | Y* | | Username of the user. When provided, `force_create` is ignored. |
+| `client_id` | Y | | Client ID for which the authorization URL is built. |
+| `expiration_seconds` | N | 300 (5 min) | Token validity in seconds. |
+| `loa` | N | | Force the session to this LOA level, overriding the flow's Condition configuration. |
+| `remember_me` | N | false | Set the remember-me flag on the session. |
+| `force_create` | N | false | Create the user if they do not exist (email only). |
+| `reusable` | N | false | Allow the token to be used more than once within its validity window. |
+| `set_email_verified` | N | false | When `true`, marks the user's email as verified after the token is successfully validated. |
+| `additional_parameters` | N | | Key/value map of extra query parameters appended verbatim to the returned URL (e.g. `redirect_uri`, `scope`, `state`, `nonce`, `code_challenge`, `acr_values`). |
+
+*One of `email` or `username` is required.
+
+**Sample request:**
+
+```
+curl --request POST https://keycloak.host/realms/test/magic-link-v2 \
+ --header "Accept: application/json" \
+ --header "Content-Type: application/json" \
+ --header "Authorization: Bearer <access_token>" \
+ --data '{
+   "email": "foo@example.com",
+   "client_id": "myapp",
+   "expiration_seconds": 300,
+   "additional_parameters": {
+     "redirect_uri": "https://myapp.example.com/callback",
+     "scope": "openid profile",
+     "state": "abc123",
+     "nonce": "xyz789"
+   }
+ }'
+```
+
+**Sample response:**
+
+```json
+{
+  "user_id": "386edecf-3e43-41fd-886c-c674eea41034",
+  "link": "https://keycloak.host/realms/test/protocol/openid-connect/auth?client_id=myapp&response_type=code&login_hint=mlv2%3AeyJhbG...&redirect_uri=https%3A%2F%2Fmyapp.example.com%2Fcallback&scope=openid+profile&state=abc123&nonce=xyz789"
+}
+```
+
+The caller opens `link` in the browser (or sends it to the user by email/SMS). Additional OIDC parameters not supplied via `additional_parameters` can be appended to the URL manually before opening it.
+
+**PKCE** — pass `code_challenge` and `code_challenge_method` as `additional_parameters`:
+
+```json
+{
+  "additional_parameters": {
+    "redirect_uri": "...",
+    "code_challenge": "<S256-challenge>",
+    "code_challenge_method": "S256"
+  }
+}
+```
+
+### Differences from Magic Link v1
+
+| | Magic Link (v1) | Magic Link v2 |
+|---|---|---|
+| Endpoint | `POST /magic-link` | `POST /magic-link-v2` |
+| Returned URL | Action-token URL (`login-actions/action-token?key=...`) | OIDC auth URL (`protocol/openid-connect/auth?...`) |
+| Authentication | Direct — bypasses browser flow | Via browser flow — full flow executes |
+| `acr_values` / step-up | Not supported | Fully supported |
+| OIDC params in request | Supplied in API body | Supplied via `additional_parameters` or appended to URL |
+| `redirect_uri` in request | Required | Optional — caller appends to URL |
+| `reusable` default | `true` | `false` (single-use) |
+| Flow authenticator required | No | Yes — Magic Link Verifier must be in the flow |
+| Breaking change risk | — | None — v1 and v2 coexist independently |
+
+---
 
 ## Email OTP
 

@@ -83,7 +83,14 @@ public abstract class AbstractMagicLinkTest {
                 .withNetwork(network)
                 .withAccessToHost(true);
 
-        return keycloakContainer.withEnv("JAVA_OPTS", "-agentlib:jdwp=transport=dt_socket,address=*:8787,server=y,suspend=n -XX:MetaspaceSize=96M -XX:MaxMetaspaceSize=256m");
+        return keycloakContainer
+                .withEnv("JAVA_OPTS", "-agentlib:jdwp=transport=dt_socket,address=*:8787,server=y,suspend=n -XX:MetaspaceSize=96M -XX:MaxMetaspaceSize=256m")
+                .withLogConsumer(outputFrame -> {
+                    String msg = outputFrame.getUtf8String();
+                    if (msg.contains("MLv2") || msg.contains("ERROR") || msg.contains("WARN")) {
+                        System.out.print("[KC] " + msg);
+                    }
+                });
     }
 
     protected static final int WEBHOOK_SERVER_PORT = 8083;
