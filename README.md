@@ -178,6 +178,7 @@ Requires `manage-users` role (same as `/magic-link`).
 
 | Name | Required | Default | Description |
 | ----- | ----- | ----- | ----- |
+| `user_id` | Y* | | Keycloak user ID. Takes precedence over `email` and `username` when provided. `force_create` is ignored. |
 | `email` | Y* | | Email address of the user. Mutually exclusive with `username`. |
 | `username` | Y* | | Username of the user. When provided, `force_create` is ignored. |
 | `client_id` | Y | | Client ID for which the authorization URL is built. |
@@ -191,7 +192,7 @@ Requires `manage-users` role (same as `/magic-link`).
 | `redirect_uri` | N | | Redirect URI appended to the returned OIDC authorization URL. Takes precedence over the same key in `additional_parameters`. |
 | `additional_parameters` | N | | Key/value map of extra query parameters appended to the returned URL (e.g. `scope`, `state`, `nonce`, `code_challenge`, `acr_values`). Values override defaults, including `prompt`. |
 
-*One of `email` or `username` is required.
+*One of `user_id`, `email`, or `username` is required. `user_id` takes precedence if multiple are provided.
 
 > **Important: place the Magic Link (v2) Verifier before the Cookie authenticator in your flow.**
 > Keycloak evaluates ALTERNATIVE executions in order and stops at the first success. If Cookie

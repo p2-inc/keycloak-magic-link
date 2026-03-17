@@ -9,6 +9,13 @@ import lombok.Data;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class MagicLinkV2Request {
 
+  /**
+   * User's Keycloak ID. Takes precedence over {@code email} and {@code username} when provided.
+   * {@code force_create} is ignored when this field is set.
+   */
+  @JsonProperty("user_id")
+  private String userId;
+
   /** User's email address. Mutually exclusive with {@code username}. */
   @JsonProperty("email")
   private String email;
