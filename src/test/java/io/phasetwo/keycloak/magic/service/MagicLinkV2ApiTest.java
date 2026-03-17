@@ -134,6 +134,73 @@ class MagicLinkV2ApiTest extends AbstractMagicLinkTest {
             .statusCode(404);
     }
 
+    @Test
+    void createMagicLinkV2_withUserId_returnsLink() {
+        Testcontainers.exposeHostPorts(container.getHttpPort());
+        importRealm("/realms/magic-link-v2-api-test-setup.json");
+
+        String userId = keycloak.realm(TEST_REALM).users()
+            .searchByEmail(TEST_EMAIL, true).get(0).getId();
+
+        given()
+            .baseUri(getAuthUrl())
+            .auth().oauth2(keycloak.tokenManager().getAccessTokenString())
+            .contentType("application/json")
+            .body(Map.of(
+                "user_id",               userId,
+                "client_id",             TEST_CLIENT,
+                "additional_parameters", Map.of("redirect_uri", REDIRECT_URI)
+            ))
+            .post(MAGIC_LINK_V2_PATH)
+            .then()
+            .statusCode(200)
+            .body("link",    not(emptyOrNullString()))
+            .body("user_id", equalTo(userId));
+    }
+
+    @Test
+    void createMagicLinkV2_userId_takesPrecedenceOverEmail() {
+        Testcontainers.exposeHostPorts(container.getHttpPort());
+        importRealm("/realms/magic-link-v2-api-test-setup.json");
+
+        String userId = keycloak.realm(TEST_REALM).users()
+            .searchByEmail(TEST_EMAIL, true).get(0).getId();
+
+        // email points to a non-existent user — if user_id were ignored this would return 404
+        given()
+            .baseUri(getAuthUrl())
+            .auth().oauth2(keycloak.tokenManager().getAccessTokenString())
+            .contentType("application/json")
+            .body(Map.of(
+                "user_id",               userId,
+                "email",                 "nobody@example.com",
+                "client_id",             TEST_CLIENT,
+                "additional_parameters", Map.of("redirect_uri", REDIRECT_URI)
+            ))
+            .post(MAGIC_LINK_V2_PATH)
+            .then()
+            .statusCode(200)
+            .body("user_id", equalTo(userId));
+    }
+
+    @Test
+    void createMagicLinkV2_unknownUserId_returnsNotFound() {
+        Testcontainers.exposeHostPorts(container.getHttpPort());
+        importRealm("/realms/magic-link-v2-api-test-setup.json");
+
+        given()
+            .baseUri(getAuthUrl())
+            .auth().oauth2(keycloak.tokenManager().getAccessTokenString())
+            .contentType("application/json")
+            .body(Map.of(
+                "user_id",   "00000000-0000-0000-0000-000000000000",
+                "client_id", TEST_CLIENT
+            ))
+            .post(MAGIC_LINK_V2_PATH)
+            .then()
+            .statusCode(404);
+    }
+
     // -------------------------------------------------------------------------
     // Flow tests
     // -------------------------------------------------------------------------

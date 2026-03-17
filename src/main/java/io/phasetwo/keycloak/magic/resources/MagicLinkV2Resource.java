@@ -71,8 +71,8 @@ public class MagicLinkV2Resource extends AbstractAdminResource {
       throw new BadRequestException("client_id is required");
     }
 
-    if (req.getEmail() == null && req.getUsername() == null) {
-      throw new BadRequestException("email or username is required");
+    if (req.getUserId() == null && req.getEmail() == null && req.getUsername() == null) {
+      throw new BadRequestException("user_id, email, or username is required");
     }
 
     ClientModel client = session.clients().getClientByClientId(realm, req.getClientId());
@@ -80,29 +80,36 @@ public class MagicLinkV2Resource extends AbstractAdminResource {
       throw new NotFoundException("Client not found: " + req.getClientId());
     }
 
-    // When username is provided, never auto-create (consistent with v1 behavior).
-    String emailOrUsername;
-    boolean forceCreate;
-    if (req.getUsername() != null) {
-      emailOrUsername = req.getUsername();
-      forceCreate = false;
+    // user_id takes precedence, then username, then email.
+    UserModel user;
+    if (req.getUserId() != null) {
+      user = session.users().getUserById(realm, req.getUserId());
+      if (user == null) {
+        throw new NotFoundException("User not found: " + req.getUserId());
+      }
     } else {
-      emailOrUsername = req.getEmail();
-      forceCreate = req.isForceCreate();
-    }
-
-    UserModel user =
-        MagicLink.getOrCreate(
-            session,
-            realm,
-            emailOrUsername,
-            forceCreate,
-            false,
-            false,
-            MagicLink.registerEvent(event, MAGIC_LINK));
-    if (user == null) {
-      throw new NotFoundException(
-          "User not found: " + emailOrUsername + " (forceCreate=" + forceCreate + ")");
+      String emailOrUsername;
+      boolean forceCreate;
+      if (req.getUsername() != null) {
+        emailOrUsername = req.getUsername();
+        forceCreate = false;
+      } else {
+        emailOrUsername = req.getEmail();
+        forceCreate = req.isForceCreate();
+      }
+      user =
+          MagicLink.getOrCreate(
+              session,
+              realm,
+              emailOrUsername,
+              forceCreate,
+              false,
+              false,
+              MagicLink.registerEvent(event, MAGIC_LINK));
+      if (user == null) {
+        throw new NotFoundException(
+            "User not found: " + emailOrUsername + " (forceCreate=" + forceCreate + ")");
+      }
     }
 
     // Build the notes map stored in Infinispan under the UUID key.
