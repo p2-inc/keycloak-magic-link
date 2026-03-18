@@ -106,6 +106,14 @@ public class MagicLinkBFAuthenticator implements Authenticator {
 
   // -------------------------------------------------------------------------
 
+  /**
+   * Removes {@code login_hint} from the current auth session so that downstream authenticators
+   * (e.g. Email OTP / Username form) do not inherit a stale or expired magic-link hint.
+   */
+  private static void clearLoginHint(AuthenticationFlowContext context) {
+    context.getAuthenticationSession().removeClientNote(OIDCLoginProtocol.LOGIN_HINT_PARAM);
+  }
+
   private void handleTokenId(AuthenticationFlowContext context, String tokenId) {
     SingleUseObjectProvider singleUse =
         context.getSession().getProvider(SingleUseObjectProvider.class);
@@ -113,6 +121,7 @@ public class MagicLinkBFAuthenticator implements Authenticator {
     Map<String, String> notes = singleUse.get(DATA_KEY_PREFIX + tokenId);
     if (notes == null) {
       log.warnf("[MLv2] credential not found or expired for tokenId='%s'", tokenId);
+      clearLoginHint(context);
       context.attempted();
       return;
     }
@@ -122,6 +131,7 @@ public class MagicLinkBFAuthenticator implements Authenticator {
     if (expiryStr != null) {
       if (System.currentTimeMillis() / 1000L > Long.parseLong(expiryStr)) {
         log.warnf("[MLv2] credential expired for tokenId='%s'", tokenId);
+        clearLoginHint(context);
         context.attempted();
         return;
       }
@@ -132,6 +142,7 @@ public class MagicLinkBFAuthenticator implements Authenticator {
     String sessionClientId = context.getAuthenticationSession().getClient().getClientId();
     if (storedClientId != null && !storedClientId.equals(sessionClientId)) {
       log.warnf("[MLv2] client mismatch: stored='%s', flow='%s'", storedClientId, sessionClientId);
+      clearLoginHint(context);
       context.attempted();
       return;
     }
@@ -141,6 +152,7 @@ public class MagicLinkBFAuthenticator implements Authenticator {
     UserModel targetUser = context.getSession().users().getUserById(context.getRealm(), userId);
     if (targetUser == null || !targetUser.isEnabled()) {
       log.warnf("[MLv2] user '%s' not found or disabled", userId);
+      clearLoginHint(context);
       context.failure(AuthenticationFlowError.USER_DISABLED);
       return;
     }
