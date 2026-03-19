@@ -18,6 +18,7 @@ import org.keycloak.authentication.authenticators.browser.AbstractUsernameFormAu
 import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
+import org.keycloak.models.Constants;
 import org.keycloak.models.SingleUseObjectProvider;
 import org.keycloak.models.UserModel;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
@@ -223,6 +224,14 @@ public class MagicLinkBFAuthenticator implements Authenticator {
       new AcrStore(context.getSession(), context.getAuthenticationSession())
           .setLevelAuthenticated(loaLevel);
       log.debugf("[MLv2] LOA %d set for user '%s'", loaLevel, user.getId());
+      // Persist LOA_MAP directly to the UserSession note.
+      // ConditionalLoaAuthenticator.onTopFlowSuccess() normally does this, but may not be
+      // invoked when the LOA conditional sub-flow is skipped (because magic link already
+      // satisfied the requested LOA). Without this, auth-cookie cannot satisfy subsequent
+      // re-auth requests and the login form is shown unnecessarily.
+      context.getAuthenticationSession().setUserSessionNote(
+          Constants.LOA_MAP,
+          context.getAuthenticationSession().getAuthNote(Constants.LOA_MAP));
     }
 
     if ("true".equalsIgnoreCase(notes.get(KEY_REMEMBER_ME))) {
@@ -310,7 +319,11 @@ public class MagicLinkBFAuthenticator implements Authenticator {
       }
     }
 
-    return null;
+    // Default: Magic Link always grants at least LoA 1.
+    // Without this, the session has no LoA and every subsequent auth request
+    // triggers the Level-2 condition even when only LoA 1 was required.
+    log.debugf("[MLv2] no explicit LOA in token and no sibling condition found — defaulting to LOA 1");
+    return 1;
   }
 
   // -------------------------------------------------------------------------
