@@ -1,10 +1,10 @@
 package io.phasetwo.keycloak.magic.auth.token;
 
 /**
- * Data carrier for Magic Link v2 credentials.
+ * Data carrier for Login Token credentials.
  *
  * <p>Instances are stored in {@link org.keycloak.models.SingleUseObjectProvider} at generation
- * time; only a short UUID reference ({@code mlv2:{uuid}}) is placed in the OIDC
+ * time; only a short UUID reference ({@code lt:{uuid}}) is placed in the OIDC
  * {@code login_hint} parameter to stay within Keycloak's 255-character limit.
  *
  * <p>Fields stored:
@@ -18,7 +18,7 @@ package io.phasetwo.keycloak.magic.auth.token;
  *   <li>{@code sev}        — whether to mark the user's email as verified on redemption</li>
  * </ul>
  */
-public class MagicLinkV2Token {
+public class LoginToken {
 
   // Map keys used in SingleUseObjectProvider notes
   public static final String KEY_USER_ID      = "userId";

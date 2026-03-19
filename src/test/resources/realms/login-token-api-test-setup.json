@@ -1,6 +1,6 @@
 {
   "realm": "test-realm-v2",
-  "displayName": "Magic Link v2 API Test Realm",
+  "displayName": "Login Token API Test Realm",
   "enabled": true,
   "smtpServer": {
     "host": "mailhog",
@@ -30,8 +30,8 @@
   ],
   "authenticationFlows": [
     {
-      "alias": "magic-link-v2-flow",
-      "description": "Browser flow with Magic Link v2 Verifier for integration tests.",
+      "alias": "login-token-flow",
+      "description": "Browser flow with Login Token Verifier for integration tests.",
       "providerId": "basic-flow",
       "topLevel": true,
       "builtIn": false,
@@ -49,20 +49,20 @@
           "requirement": "ALTERNATIVE",
           "priority": 20,
           "autheticatorFlow": true,
-          "flowAlias": "Magic Link v2 forms",
+          "flowAlias": "Login Token forms",
           "userSetupAllowed": false
         }
       ]
     },
     {
-      "alias": "Magic Link v2 forms",
+      "alias": "Login Token forms",
       "description": "",
       "providerId": "basic-flow",
       "topLevel": false,
       "builtIn": false,
       "authenticationExecutions": [
         {
-          "authenticator": "ext-magic-link-browser-flow",
+          "authenticator": "login-token-verifier",
           "authenticatorFlow": false,
           "requirement": "ALTERNATIVE",
           "priority": 10,
@@ -72,7 +72,7 @@
       ]
     }
   ],
-  "browserFlow": "magic-link-v2-flow",
+  "browserFlow": "login-token-flow",
   "users": [
     {
       "username": "testuser@phasetwo.io",

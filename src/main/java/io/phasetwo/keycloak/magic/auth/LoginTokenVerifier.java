@@ -1,6 +1,6 @@
 package io.phasetwo.keycloak.magic.auth;
 
-import static io.phasetwo.keycloak.magic.auth.token.MagicLinkV2Token.*;
+import static io.phasetwo.keycloak.magic.auth.token.LoginToken.*;
 
 import jakarta.ws.rs.core.Response;
 import java.util.List;
@@ -25,12 +25,12 @@ import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.services.managers.AuthenticationManager;
 
 /**
- * Authenticator that completes Magic Link v2 authentication inside the Keycloak browser flow.
+ * Authenticator that completes Login Token authentication inside the Keycloak browser flow.
  *
  * <h3>Flow</h3>
  * <ol>
- *   <li>Backend calls {@code POST /realms/{realm}/magic-link-v2} to obtain an OIDC authorization
- *       URL containing a UUID credential reference in {@code login_hint=mlv2:{uuid}}. The
+ *   <li>Backend calls {@code POST /realms/{realm}/login-token} to obtain an OIDC authorization
+ *       URL containing a UUID credential reference in {@code login_hint=lt:{uuid}}. The
  *       credential data is stored in {@link SingleUseObjectProvider} (Infinispan).</li>
  *   <li>The app opens that URL. The OIDC endpoint processes all parameters and starts the browser
  *       flow.</li>
@@ -47,18 +47,18 @@ import org.keycloak.services.managers.AuthenticationManager;
  * short-circuit the flow with a different user's existing session.
  */
 @JBossLog
-public class MagicLinkBFAuthenticator implements Authenticator {
+public class LoginTokenVerifier implements Authenticator {
 
-  public static final String RESUME_PREFIX   = "mlv2:";
-  public static final String DATA_KEY_PREFIX = "mlv2:data:";
-  private static final String USED_KEY_PREFIX = "mlv2:used:";
+  public static final String RESUME_PREFIX   = "lt:";
+  public static final String DATA_KEY_PREFIX = "lt:data:";
+  private static final String USED_KEY_PREFIX = "lt:used:";
 
   /** Auth-session note: tokenId pending user-switch confirmation. */
-  private static final String NOTE_PENDING_TOKEN    = "mlv2_pending_token";
+  private static final String NOTE_PENDING_TOKEN    = "lt_pending_token";
   /** Auth-session note: display name of the currently logged-in user. */
-  private static final String NOTE_CURRENT_USERNAME = "mlv2_current_username";
-  /** Auth-session note: display name of the magic-link target user. */
-  private static final String NOTE_TARGET_USERNAME  = "mlv2_target_username";
+  private static final String NOTE_CURRENT_USERNAME = "lt_current_username";
+  /** Auth-session note: display name of the login token target user. */
+  private static final String NOTE_TARGET_USERNAME  = "lt_target_username";
 
   @Override
   public void authenticate(AuthenticationFlowContext context) {
@@ -84,7 +84,7 @@ public class MagicLinkBFAuthenticator implements Authenticator {
 
     String action = context.getHttpRequest().getDecodedFormParameters().getFirst("action");
     if ("logout".equals(action)) {
-      log.debugf("[MLv2] redirecting to fresh auth flow after cookie expiry for pending token '%s'",
+      log.debugf("[LT] redirecting to fresh auth flow after cookie expiry for pending token '%s'",
           pendingToken);
       redirectAfterLogout(context, pendingToken);
       return;
@@ -97,7 +97,7 @@ public class MagicLinkBFAuthenticator implements Authenticator {
       String state = context.getAuthenticationSession().getClientNote(OIDCLoginProtocol.STATE_PARAM);
       jakarta.ws.rs.core.UriBuilder errorUri = jakarta.ws.rs.core.UriBuilder.fromUri(redirectUri)
           .queryParam("error", "access_denied")
-          .queryParam("error_description", "User+cancelled+the+magic+link+authentication");
+          .queryParam("error_description", "User+cancelled+the+login+token+authentication");
       if (state != null && !state.isBlank()) {
         errorUri.queryParam("state", state);
       }
@@ -110,7 +110,7 @@ public class MagicLinkBFAuthenticator implements Authenticator {
 
   /**
    * Removes {@code login_hint} from the current auth session so that downstream authenticators
-   * (e.g. Email OTP / Username form) do not inherit a stale or expired magic-link hint.
+   * (e.g. Email OTP / Username form) do not inherit a stale or expired login token hint.
    */
   private static void clearLoginHint(AuthenticationFlowContext context) {
     context.getAuthenticationSession().removeClientNote(OIDCLoginProtocol.LOGIN_HINT_PARAM);
@@ -124,7 +124,7 @@ public class MagicLinkBFAuthenticator implements Authenticator {
 
     Map<String, String> notes = singleUse.get(DATA_KEY_PREFIX + tokenId);
     if (notes == null) {
-      log.warnf("[MLv2] credential not found or expired for tokenId='%s'", tokenId);
+      log.warnf("[LT] credential not found or expired for tokenId='%s'", tokenId);
       clearLoginHint(context);
       context.attempted();
       return;
@@ -134,7 +134,7 @@ public class MagicLinkBFAuthenticator implements Authenticator {
     String expiryStr = notes.get(KEY_EXPIRY);
     if (expiryStr != null) {
       if (System.currentTimeMillis() / 1000L > Long.parseLong(expiryStr)) {
-        log.warnf("[MLv2] credential expired for tokenId='%s'", tokenId);
+        log.warnf("[LT] credential expired for tokenId='%s'", tokenId);
         clearLoginHint(context);
         context.attempted();
         return;
@@ -145,7 +145,7 @@ public class MagicLinkBFAuthenticator implements Authenticator {
     String storedClientId = notes.get(KEY_CLIENT_ID);
     String sessionClientId = context.getAuthenticationSession().getClient().getClientId();
     if (storedClientId != null && !storedClientId.equals(sessionClientId)) {
-      log.warnf("[MLv2] client mismatch: stored='%s', flow='%s'", storedClientId, sessionClientId);
+      log.warnf("[LT] client mismatch: stored='%s', flow='%s'", storedClientId, sessionClientId);
       clearLoginHint(context);
       context.attempted();
       return;
@@ -155,7 +155,7 @@ public class MagicLinkBFAuthenticator implements Authenticator {
     String userId = notes.get(KEY_USER_ID);
     UserModel targetUser = context.getSession().users().getUserById(context.getRealm(), userId);
     if (targetUser == null || !targetUser.isEnabled()) {
-      log.warnf("[MLv2] user '%s' not found or disabled", userId);
+      log.warnf("[LT] user '%s' not found or disabled", userId);
       clearLoginHint(context);
       context.failure(AuthenticationFlowError.USER_DISABLED);
       return;
@@ -170,7 +170,7 @@ public class MagicLinkBFAuthenticator implements Authenticator {
 
       String currentDisplay = displayName(cookie.getUser());
       String targetDisplay  = displayName(targetUser);
-      log.debugf("[MLv2] user switch required: '%s' → '%s'", currentDisplay, targetDisplay);
+      log.debugf("[LT] user switch required: '%s' → '%s'", currentDisplay, targetDisplay);
 
       if ("true".equalsIgnoreCase(notes.get(KEY_CONFIRM_USER_SWITCH))) {
         // Show confirmation form — user must explicitly approve the logout.
@@ -185,7 +185,7 @@ public class MagicLinkBFAuthenticator implements Authenticator {
         context.challenge(challenge);
       } else {
         // Auto-logout: silently expire session cookies and restart the auth flow.
-        log.debugf("[MLv2] auto-logout: signing out '%s' to authenticate '%s'",
+        log.debugf("[LT] auto-logout: signing out '%s' to authenticate '%s'",
             currentDisplay, targetDisplay);
         redirectAfterLogout(context, tokenId);
       }
@@ -206,7 +206,7 @@ public class MagicLinkBFAuthenticator implements Authenticator {
           : 300L;
       if (!context.getSession().getProvider(SingleUseObjectProvider.class)
           .putIfAbsent(USED_KEY_PREFIX + tokenId, remainingTtl)) {
-        log.warnf("[MLv2] token already used: '%s'", tokenId);
+        log.warnf("[LT] token already used: '%s'", tokenId);
         context.failure(AuthenticationFlowError.INVALID_CREDENTIALS);
         return;
       }
@@ -223,10 +223,10 @@ public class MagicLinkBFAuthenticator implements Authenticator {
     if (loaLevel != null) {
       new AcrStore(context.getSession(), context.getAuthenticationSession())
           .setLevelAuthenticated(loaLevel);
-      log.debugf("[MLv2] LOA %d set for user '%s'", loaLevel, user.getId());
+      log.debugf("[LT] LOA %d set for user '%s'", loaLevel, user.getId());
       // Persist LOA_MAP directly to the UserSession note.
       // ConditionalLoaAuthenticator.onTopFlowSuccess() normally does this, but may not be
-      // invoked when the LOA conditional sub-flow is skipped (because magic link already
+      // invoked when the LOA conditional sub-flow is skipped (because login token already
       // satisfied the requested LOA). Without this, auth-cookie cannot satisfy subsequent
       // re-auth requests and the login form is shown unnecessarily.
       context.getAuthenticationSession().setUserSessionNote(
@@ -242,13 +242,13 @@ public class MagicLinkBFAuthenticator implements Authenticator {
     String displayEmail = user.getEmail() != null ? user.getEmail() : user.getUsername();
     context.getAuthenticationSession().setAuthNote(
         AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME, displayEmail);
-    log.debugf("[MLv2] authentication complete for user '%s'", user.getId());
+    log.debugf("[LT] authentication complete for user '%s'", user.getId());
     context.success();
   }
 
   /**
    * Expires the identity and auth-session cookies, then issues a 302 redirect to a fresh OIDC
-   * authorization request carrying the same {@code login_hint}. The magic link token has not been
+   * authorization request carrying the same {@code login_hint}. The login token has not been
    * consumed yet, so the fresh flow will pick it up and complete authentication for the target
    * user.
    *
@@ -287,7 +287,7 @@ public class MagicLinkBFAuthenticator implements Authenticator {
       authUri.queryParam("scope", scope);
     }
 
-    log.debugf("[MLv2] cookie expiry + redirect for token '%s'", tokenId);
+    log.debugf("[LT] cookie expiry + redirect for token '%s'", tokenId);
     context.challenge(Response.seeOther(authUri.build(context.getRealm().getName())).build());
   }
 
@@ -314,15 +314,15 @@ public class MagicLinkBFAuthenticator implements Authenticator {
       Integer level = LoAUtil.getLevelFromLoaConditionConfiguration(
           context.getRealm().getAuthenticatorConfigById(configId));
       if (level != null) {
-        log.debugf("[MLv2] LOA %d read from sibling Condition - Level of Authentication", level);
+        log.debugf("[LT] LOA %d read from sibling Condition - Level of Authentication", level);
         return level;
       }
     }
 
-    // Default: Magic Link always grants at least LoA 1.
+    // Default: Login Token always grants at least LoA 1.
     // Without this, the session has no LoA and every subsequent auth request
     // triggers the Level-2 condition even when only LoA 1 was required.
-    log.debugf("[MLv2] no explicit LOA in token and no sibling condition found — defaulting to LOA 1");
+    log.debugf("[LT] no explicit LOA in token and no sibling condition found — defaulting to LOA 1");
     return 1;
   }
 

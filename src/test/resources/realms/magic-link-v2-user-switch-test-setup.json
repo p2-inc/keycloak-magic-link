@@ -29,7 +29,7 @@
       "builtIn": false,
       "authenticationExecutions": [
         {
-          "authenticator": "ext-magic-link-browser-flow",
+          "authenticator": "login-token-verifier",
           "authenticatorFlow": false,
           "requirement": "ALTERNATIVE",
           "priority": 10,

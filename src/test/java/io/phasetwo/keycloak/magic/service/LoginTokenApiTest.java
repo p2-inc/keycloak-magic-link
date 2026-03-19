@@ -1,7 +1,7 @@
 package io.phasetwo.keycloak.magic.service;
 
 import io.phasetwo.keycloak.magic.Helpers;
-import io.phasetwo.keycloak.magic.representation.MagicLinkV2Request;
+import io.phasetwo.keycloak.magic.representation.LoginTokenRequest;
 import lombok.extern.jbosslog.JBossLog;
 import org.junit.jupiter.api.Test;
 import org.keycloak.representations.idm.UserRepresentation;
@@ -19,15 +19,15 @@ import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Integration tests for the Magic Link v2 REST API ({@code POST /magic-link-v2}) and the
- * {@link io.phasetwo.keycloak.magic.auth.MagicLinkBFAuthenticator} browser-flow authenticator.
+ * Integration tests for the Login Token REST API ({@code POST /login-token}) and the
+ * {@link io.phasetwo.keycloak.magic.auth.LoginTokenVerifier} browser-flow authenticator.
  *
- * <p>The test realm ({@code magic-link-v2-api-test-setup.json}) uses a simple browser flow
- * containing only {@code auth-cookie} and {@code ext-magic-link-browser-flow} as ALTERNATIVE
+ * <p>The test realm ({@code login-token-api-test-setup.json}) uses a simple browser flow
+ * containing only {@code auth-cookie} and {@code login-token-verifier} as ALTERNATIVE
  * executions. This lets us verify:
  *
  * <ul>
- *   <li>The API returns a {@code login_hint} value with {@code mlv2:...} prefix.</li>
+ *   <li>The API returns a {@code login_hint} value with {@code lt:...} prefix.</li>
  *   <li>Following an OIDC auth URL built from the {@code login_hint} completes the browser flow
  *       and yields an authorization code.</li>
  *   <li>Explicit {@code loa} ends up as the {@code acr} claim in the ID token.</li>
@@ -38,14 +38,14 @@ import static org.junit.jupiter.api.Assertions.*;
  * </ul>
  */
 @JBossLog
-class MagicLinkV2ApiTest extends AbstractMagicLinkTest {
+class LoginTokenApiTest extends AbstractMagicLinkTest {
 
     private static final String TEST_REALM          = "test-realm-v2";
     private static final String TEST_CLIENT         = "v2-test-client";
     private static final String REDIRECT_URI        = "http://localhost/callback";
     private static final String TEST_EMAIL          = "testuser@phasetwo.io";
 
-    private static final String MAGIC_LINK_V2_PATH  = "realms/" + TEST_REALM + "/magic-link-v2";
+    private static final String LOGIN_TOKEN_PATH    = "realms/" + TEST_REALM + "/login-token";
     private static final String TOKEN_PATH          = "realms/" + TEST_REALM + "/protocol/openid-connect/token";
     private static final String AUTH_PATH           = "realms/" + TEST_REALM + "/protocol/openid-connect/auth";
 
@@ -54,9 +54,9 @@ class MagicLinkV2ApiTest extends AbstractMagicLinkTest {
     // -------------------------------------------------------------------------
 
     @Test
-    void createMagicLinkV2_returnsLoginHintAndUserId() {
+    void createLoginToken_returnsLoginHintAndUserId() {
         Testcontainers.exposeHostPorts(container.getHttpPort());
-        importRealm("/realms/magic-link-v2-api-test-setup.json");
+        importRealm("/realms/login-token-api-test-setup.json");
 
         given()
             .baseUri(getAuthUrl())
@@ -66,42 +66,42 @@ class MagicLinkV2ApiTest extends AbstractMagicLinkTest {
                 "email",     TEST_EMAIL,
                 "client_id", TEST_CLIENT
             ))
-            .post(MAGIC_LINK_V2_PATH)
+            .post(LOGIN_TOKEN_PATH)
             .then()
             .statusCode(200)
             .body("login_hint", not(emptyOrNullString()));
     }
 
     @Test
-    void createMagicLinkV2_loginHintHasMlv2Prefix() throws Exception {
+    void createLoginToken_loginHintHasLtPrefix() throws Exception {
         Testcontainers.exposeHostPorts(container.getHttpPort());
-        importRealm("/realms/magic-link-v2-api-test-setup.json");
+        importRealm("/realms/login-token-api-test-setup.json");
 
-        String loginHint = postV2Request(buildRequest(null, null));
+        String loginHint = postLoginTokenRequest(buildRequest(null, null));
 
-        assertTrue(loginHint.startsWith("mlv2:"),
-            "login_hint must start with 'mlv2:', got: " + loginHint);
+        assertTrue(loginHint.startsWith("lt:"),
+            "login_hint must start with 'lt:', got: " + loginHint);
     }
 
     @Test
-    void createMagicLinkV2_missingClientId_returnsBadRequest() {
+    void createLoginToken_missingClientId_returnsBadRequest() {
         Testcontainers.exposeHostPorts(container.getHttpPort());
-        importRealm("/realms/magic-link-v2-api-test-setup.json");
+        importRealm("/realms/login-token-api-test-setup.json");
 
         given()
             .baseUri(getAuthUrl())
             .auth().oauth2(keycloak.tokenManager().getAccessTokenString())
             .contentType("application/json")
             .body(Map.of("email", TEST_EMAIL))
-            .post(MAGIC_LINK_V2_PATH)
+            .post(LOGIN_TOKEN_PATH)
             .then()
             .statusCode(400);
     }
 
     @Test
-    void createMagicLinkV2_unknownUser_returnsNotFound() {
+    void createLoginToken_unknownUser_returnsNotFound() {
         Testcontainers.exposeHostPorts(container.getHttpPort());
-        importRealm("/realms/magic-link-v2-api-test-setup.json");
+        importRealm("/realms/login-token-api-test-setup.json");
 
         given()
             .baseUri(getAuthUrl())
@@ -111,15 +111,15 @@ class MagicLinkV2ApiTest extends AbstractMagicLinkTest {
                 "email",     "nobody@example.com",
                 "client_id", TEST_CLIENT
             ))
-            .post(MAGIC_LINK_V2_PATH)
+            .post(LOGIN_TOKEN_PATH)
             .then()
             .statusCode(404);
     }
 
     @Test
-    void createMagicLinkV2_withUserId_returnsLoginHint() {
+    void createLoginToken_withUserId_returnsLoginHint() {
         Testcontainers.exposeHostPorts(container.getHttpPort());
-        importRealm("/realms/magic-link-v2-api-test-setup.json");
+        importRealm("/realms/login-token-api-test-setup.json");
 
         String userId = keycloak.realm(TEST_REALM).users()
             .searchByEmail(TEST_EMAIL, true).get(0).getId();
@@ -132,16 +132,16 @@ class MagicLinkV2ApiTest extends AbstractMagicLinkTest {
                 "user_id",   userId,
                 "client_id", TEST_CLIENT
             ))
-            .post(MAGIC_LINK_V2_PATH)
+            .post(LOGIN_TOKEN_PATH)
             .then()
             .statusCode(200)
             .body("login_hint", not(emptyOrNullString()));
     }
 
     @Test
-    void createMagicLinkV2_userId_takesPrecedenceOverEmail() {
+    void createLoginToken_userId_takesPrecedenceOverEmail() {
         Testcontainers.exposeHostPorts(container.getHttpPort());
-        importRealm("/realms/magic-link-v2-api-test-setup.json");
+        importRealm("/realms/login-token-api-test-setup.json");
 
         String userId = keycloak.realm(TEST_REALM).users()
             .searchByEmail(TEST_EMAIL, true).get(0).getId();
@@ -156,15 +156,15 @@ class MagicLinkV2ApiTest extends AbstractMagicLinkTest {
                 "email",     "nobody@example.com",
                 "client_id", TEST_CLIENT
             ))
-            .post(MAGIC_LINK_V2_PATH)
+            .post(LOGIN_TOKEN_PATH)
             .then()
             .statusCode(200);
     }
 
     @Test
-    void createMagicLinkV2_unknownUserId_returnsNotFound() {
+    void createLoginToken_unknownUserId_returnsNotFound() {
         Testcontainers.exposeHostPorts(container.getHttpPort());
-        importRealm("/realms/magic-link-v2-api-test-setup.json");
+        importRealm("/realms/login-token-api-test-setup.json");
 
         given()
             .baseUri(getAuthUrl())
@@ -174,7 +174,7 @@ class MagicLinkV2ApiTest extends AbstractMagicLinkTest {
                 "user_id",   "00000000-0000-0000-0000-000000000000",
                 "client_id", TEST_CLIENT
             ))
-            .post(MAGIC_LINK_V2_PATH)
+            .post(LOGIN_TOKEN_PATH)
             .then()
             .statusCode(404);
     }
@@ -184,34 +184,34 @@ class MagicLinkV2ApiTest extends AbstractMagicLinkTest {
     // -------------------------------------------------------------------------
 
     @Test
-    void magicLinkV2Flow_completesSuccessfullyAndReturnsAuthCode() throws Exception {
+    void loginTokenFlow_completesSuccessfullyAndReturnsAuthCode() throws Exception {
         Testcontainers.exposeHostPorts(container.getHttpPort());
-        importRealm("/realms/magic-link-v2-api-test-setup.json");
+        importRealm("/realms/login-token-api-test-setup.json");
 
-        String link = createMagicLinkV2(Map.of("scope", "openid"));
+        String link = createLoginToken(Map.of("scope", "openid"));
         String code = followLinkToCode(link);
 
-        assertNotNull(code, "authorization code must be returned after a successful v2 flow");
+        assertNotNull(code, "authorization code must be returned after a successful login token flow");
     }
 
     @Test
-    void magicLinkV2WithExplicitLoa_acrClaimMatchesRequestedLoa() throws Exception {
+    void loginTokenWithExplicitLoa_acrClaimMatchesRequestedLoa() throws Exception {
         Testcontainers.exposeHostPorts(container.getHttpPort());
-        importRealm("/realms/magic-link-v2-api-test-setup.json");
+        importRealm("/realms/login-token-api-test-setup.json");
 
-        String link = createMagicLinkV2(Map.of("scope", "openid"), 2, null);
+        String link = createLoginToken(Map.of("scope", "openid"), 2, null);
         Map<String, Object> claims = redeemAndDecodeIdToken(link);
 
         assertEquals("2", String.valueOf(claims.get("acr")),
-            "acr claim must equal the loa value set in the magic-link-v2 request");
+            "acr claim must equal the loa value set in the login-token request");
     }
 
     @Test
-    void magicLinkV2SingleUse_cannotBeRedeemedTwice() throws Exception {
+    void loginTokenSingleUse_cannotBeRedeemedTwice() throws Exception {
         Testcontainers.exposeHostPorts(container.getHttpPort());
-        importRealm("/realms/magic-link-v2-api-test-setup.json");
+        importRealm("/realms/login-token-api-test-setup.json");
 
-        String link = createMagicLinkV2(Map.of(), null, false);
+        String link = createLoginToken(Map.of(), null, false);
 
         String firstCode = followLinkToCode(link);
         assertNotNull(firstCode, "first redemption must return an authorization code");
@@ -225,15 +225,15 @@ class MagicLinkV2ApiTest extends AbstractMagicLinkTest {
 
         assertTrue(
             secondLocation == null || secondLocation.contains("error"),
-            "second redemption of a single-use v2 token must be rejected (Location: " + secondLocation + ")");
+            "second redemption of a single-use login token must be rejected (Location: " + secondLocation + ")");
     }
 
     @Test
-    void magicLinkV2Reusable_canBeRedeemedMultipleTimes() throws Exception {
+    void loginTokenReusable_canBeRedeemedMultipleTimes() throws Exception {
         Testcontainers.exposeHostPorts(container.getHttpPort());
-        importRealm("/realms/magic-link-v2-api-test-setup.json");
+        importRealm("/realms/login-token-api-test-setup.json");
 
-        String link = createMagicLinkV2(Map.of(), null, true);
+        String link = createLoginToken(Map.of(), null, true);
 
         String firstCode = followLinkToCode(link);
         assertNotNull(firstCode, "first redemption must return an authorization code");
@@ -244,9 +244,9 @@ class MagicLinkV2ApiTest extends AbstractMagicLinkTest {
     }
 
     @Test
-    void magicLinkV2SetEmailVerified_marksEmailVerifiedOnRedemption() throws Exception {
+    void loginTokenSetEmailVerified_marksEmailVerifiedOnRedemption() throws Exception {
         Testcontainers.exposeHostPorts(container.getHttpPort());
-        importRealm("/realms/magic-link-v2-api-test-setup.json");
+        importRealm("/realms/login-token-api-test-setup.json");
 
         UserRepresentation user = Helpers.createUser(
             keycloak, TEST_REALM, "unverified@test.com", "unverified@test.com",
@@ -257,12 +257,12 @@ class MagicLinkV2ApiTest extends AbstractMagicLinkTest {
         assertFalse(Boolean.TRUE.equals(before.isEmailVerified()),
             "pre-condition: email must not be verified before the link is followed");
 
-        MagicLinkV2Request req = new MagicLinkV2Request();
+        LoginTokenRequest req = new LoginTokenRequest();
         req.setEmail("unverified@test.com");
         req.setClientId(TEST_CLIENT);
         req.setSetEmailVerified(true);
 
-        String loginHint = postV2Request(req);
+        String loginHint = postLoginTokenRequest(req);
         String link = buildOidcUrl(loginHint, Map.of("redirect_uri", REDIRECT_URI, "scope", "openid"));
         followLinkToCode(link);
 
@@ -276,8 +276,8 @@ class MagicLinkV2ApiTest extends AbstractMagicLinkTest {
     // Helpers
     // -------------------------------------------------------------------------
 
-    private MagicLinkV2Request buildRequest(Integer loa, Boolean reusable) {
-        MagicLinkV2Request req = new MagicLinkV2Request();
+    private LoginTokenRequest buildRequest(Integer loa, Boolean reusable) {
+        LoginTokenRequest req = new LoginTokenRequest();
         req.setEmail(TEST_EMAIL);
         req.setClientId(TEST_CLIENT);
         req.setForceSessionLoa(loa);
@@ -285,29 +285,29 @@ class MagicLinkV2ApiTest extends AbstractMagicLinkTest {
         return req;
     }
 
-    private String createMagicLinkV2(Map<String, String> additionalParams) throws Exception {
-        return createMagicLinkV2(additionalParams, null, null);
+    private String createLoginToken(Map<String, String> additionalParams) throws Exception {
+        return createLoginToken(additionalParams, null, null);
     }
 
-    private String createMagicLinkV2(
+    private String createLoginToken(
             Map<String, String> additionalParams,
             Integer loa,
             Boolean reusable) throws Exception {
-        String loginHint = postV2Request(buildRequest(loa, reusable));
+        String loginHint = postLoginTokenRequest(buildRequest(loa, reusable));
         Map<String, String> params = new HashMap<>();
         params.put("redirect_uri", REDIRECT_URI);
         params.putAll(additionalParams);
         return buildOidcUrl(loginHint, params);
     }
 
-    /** Posts to {@code /magic-link-v2} and returns the {@code login_hint} from the response. */
-    private String postV2Request(MagicLinkV2Request req) throws Exception {
+    /** Posts to {@code /login-token} and returns the {@code login_hint} from the response. */
+    private String postLoginTokenRequest(LoginTokenRequest req) throws Exception {
         return given()
             .baseUri(getAuthUrl())
             .auth().oauth2(keycloak.tokenManager().getAccessTokenString())
             .contentType("application/json")
             .body(Helpers.toJsonString(req))
-            .post(MAGIC_LINK_V2_PATH)
+            .post(LOGIN_TOKEN_PATH)
             .then()
             .statusCode(200)
             .extract().jsonPath().getString("login_hint");
@@ -351,8 +351,8 @@ class MagicLinkV2ApiTest extends AbstractMagicLinkTest {
     }
 
     /**
-     * Follows all Keycloak redirects starting from the v2 authorization URL until the final
-     * redirect to {@link #REDIRECT_URI} containing a {@code code} query parameter.
+     * Follows all Keycloak redirects starting from the login token authorization URL until the
+     * final redirect to {@link #REDIRECT_URI} containing a {@code code} query parameter.
      *
      * <p>A fresh {@link java.net.CookieManager} is used on every call so that sessions from
      * previous calls do not interfere (important for the single-use and reusable tests).
@@ -434,7 +434,7 @@ class MagicLinkV2ApiTest extends AbstractMagicLinkTest {
                 break;
             }
         }
-        throw new AssertionError("Authorization code not found in v2 redirect chain.\n" + debug);
+        throw new AssertionError("Authorization code not found in login token redirect chain.\n" + debug);
     }
 
     private static String extractQueryParam(String url, String param) throws Exception {

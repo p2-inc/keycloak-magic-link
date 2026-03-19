@@ -67,7 +67,7 @@ Integration tests (`src/test/java/`) use:
 - **Rest-Assured** — HTTP assertions against the live Keycloak.
 - **Realm fixture JSON files** in `src/test/resources/realms/` — imported fresh per test, deleted in `@AfterEach`.
 
-The abstract base classes (`service/AbstractMagicLinkTest`, `web/AbstractMagicLinkTest`) share container lifecycle. `MagicLinkApiTest` inherits from the `service` variant and follows the full action-token redirect chain using `java.net.http.HttpClient` with cookie support (required because Keycloak 26.x routes through a required-action page that uses the `AUTH_SESSION_ID` cookie).
+The abstract base classes (`service/AbstractMagicLinkTest`, `web/AbstractMagicLinkTest`) share container lifecycle. `MagicLinkResourceTest` inherits from the `service` variant and follows the full action-token redirect chain using `java.net.http.HttpClient` with cookie support (required because Keycloak 26.x routes through a required-action page that uses the `AUTH_SESSION_ID` cookie).
 
 ### Keycloak SPI Registration
 
@@ -79,42 +79,42 @@ Code is formatted with `fmt-maven-plugin` (Google Java style). Run `mvn fmt:form
 
 ---
 
-## Magic Link v2
+## Login Token
 
-Parallel v2 implementation that coexists with v1 without any breaking changes.
+Login Token implementation that coexists with Magic Link v1 without any breaking changes.
 
-### Why v2 exists
+### Why Login Token exists
 
-The original `MagicLinkActionTokenHandler` authenticates the user *directly* (bypasses the browser flow). This means `acr_values`, `ConditionalLoaAuthenticator`, and step-up authenticators cannot run. v2 solves this by returning a **standard OIDC authorization URL** — the full browser flow runs, including step-up authenticators.
+The original `MagicLinkActionTokenHandler` authenticates the user *directly* (bypasses the browser flow). This means `acr_values`, `ConditionalLoaAuthenticator`, and step-up authenticators cannot run. Login Token solves this by returning a **standard OIDC authorization URL** — the full browser flow runs, including step-up authenticators.
 
 ### Credential transport: Infinispan + UUID reference
 
-Keycloak silently truncates any OIDC parameter longer than 255 characters (`AuthzEndpointRequestParser`). A signed JWT is typically 500–700 characters and would be dropped. v2 therefore uses a **UUID reference in `login_hint`**:
+Keycloak silently truncates any OIDC parameter longer than 255 characters (`AuthzEndpointRequestParser`). A signed JWT is typically 500–700 characters and would be dropped. Login Token therefore uses a **UUID reference in `login_hint`**:
 
-1. `POST /magic-link-v2` generates a UUID, stores the credential data in `SingleUseObjectProvider` (Infinispan) under key `mlv2:data:{uuid}` with the requested TTL, and returns `{ "login_hint": "mlv2:{uuid}" }`. The caller constructs the full OIDC auth URL — owning PKCE, `redirect_uri`, `state`, `nonce`, etc.
-2. `MagicLinkBFAuthenticator` reads `login_hint`, strips the `mlv2:` prefix, looks up the data map by UUID, validates expiry and client, enforces single-use if required, then calls `context.success()`.
+1. `POST /login-token` generates a UUID, stores the credential data in `SingleUseObjectProvider` (Infinispan) under key `lt:data:{uuid}` with the requested TTL, and returns `{ "login_hint": "lt:{uuid}" }`. The caller constructs the full OIDC auth URL — owning PKCE, `redirect_uri`, `state`, `nonce`, etc.
+2. `LoginTokenVerifier` reads `login_hint`, strips the `lt:` prefix, looks up the data map by UUID, validates expiry and client, enforces single-use if required, then calls `context.success()`.
 
 This is the same security model as v1 action tokens: security comes from the UUID's 128-bit entropy plus Infinispan TTL and atomic single-use tracking — not from a cryptographic signature.
 
 ### New components
 
-**`MagicLinkV2Token`** (`auth/token/MagicLinkV2Token.java`) — Plain data class (no JWT, no `DefaultActionToken`). Used internally to carry the credential fields:
+**`LoginToken`** (`auth/token/LoginToken.java`) — Plain data class (no JWT, no `DefaultActionToken`). Used internally to carry the credential fields:
 - `userId`, `clientId`, `expiry` (Unix epoch seconds)
 - `forceSessionLoa` (Integer, optional)
 - `rememberMe`, `reusable`, `setEmailVerified` (Boolean, optional)
 
 Also defines the `KEY_*` constants used as keys in the `SingleUseObjectProvider` notes map.
 
-**`MagicLinkV2Resource`** (`resources/MagicLinkV2Resource.java`) — `POST realms/{realm}/magic-link-v2`. Requires `manage-users` role. Stores credential data in `SingleUseObjectProvider` and returns `{ "login_hint": "mlv2:{uuid}" }`. The caller is responsible for building the full OIDC auth URL with PKCE, `redirect_uri`, `state`, `nonce`, etc. Registered via `MagicLinkV2ResourceProviderFactory` (provider ID: `magic-link-v2`).
+**`LoginTokenResource`** (`resources/LoginTokenResource.java`) — `POST realms/{realm}/login-token`. Requires `manage-users` role. Stores credential data in `SingleUseObjectProvider` and returns `{ "login_hint": "lt:{uuid}" }`. The caller is responsible for building the full OIDC auth URL with PKCE, `redirect_uri`, `state`, `nonce`, etc. Registered via `LoginTokenResourceProviderFactory` (provider ID: `login-token`).
 
-**`MagicLinkBFAuthenticator`** (`auth/MagicLinkBFAuthenticator.java`, provider ID: `ext-magic-link-browser-flow`) — Browser-flow authenticator. Place as **ALTERNATIVE** alongside username/password. When `login_hint` does not start with `mlv2:`, calls `context.attempted()` and passes through silently.
+**`LoginTokenVerifier`** (`auth/LoginTokenVerifier.java`, provider ID: `login-token-verifier`) — Browser-flow authenticator. Place as **ALTERNATIVE** alongside username/password. When `login_hint` does not start with `lt:`, calls `context.attempted()` and passes through silently.
 
 On a matching `login_hint`, it:
-1. Strips `mlv2:` prefix to get the tokenId (UUID).
-2. Calls `singleUse.get("mlv2:data:{tokenId}")` to fetch the notes map.
+1. Strips `lt:` prefix to get the tokenId (UUID).
+2. Calls `singleUse.get("lt:data:{tokenId}")` to fetch the notes map.
 3. Validates expiry against stored `expiry` timestamp.
 4. Validates stored `clientId` matches the client that started the flow.
-5. For single-use (default): calls `singleUse.putIfAbsent("mlv2:used:{tokenId}", ttl)` — returns false if already used → `context.failure(INVALID_CREDENTIALS)`.
+5. For single-use (default): calls `singleUse.putIfAbsent("lt:used:{tokenId}", ttl)` — returns false if already used → `context.failure(INVALID_CREDENTIALS)`.
 6. Resolves user by stored `userId`.
 7. Optionally sets `user.setEmailVerified(true)` if `sev=true`.
 8. Sets LOA via `AcrStore.setLevelAuthenticated()` — priority: stored `loa` > sibling `Condition – Level of Authentication`.
@@ -127,9 +127,9 @@ On a matching `login_hint`, it:
 
 **Token lifetime is configurable.** The TTL passed to `SingleUseObjectProvider.put()` is exactly `expiration_seconds` (default 300 s). Infinispan automatically expires the entry. The authenticator also cross-checks the stored `expiry` timestamp as a belt-and-suspenders guard.
 
-**No action-token endpoint.** The magic link URL is a standard OIDC auth URL, not a `login-actions/action-token` URL. v1 is completely untouched.
+**No action-token endpoint.** The login token URL is a standard OIDC auth URL, not a `login-actions/action-token` URL. Magic Link v1 is completely untouched.
 
-**Caller owns all OIDC parameters.** `redirect_uri`, `scope`, `state`, `nonce`, `code_challenge`, `acr_values`, `prompt=login`, etc. are the caller's responsibility. The endpoint returns only the `login_hint` value; the caller constructs the full OIDC auth URL. This ensures the entity generating the PKCE `code_verifier` is always the same entity that handles the authorization code callback — required for both same-device and cross-device (email) magic link flows.
+**Caller owns all OIDC parameters.** `redirect_uri`, `scope`, `state`, `nonce`, `code_challenge`, `acr_values`, `prompt=login`, etc. are the caller's responsibility. The endpoint returns only the `login_hint` value; the caller constructs the full OIDC auth URL. This ensures the entity generating the PKCE `code_verifier` is always the same entity that handles the authorization code callback — required for both same-device and cross-device (email) flows.
 
 **`reusable` default is `true`** (reusable), matching the v1 default.
 
@@ -142,16 +142,16 @@ Browser Flow
 └── Forms [ALTERNATIVE]
     ├── LOA=1 sub-flow [CONDITIONAL]
     │   ├── Condition – Level of Authentication (loa=1)
-    │   └── Magic Link Verifier [ALTERNATIVE]  ← authenticates at LOA=1
+    │   └── Login Token Verifier [ALTERNATIVE]  ← authenticates at LOA=1
     └── LOA=2 sub-flow [CONDITIONAL]
         ├── Condition – Level of Authentication (loa=2)
-        └── Email OTP [REQUIRED]               ← runs after the verifier if LOA=2 requested
+        └── Email OTP [REQUIRED]                ← runs after the verifier if LOA=2 requested
 ```
 
 ### Infinispan usage summary
 
 | Component | When | Key | What |
 |---|---|---|---|
-| v2 `MagicLinkV2Resource` | on generation | `mlv2:data:{uuid}` | stores credential data map with TTL = `expiration_seconds` |
-| v2 `MagicLinkBFAuthenticator` | on redemption | `mlv2:used:{uuid}` | `putIfAbsent` for single-use guard |
+| `LoginTokenResource` | on generation | `lt:data:{uuid}` | stores credential data map with TTL = `expiration_seconds` |
+| `LoginTokenVerifier` | on redemption | `lt:used:{uuid}` | `putIfAbsent` for single-use guard |
 | v1 `MagicLinkActionTokenHandler` | on redemption | (Keycloak-managed jti) | marks action token as used |
