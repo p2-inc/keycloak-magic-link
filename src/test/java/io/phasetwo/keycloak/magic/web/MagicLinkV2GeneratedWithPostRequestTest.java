@@ -46,12 +46,8 @@ public class MagicLinkV2GeneratedWithPostRequestTest extends AbstractMagicLinkTe
         MagicLinkV2Request request = new MagicLinkV2Request();
         request.setEmail("testuser@phasetwo.io");
         request.setClientId(TEST_CLIENT);
-        request.setAdditionalParameters(Map.of(
-                "redirect_uri", redirectUri,
-                "scope", "openid"
-        ));
 
-        String link = given()
+        String loginHint = given()
                 .baseUri(getAuthUrl())
                 .auth().oauth2(keycloak.tokenManager().getAccessTokenString())
                 .contentType("application/json")
@@ -59,15 +55,22 @@ public class MagicLinkV2GeneratedWithPostRequestTest extends AbstractMagicLinkTe
                 .post(MAGIC_LINK_V2_PATH)
                 .then()
                 .statusCode(200)
-                .extract().jsonPath().getString("link");
+                .extract().jsonPath().getString("login_hint");
 
-        assertThat(link, not(emptyOrNullString()));
+        assertThat(loginHint, not(emptyOrNullString()));
 
-        // Cypress runs in Docker: replace localhost with host.testcontainers.internal so
-        // the container can reach Keycloak via the testcontainers bridge network.
-        String dockerLink = link.replace(
+        // Build the OIDC auth URL — the caller (Cypress / CLP) owns PKCE, state, etc.
+        // Cypress runs in Docker: use host.testcontainers.internal to reach Keycloak.
+        String dockerBase = getAuthUrl().replace(
                 "http://localhost:" + container.getHttpPort(),
                 "http://host.testcontainers.internal:" + container.getHttpPort());
+        String dockerLink = dockerBase + "realms/" + TEST_REALM + "/protocol/openid-connect/auth"
+                + "?client_id=" + TEST_CLIENT
+                + "&response_type=code"
+                + "&login_hint=" + loginHint
+                + "&prompt=login"
+                + "&scope=openid"
+                + "&redirect_uri=" + redirectUri;
         log.info("Generated v2 link (docker-reachable): " + dockerLink);
 
         return runCypressTests(

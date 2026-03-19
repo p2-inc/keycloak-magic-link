@@ -115,11 +115,19 @@ Magic Link v2 solves this by returning a **standard OIDC authorization URL** ins
 POST /realms/{realm}/magic-link-v2
   → credential data (userId, clientId, expiry, optional LOA/rememberMe)
     stored in Infinispan under key "mlv2:data:{uuid}" with the requested TTL
-  → returns: https://keycloak.host/realms/{realm}/protocol/openid-connect/auth
-              ?client_id=myapp&response_type=code&login_hint=mlv2:{uuid}
-              [+ any additional_parameters you supplied]
+  → returns: { "login_hint": "mlv2:{uuid}", "user_id": "..." }
 
-User (or app) opens the URL
+Caller constructs the OIDC authorization URL and opens it in the browser:
+  https://keycloak.host/realms/{realm}/protocol/openid-connect/auth
+    ?client_id=myapp
+    &response_type=code
+    &login_hint=mlv2:{uuid}     ← returned login_hint passed verbatim
+    &prompt=login               ← required (see note below)
+    &redirect_uri=...           ← caller's redirect URI
+    &code_challenge=...         ← caller's PKCE challenge
+    &state=...                  ← caller's state
+    [+ any other OIDC params]
+
   → standard OIDC browser flow starts
   → Magic Link Verifier (ext-magic-link-browser-flow) resolves the credential:
       1. Strips "mlv2:" prefix from login_hint to get the UUID
@@ -132,6 +140,11 @@ User (or app) opens the URL
       7. context.success() → flow continues normally
   → Any subsequent step-up authenticators run in the same browser session
 ```
+
+> **`prompt=login` is required.** Without it, Keycloak may find an existing session cookie before
+> the Magic Link Verifier runs and pre-populate the auth session with the cookie user.
+> This causes an `already authenticated as different user` error when the Verifier later tries
+> to authenticate the magic-link target user.
 
 > **Why UUID instead of a signed JWT?**  Keycloak silently ignores OIDC parameters longer than
 > 255 characters. A typical HS512/RS256 JWT is 500–700 characters and would be dropped, causing
@@ -181,7 +194,7 @@ Requires `manage-users` role (same as `/magic-link`).
 | `user_id` | Y* | | Keycloak user ID. Takes precedence over `email` and `username` when provided. `force_create` is ignored. |
 | `email` | Y* | | Email address of the user. Mutually exclusive with `username`. |
 | `username` | Y* | | Username of the user. When provided, `force_create` is ignored. |
-| `client_id` | Y | | Client ID for which the authorization URL is built. |
+| `client_id` | Y | | Client ID validated when the magic link is redeemed. The verifier rejects redemption attempts from any other client. |
 | `expiration_seconds` | N | 300 (5 min) | Token validity in seconds. |
 | `loa` | N | | Force the session to this LOA level, overriding the flow's Condition configuration. |
 | `remember_me` | N | false | Set the remember-me flag on the session. |
@@ -189,8 +202,6 @@ Requires `manage-users` role (same as `/magic-link`).
 | `reusable` | N | true | Allow the token to be used more than once within its validity window. |
 | `set_email_verified` | N | false | When `true`, marks the user's email as verified after the token is successfully validated. |
 | `confirm_user_switch` | N | false | Controls behaviour when a different user is already logged in on the device. When `false` (default), the existing session is silently logged out and the magic link is processed automatically. When `true`, a confirmation screen is shown asking the user to approve the logout before continuing. |
-| `redirect_uri` | N | | Redirect URI appended to the returned OIDC authorization URL. Takes precedence over the same key in `additional_parameters`. |
-| `additional_parameters` | N | | Key/value map of extra query parameters appended to the returned URL (e.g. `scope`, `state`, `nonce`, `code_challenge`, `acr_values`). Values override defaults, including `prompt`. |
 
 *One of `user_id`, `email`, or `username` is required. `user_id` takes precedence if multiple are provided.
 
@@ -219,13 +230,7 @@ curl --request POST https://keycloak.host/realms/test/magic-link-v2 \
  --data '{
    "email": "foo@example.com",
    "client_id": "myapp",
-   "expiration_seconds": 300,
-   "additional_parameters": {
-     "redirect_uri": "https://myapp.example.com/callback",
-     "scope": "openid profile",
-     "state": "abc123",
-     "nonce": "xyz789"
-   }
+   "expiration_seconds": 300
  }'
 ```
 
@@ -233,24 +238,27 @@ curl --request POST https://keycloak.host/realms/test/magic-link-v2 \
 
 ```json
 {
-  "user_id": "386edecf-3e43-41fd-886c-c674eea41034",
-  "link": "https://keycloak.host/realms/test/protocol/openid-connect/auth?client_id=myapp&response_type=code&login_hint=mlv2%3AeyJhbG...&redirect_uri=https%3A%2F%2Fmyapp.example.com%2Fcallback&scope=openid+profile&state=abc123&nonce=xyz789"
+  "login_hint": "mlv2:5713e2a7-53a6-4fbc-8ff5-53d5d8862418"
 }
 ```
 
-The caller opens `link` in the browser (or sends it to the user by email/SMS). Additional OIDC parameters not supplied via `additional_parameters` can be appended to the URL manually before opening it.
+The caller then constructs the OIDC authorization URL using the returned `login_hint` and opens it in the browser (or sends it to the user by email/SMS):
 
-**PKCE** — pass `code_challenge` and `code_challenge_method` as `additional_parameters`:
-
-```json
-{
-  "additional_parameters": {
-    "redirect_uri": "...",
-    "code_challenge": "<S256-challenge>",
-    "code_challenge_method": "S256"
-  }
-}
 ```
+https://keycloak.host/realms/test/protocol/openid-connect/auth
+  ?client_id=myapp
+  &response_type=code
+  &login_hint=mlv2:5713e2a7-53a6-4fbc-8ff5-53d5d8862418
+  &prompt=login
+  &redirect_uri=https://myapp.example.com/callback
+  &scope=openid profile
+  &state=abc123
+  &nonce=xyz789
+  &code_challenge=<S256-challenge>
+  &code_challenge_method=S256
+```
+
+The caller is fully responsible for PKCE (`code_challenge`, `code_challenge_method`, `code_verifier`), `state`, `nonce`, `redirect_uri`, and `scope`. This design ensures that the entity generating the PKCE `code_verifier` is always the same entity that handles the authorization code callback — regardless of whether the link is opened on the same device or clicked on a different device (e.g. from an email).
 
 ### User-switch behaviour
 

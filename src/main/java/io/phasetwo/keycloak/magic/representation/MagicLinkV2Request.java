@@ -2,7 +2,6 @@ package io.phasetwo.keycloak.magic.representation;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import java.util.Map;
 import lombok.Data;
 
 @Data
@@ -27,7 +26,10 @@ public class MagicLinkV2Request {
   @JsonProperty("username")
   private String username;
 
-  /** Client ID for which the OIDC authorization URL is built. */
+  /**
+   * Client ID validated when the magic link is redeemed. The browser flow verifier rejects
+   * redemption attempts from any other client.
+   */
   @JsonProperty("client_id")
   private String clientId;
 
@@ -61,21 +63,6 @@ public class MagicLinkV2Request {
    */
   @JsonProperty("reusable")
   private Boolean reusable = true;
-
-  /**
-   * Redirect URI appended to the returned OIDC authorization URL. Takes precedence over the same
-   * key in {@code additional_parameters} if both are set.
-   */
-  @JsonProperty("redirect_uri")
-  private String redirectUri;
-
-  /**
-   * Additional query parameters appended verbatim to the returned OIDC authorization URL. Use
-   * this to pass {@code scope}, {@code state}, {@code nonce}, {@code code_challenge},
-   * {@code acr_values}, etc.
-   */
-  @JsonProperty("additional_parameters")
-  private Map<String, String> additionalParameters;
 
   /**
    * When {@code true}, {@code user.setEmailVerified(true)} is called after the token is

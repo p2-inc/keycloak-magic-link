@@ -5,7 +5,6 @@ import static io.phasetwo.keycloak.magic.auth.token.MagicLinkV2Token.*;
 
 import io.phasetwo.keycloak.magic.MagicLink;
 import io.phasetwo.keycloak.magic.auth.MagicLinkBFAuthenticator;
-import io.phasetwo.keycloak.magic.auth.token.MagicLinkV2Token;
 import io.phasetwo.keycloak.magic.representation.MagicLinkV2Request;
 import io.phasetwo.keycloak.magic.representation.MagicLinkV2Response;
 import jakarta.ws.rs.BadRequestException;
@@ -15,36 +14,34 @@ import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.UriBuilder;
-import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.Config;
-import org.keycloak.OAuth2Constants;
 import org.keycloak.common.util.Time;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.SingleUseObjectProvider;
 import org.keycloak.models.UserModel;
-import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 
 /**
- * REST endpoint for generating Magic Link v2 authorization URLs.
+ * REST endpoint for generating Magic Link v2 credentials.
  *
  * <p>Unlike the v1 {@code /magic-link} endpoint, this endpoint does <em>not</em> authenticate the
- * user directly. Instead it stores the credential in {@link SingleUseObjectProvider} (Infinispan)
- * under a random UUID and returns a standard OIDC authorization URL with
- * {@code login_hint=mlv2:{uuid}}. The {@link MagicLinkBFAuthenticator} inside the browser flow
- * looks up the credential by UUID and completes authentication.
+ * user directly and does <em>not</em> build an OIDC authorization URL. Instead it stores the
+ * credential in {@link SingleUseObjectProvider} (Infinispan) under a random UUID and returns the
+ * {@code login_hint} value ({@code mlv2:{uuid}}) that the caller must pass to the OIDC
+ * authorization endpoint.
  *
- * <p>Using a UUID in {@code login_hint} keeps the value well within Keycloak's 255-character
- * parameter limit, avoiding the silent truncation that would occur with a full JWT.
+ * <p>The caller is responsible for constructing the full OIDC authorization URL, including PKCE
+ * ({@code code_challenge}, {@code code_challenge_method}), {@code redirect_uri}, {@code scope},
+ * {@code state}, {@code nonce}, and any other parameters required by the client. The caller
+ * <strong>must</strong> include {@code prompt=login} to prevent Keycloak from short-circuiting the
+ * flow with an existing session belonging to a different user.
  *
- * <p>OIDC parameters ({@code redirect_uri}, {@code scope}, {@code state}, {@code nonce},
- * {@code code_challenge}, {@code acr_values}, etc.) are the caller's responsibility and must be
- * supplied via {@code additional_parameters} in the request body or appended to the returned URL.
+ * <p>The {@link MagicLinkBFAuthenticator} inside the browser flow looks up the credential by UUID
+ * and completes authentication.
  *
  * <p>Requires the same {@code manage-users} permission as the v1 endpoint.
  */
@@ -145,37 +142,8 @@ public class MagicLinkV2Resource extends AbstractAdminResource {
         user.getId(), req.getClientId(), absoluteExpiry,
         req.getForceSessionLoa(), req.getReusable());
 
-    // Build the OIDC authorization URL.
-    // login_hint=mlv2:{uuid} is well within Keycloak's 255-char limit.
-    URI baseUri = session.getContext().getUri().getBaseUri();
-    UriBuilder authUri =
-        UriBuilder.fromUri(baseUri)
-            .path("realms/{realm}/protocol/openid-connect/auth")
-            .queryParam(OIDCLoginProtocol.CLIENT_ID_PARAM, req.getClientId())
-            .queryParam(OIDCLoginProtocol.RESPONSE_TYPE_PARAM, OAuth2Constants.CODE)
-            .queryParam(OIDCLoginProtocol.LOGIN_HINT_PARAM,
-                MagicLinkBFAuthenticator.RESUME_PREFIX + tokenId)
-            // prompt=login prevents Keycloak from pre-populating the auth session with the
-            // existing cookie user before the flow starts. Without it, Keycloak sets
-            // authenticatedUser=UserA in the auth session, causing an
-            // "already authenticated as different user" error when our verifier tries to
-            // authenticate UserB. With the verifier placed before Cookie in the flow,
-            // context.success() is called immediately and no re-auth banner is shown.
-            .queryParam(OIDCLoginProtocol.PROMPT_PARAM, OIDCLoginProtocol.PROMPT_VALUE_LOGIN);
-
-    if (req.getAdditionalParameters() != null) {
-      req.getAdditionalParameters().forEach(authUri::replaceQueryParam);
-    }
-    if (req.getRedirectUri() != null) {
-      authUri.replaceQueryParam(OIDCLoginProtocol.REDIRECT_URI_PARAM, req.getRedirectUri());
-    }
-
-    String link = authUri.build(realm.getName()).toString();
-    log.debugf("[MLv2] authorization URL built: %s", link);
-
     MagicLinkV2Response resp = new MagicLinkV2Response();
-    resp.setLink(link);
-    resp.setUserId(user.getId());
+    resp.setLoginHint(MagicLinkBFAuthenticator.RESUME_PREFIX + tokenId);
     return resp;
   }
 }
