@@ -57,10 +57,10 @@ public class MagicLinkV2Request {
 
   /**
    * When {@code true} the token may be used multiple times until it expires. Default is
-   * {@code false} (single-use).
+   * {@code true} (reusable).
    */
   @JsonProperty("reusable")
-  private Boolean reusable = false;
+  private Boolean reusable = true;
 
   /**
    * Redirect URI appended to the returned OIDC authorization URL. Takes precedence over the same

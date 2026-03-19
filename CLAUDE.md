@@ -131,7 +131,7 @@ On a matching `login_hint`, it:
 
 **Caller owns OIDC parameters.** `redirect_uri`, `scope`, `state`, `nonce`, `code_challenge`, `acr_values`, etc. go in `additional_parameters` and are appended verbatim to the returned URL.
 
-**`reusable` default is `false`** (single-use), opposite of the v1 default (`reusable=true`). This is the safer default.
+**`reusable` default is `true`** (reusable), matching the v1 default.
 
 **`setEmailVerified` default is `false`**, unlike the v1 handler which always sets it. The caller must explicitly opt in.
 

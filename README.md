@@ -186,7 +186,7 @@ Requires `manage-users` role (same as `/magic-link`).
 | `loa` | N | | Force the session to this LOA level, overriding the flow's Condition configuration. |
 | `remember_me` | N | false | Set the remember-me flag on the session. |
 | `force_create` | N | false | Create the user if they do not exist (email only). |
-| `reusable` | N | false | Allow the token to be used more than once within its validity window. |
+| `reusable` | N | true | Allow the token to be used more than once within its validity window. |
 | `set_email_verified` | N | false | When `true`, marks the user's email as verified after the token is successfully validated. |
 | `confirm_user_switch` | N | false | Controls behaviour when a different user is already logged in on the device. When `false` (default), the existing session is silently logged out and the magic link is processed automatically. When `true`, a confirmation screen is shown asking the user to approve the logout before continuing. |
 | `redirect_uri` | N | | Redirect URI appended to the returned OIDC authorization URL. Takes precedence over the same key in `additional_parameters`. |
@@ -275,7 +275,7 @@ A confirmation page is shown informing the user that they are currently signed i
 | OIDC params in request | Supplied in API body | Supplied via `additional_parameters` or appended to URL |
 | `redirect_uri` in request | Required | Optional — top-level field or via `additional_parameters` |
 | `prompt=login` | Not set | Always set — prevents silent session reuse |
-| `reusable` default | `true` | `false` (single-use) |
+| `reusable` default | `true` | `true` (reusable) |
 | User-switch (different user already logged in) | Not handled | Auto-logout by default; optional confirmation screen via `confirm_user_switch` |
 | Flow authenticator required | No | Yes — Magic Link Verifier must be in the flow |
 | Breaking change risk | — | None — v1 and v2 coexist independently |
