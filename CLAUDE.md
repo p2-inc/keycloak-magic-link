@@ -91,7 +91,7 @@ The original `MagicLinkActionTokenHandler` authenticates the user *directly* (by
 
 Keycloak silently truncates any OIDC parameter longer than 255 characters (`AuthzEndpointRequestParser`). A signed JWT is typically 500–700 characters and would be dropped. v2 therefore uses a **UUID reference in `login_hint`**:
 
-1. `POST /magic-link-v2` generates a UUID, stores the credential data in `SingleUseObjectProvider` (Infinispan) under key `mlv2:data:{uuid}` with the requested TTL, and returns an OIDC auth URL with `login_hint=mlv2:{uuid}` (~42 chars — well within the limit).
+1. `POST /magic-link-v2` generates a UUID, stores the credential data in `SingleUseObjectProvider` (Infinispan) under key `mlv2:data:{uuid}` with the requested TTL, and returns `{ "login_hint": "mlv2:{uuid}" }`. The caller constructs the full OIDC auth URL — owning PKCE, `redirect_uri`, `state`, `nonce`, etc.
 2. `MagicLinkBFAuthenticator` reads `login_hint`, strips the `mlv2:` prefix, looks up the data map by UUID, validates expiry and client, enforces single-use if required, then calls `context.success()`.
 
 This is the same security model as v1 action tokens: security comes from the UUID's 128-bit entropy plus Infinispan TTL and atomic single-use tracking — not from a cryptographic signature.
@@ -105,7 +105,7 @@ This is the same security model as v1 action tokens: security comes from the UUI
 
 Also defines the `KEY_*` constants used as keys in the `SingleUseObjectProvider` notes map.
 
-**`MagicLinkV2Resource`** (`resources/MagicLinkV2Resource.java`) — `POST realms/{realm}/magic-link-v2`. Requires `manage-users` role. Stores credential data in `SingleUseObjectProvider` and builds the OIDC auth URL with `login_hint=mlv2:{uuid}`. OIDC parameters (`redirect_uri`, `scope`, `state`, `nonce`, `code_challenge`, etc.) are passed via `additional_parameters`. Registered via `MagicLinkV2ResourceProviderFactory` (provider ID: `magic-link-v2`).
+**`MagicLinkV2Resource`** (`resources/MagicLinkV2Resource.java`) — `POST realms/{realm}/magic-link-v2`. Requires `manage-users` role. Stores credential data in `SingleUseObjectProvider` and returns `{ "login_hint": "mlv2:{uuid}" }`. The caller is responsible for building the full OIDC auth URL with PKCE, `redirect_uri`, `state`, `nonce`, etc. Registered via `MagicLinkV2ResourceProviderFactory` (provider ID: `magic-link-v2`).
 
 **`MagicLinkBFAuthenticator`** (`auth/MagicLinkBFAuthenticator.java`, provider ID: `ext-magic-link-browser-flow`) — Browser-flow authenticator. Place as **ALTERNATIVE** alongside username/password. When `login_hint` does not start with `mlv2:`, calls `context.attempted()` and passes through silently.
 
@@ -129,7 +129,7 @@ On a matching `login_hint`, it:
 
 **No action-token endpoint.** The magic link URL is a standard OIDC auth URL, not a `login-actions/action-token` URL. v1 is completely untouched.
 
-**Caller owns OIDC parameters.** `redirect_uri`, `scope`, `state`, `nonce`, `code_challenge`, `acr_values`, etc. go in `additional_parameters` and are appended verbatim to the returned URL.
+**Caller owns all OIDC parameters.** `redirect_uri`, `scope`, `state`, `nonce`, `code_challenge`, `acr_values`, `prompt=login`, etc. are the caller's responsibility. The endpoint returns only the `login_hint` value; the caller constructs the full OIDC auth URL. This ensures the entity generating the PKCE `code_verifier` is always the same entity that handles the authorization code callback — required for both same-device and cross-device (email) magic link flows.
 
 **`reusable` default is `true`** (reusable), matching the v1 default.
 

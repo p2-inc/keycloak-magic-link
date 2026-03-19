@@ -94,12 +94,8 @@ public class MagicLinkV2UserSwitchTest extends AbstractMagicLinkTest {
         req.setClientId(TEST_CLIENT);
         req.setReusable(reusable);
         req.setConfirmUserSwitch(confirmUserSwitch);
-        req.setAdditionalParameters(Map.of(
-                "redirect_uri", redirectUri,
-                "scope", "openid"
-        ));
 
-        String link = given()
+        String loginHint = given()
                 .baseUri(getAuthUrl())
                 .auth().oauth2(keycloak.tokenManager().getAccessTokenString())
                 .contentType("application/json")
@@ -107,13 +103,24 @@ public class MagicLinkV2UserSwitchTest extends AbstractMagicLinkTest {
                 .post(V2_PATH)
                 .then()
                 .statusCode(200)
-                .extract().jsonPath().getString("link");
+                .extract().jsonPath().getString("login_hint");
 
-        assertThat(link, not(emptyOrNullString()));
+        assertThat(loginHint, not(emptyOrNullString()));
 
-        // Cypress runs in Docker: replace localhost with host.testcontainers.internal.
-        return link.replace(
+        // Build the OIDC auth URL — the caller (CLP / Cypress) owns PKCE, state, etc.
+        String baseUrl = getAuthUrl().replace(
                 "http://localhost:" + container.getHttpPort(),
                 "http://host.testcontainers.internal:" + container.getHttpPort());
+        String dockerRedirectUri = redirectUri.replace(
+                "http://localhost:" + container.getHttpPort(),
+                "http://host.testcontainers.internal:" + container.getHttpPort());
+
+        return baseUrl + "realms/" + TEST_REALM + "/protocol/openid-connect/auth"
+                + "?client_id=" + TEST_CLIENT
+                + "&response_type=code"
+                + "&login_hint=" + loginHint
+                + "&prompt=login"
+                + "&scope=openid"
+                + "&redirect_uri=" + dockerRedirectUri;
     }
 }
