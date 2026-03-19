@@ -41,6 +41,9 @@ This is a **Keycloak SPI extension** — a JAR deployed into a Keycloak server's
 - `MagicLinkAuthenticator` / `MagicLinkAuthenticatorFactory` (provider ID: `ext-magic-form`) — Browser-flow authenticator. Extends `UsernamePasswordForm`. On submit, creates a `MagicLinkActionToken` and emails the link. Also sets `executionId` on the token so AMR is populated correctly on redemption.
 - `MagicLinkContinuationAuthenticator` — Variant where the original browser tab polls for completion while the link is clicked on another device.
 - `EmailOtpAuthenticator` — Standalone 6-digit OTP via email.
+- `LoginTokenVerifier` / `LoginTokenVerifierFactory` (provider ID: `login-token-verifier`, display name: **"Login Token (with login_hint)"**) — Reads `login_hint=lt:{uuid}` from the OIDC auth request and verifies the token. Passes through silently (`context.attempted()`) when `login_hint` is absent or has a different prefix.
+- `LoginTokenFormAuthenticator` / `LoginTokenFormAuthenticatorFactory` (provider ID: `login-token-form`, display name: **"Login Token"**) — Shows a form for manual token entry. Accepts tokens with or without the `lt:` prefix. Shows a form error on invalid/expired tokens rather than falling through silently.
+- `LoginTokenHelper` — Package-private class with shared constants (`RESUME_PREFIX`, `DATA_KEY_PREFIX`, `USED_KEY_PREFIX`, auth-session note names) and shared static methods (`clearLoginHint`, `displayName`, `resolveLoaLevel`, `completeAuth`) used by both Login Token authenticators.
 
 **Action Token path** (`src/main/java/.../auth/token/`):
 - `MagicLinkActionToken` — JWT subclass encoding all OIDC params (`rdu`, `scope`, `state`, `nce`, `cc`, `ccm`, `rme`, `ru`, `rm`, `loa`, `eid`). Token type: `ext-magic-link`.
@@ -107,7 +110,21 @@ Also defines the `KEY_*` constants used as keys in the `SingleUseObjectProvider`
 
 **`LoginTokenResource`** (`resources/LoginTokenResource.java`) — `POST realms/{realm}/login-token`. Requires `manage-users` role. Stores credential data in `SingleUseObjectProvider` and returns `{ "login_hint": "lt:{uuid}" }`. The caller is responsible for building the full OIDC auth URL with PKCE, `redirect_uri`, `state`, `nonce`, etc. Registered via `LoginTokenResourceProviderFactory` (provider ID: `login-token`).
 
-**`LoginTokenVerifier`** (`auth/LoginTokenVerifier.java`, provider ID: `login-token-verifier`) — Browser-flow authenticator. Place as **ALTERNATIVE** alongside username/password. When `login_hint` does not start with `lt:`, calls `context.attempted()` and passes through silently.
+**`LoginTokenHelper`** (`auth/LoginTokenHelper.java`) — Package-private helper. Holds all shared constants (`RESUME_PREFIX = "lt:"`, `DATA_KEY_PREFIX = "lt:data:"`, `USED_KEY_PREFIX = "lt:used:"`, auth-session note names) and all stateless utility methods shared by both Login Token authenticators:
+
+| Method | Description |
+|--------|-------------|
+| `handleTokenId(ctx, tokenId, onInvalidToken, onAutoLogout)` | Full verification pipeline: Infinispan lookup → expiry → client → user → cookie user-switch. `onInvalidToken` (Runnable) handles not-found/expired/mismatch differently per authenticator. `onAutoLogout` (Consumer\<String\>, nullable) is called when `confirmUserSwitch=false`; pass `null` to always show the confirmation form. |
+| `handleUserSwitchAction(ctx, pendingToken, onLogout)` | Dispatches the user-switch form submission: `action=logout` → `onLogout`, anything else → `failWithAccessDenied`. |
+| `redirectAfterLogout(ctx, tokenId, loginHint)` | Expires identity + auth-session cookies and redirects to a fresh OIDC auth URL. The `loginHint` string is the only difference between the two authenticators: verifier passes the original `login_hint` from the auth session; form passes a reconstructed `"lt:" + tokenId`. |
+| `showUserSwitchForm(ctx, tokenId, current, target)` | Sets auth-session notes and renders `login-token-user-switch.ftl`. |
+| `failWithAccessDenied(ctx)` | Redirects to `redirect_uri?error=access_denied` and calls `context.failure()` with a response to abort the flow immediately. |
+| `completeAuth(ctx, tokenId, notes, expiryStr, user)` | Single-use enforcement, user/LOA/remember-me setup, `context.success()`. |
+| `clearLoginHint(ctx)` | Removes `login_hint` client note and attempted-username auth note. |
+| `resolveLoaLevel(ctx, notes)` | Reads LOA from token notes, falls back to sibling conditional, defaults to 1. |
+| `displayName(user)` | Returns email if set, otherwise username. |
+
+**`LoginTokenVerifier`** (`auth/LoginTokenVerifier.java`, provider ID: `login-token-verifier`, UI display name: **"Login Token (with login_hint)"**) — Browser-flow authenticator. Place as **ALTERNATIVE** before Cookie. When `login_hint` does not start with `lt:`, calls `context.attempted()` and passes through silently.
 
 On a matching `login_hint`, it:
 1. Strips `lt:` prefix to get the tokenId (UUID).
@@ -120,6 +137,8 @@ On a matching `login_hint`, it:
 8. Sets LOA via `AcrStore.setLevelAuthenticated()` — priority: stored `loa` > sibling `Condition – Level of Authentication`.
 9. Sets remember-me auth note if `rememberMe=true`.
 10. `context.success()` — subsequent step-up authenticators run in the same browser session.
+
+**`LoginTokenFormAuthenticator`** (`auth/LoginTokenFormAuthenticator.java`, provider ID: `login-token-form`, UI display name: **"Login Token"**) — Shows a Freemarker form (`login-token-form.ftl`) for manual token entry. Accepts the token with or without the `lt:` prefix. On invalid/expired token shows the form with an error (never falls through silently). When a user-switch is needed, always shows the confirmation dialog (auto-logout is suppressed in interactive form context); after confirmation redirects to a fresh OIDC auth URL with `login_hint=lt:{tokenId}` so `LoginTokenVerifier` can complete the flow if present.
 
 ### Key design decisions
 
@@ -153,5 +172,5 @@ Browser Flow
 | Component | When | Key | What |
 |---|---|---|---|
 | `LoginTokenResource` | on generation | `lt:data:{uuid}` | stores credential data map with TTL = `expiration_seconds` |
-| `LoginTokenVerifier` | on redemption | `lt:used:{uuid}` | `putIfAbsent` for single-use guard |
+| `LoginTokenVerifier` / `LoginTokenFormAuthenticator` | on redemption | `lt:used:{uuid}` | `putIfAbsent` for single-use guard (via `LoginTokenHelper.completeAuth`) |
 | v1 `MagicLinkActionTokenHandler` | on redemption | (Keycloak-managed jti) | marks action token as used |

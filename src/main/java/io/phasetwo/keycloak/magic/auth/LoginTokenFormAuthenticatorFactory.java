@@ -1,6 +1,7 @@
 package io.phasetwo.keycloak.magic.auth;
 
 import com.google.auto.service.AutoService;
+import java.util.List;
 import org.keycloak.Config;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.authentication.AuthenticatorFactory;
@@ -9,21 +10,13 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.provider.ProviderConfigProperty;
 
-import java.util.List;
-
-/**
- * Factory for {@link LoginTokenVerifier}.
- *
- * <p>Configure a default {@code loa.level} in the browser flow if you want the login token
- * verifier to set a LOA even when the API caller does not provide one. The API's {@code loa}
- * field always takes precedence over this setting when present.
- */
+/** Factory for {@link LoginTokenFormAuthenticator}. */
 @AutoService(AuthenticatorFactory.class)
-public class LoginTokenVerifierFactory implements AuthenticatorFactory {
+public class LoginTokenFormAuthenticatorFactory implements AuthenticatorFactory {
 
-  public static final String PROVIDER_ID = "login-token-verifier";
+  public static final String PROVIDER_ID = "login-token-form";
 
-  private static final LoginTokenVerifier SINGLETON = new LoginTokenVerifier();
+  private static final LoginTokenFormAuthenticator SINGLETON = new LoginTokenFormAuthenticator();
 
   @Override
   public String getId() {
@@ -37,12 +30,12 @@ public class LoginTokenVerifierFactory implements AuthenticatorFactory {
 
   @Override
   public String getDisplayType() {
-    return "Login Token (with login_hint)";
+    return "Login Token";
   }
 
   @Override
   public String getHelpText() {
-    return "Verifies a Login Token UUID passed via the login_hint OIDC parameter (lt:{uuid}). Passes through silently when login_hint is absent or has a different prefix.";
+    return "Shows a form for manual Login Token entry. Accepts tokens with or without the lt: prefix.";
   }
 
   @Override
@@ -62,10 +55,10 @@ public class LoginTokenVerifierFactory implements AuthenticatorFactory {
 
   @Override
   public AuthenticationExecutionModel.Requirement[] getRequirementChoices() {
-    return new AuthenticationExecutionModel.Requirement[]{
-        AuthenticationExecutionModel.Requirement.REQUIRED,
-        AuthenticationExecutionModel.Requirement.ALTERNATIVE,
-        AuthenticationExecutionModel.Requirement.DISABLED,
+    return new AuthenticationExecutionModel.Requirement[] {
+      AuthenticationExecutionModel.Requirement.REQUIRED,
+      AuthenticationExecutionModel.Requirement.ALTERNATIVE,
+      AuthenticationExecutionModel.Requirement.DISABLED,
     };
   }
 
