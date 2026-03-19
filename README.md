@@ -241,6 +241,28 @@ A confirmation page is shown informing the user that they are currently signed i
 - **Sign out and continue** — performs the same automatic logout and redirect as the default behaviour.
 - **Cancel** — aborts the flow and redirects back to the client with `error=access_denied`.
 
+### Login Token (form-based)
+
+In addition to the `login_hint`-based flow, there is a form-based authenticator that presents a UI input field so users can manually enter a login token.
+
+**Provider ID:** `login-token-form` · **UI display name:** `Login Token`
+
+The form accepts the token with or without the `lt:` prefix — the prefix is added automatically if absent. On an invalid or expired token the form is re-displayed with an error message; the flow never falls through silently to the next alternative.
+
+**Placement:** Add as `ALTERNATIVE` or `REQUIRED` in the browser flow. Unlike `Login Token (with login_hint)`, this authenticator always shows a UI — do not place it before the Cookie authenticator unless you want every unauthenticated visit to show the token form.
+
+**User-switch behaviour:** When a user-switch is needed (an active session exists for a different user), the confirmation dialog is always shown regardless of the token's `confirm_user_switch` flag. Auto-logout without confirmation is inappropriate in an interactive form context. After confirmation, session cookies are expired and the browser is redirected to a fresh OIDC authorization URL with `login_hint=lt:{tokenId}` so that `Login Token (with login_hint)` can complete the authentication automatically if it is present in the same flow.
+
+**Example flow using both authenticators:**
+
+```
+Browser Flow
+├── Login Token (with login_hint)  [ALTERNATIVE]  ← automated redemption via login_hint
+├── Cookie                         [ALTERNATIVE]
+└── Forms sub-flow                 [ALTERNATIVE]
+    └── Login Token                [ALTERNATIVE]  ← manual entry form as fallback
+```
+
 ---
 
 ## Email OTP
