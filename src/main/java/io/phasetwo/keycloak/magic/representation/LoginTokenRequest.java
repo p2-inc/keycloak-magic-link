@@ -6,7 +6,7 @@ import lombok.Data;
 
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class MagicLinkV2Request {
+public class LoginTokenRequest {
 
   /**
    * User's Keycloak ID. Takes precedence over {@code email} and {@code username} when provided.
@@ -27,7 +27,7 @@ public class MagicLinkV2Request {
   private String username;
 
   /**
-   * Client ID validated when the magic link is redeemed. The browser flow verifier rejects
+   * Client ID validated when the login token is redeemed. The browser flow verifier rejects
    * redemption attempts from any other client.
    */
   @JsonProperty("client_id")
@@ -39,7 +39,7 @@ public class MagicLinkV2Request {
 
   /**
    * Forces the resulting session to this LOA level. When set, {@link
-   * io.phasetwo.keycloak.magic.auth.MagicLinkBFAuthenticator} writes this value directly into the
+   * io.phasetwo.keycloak.magic.auth.LoginTokenVerifier} writes this value directly into the
    * AcrStore, overriding any level configured on a sibling {@code Condition - Level of
    * Authentication} in the browser flow.
    */
@@ -74,7 +74,7 @@ public class MagicLinkV2Request {
   /**
    * When {@code true} and a different user is already logged in on the device, a confirmation
    * screen is shown asking the user to confirm the logout. When {@code false} (default), the
-   * existing session is silently logged out and the magic link is processed automatically.
+   * existing session is silently logged out and the login token is processed automatically.
    */
   @JsonProperty("confirm_user_switch")
   private Boolean confirmUserSwitch = false;

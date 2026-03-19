@@ -96,32 +96,32 @@ Sample response:
 
 ---
 
-## Magic Link v2
+## Login Token
 
-Magic Link v2 is a drop-in parallel implementation that can be deployed alongside the existing Magic Link without any breaking changes or flow migration.
+Login Token is a drop-in parallel implementation that can be deployed alongside the existing Magic Link without any breaking changes or flow migration.
 
-### Why v2?
+### Why Login Token?
 
 The original Magic Link authenticates the user *directly* via the action-token handler, bypassing the standard Keycloak browser flow entirely. This means:
 
 - `acr_values` / step-up authentication cannot be evaluated natively.
 - Subsequent authenticators (e.g. TOTP for LOA=2) cannot run in the same browser session.
 
-Magic Link v2 solves this by returning a **standard OIDC authorization URL** instead of an action-token URL. The credential is stored server-side in Infinispan; only a short UUID reference (`mlv2:{uuid}`) is placed in `login_hint`. The standard browser flow runs in full — `acr_values`, `Condition – Level of Authentication`, and all step-up logic work natively.
+Login Token solves this by returning a **standard OIDC authorization URL** instead of an action-token URL. The credential is stored server-side in Infinispan; only a short UUID reference (`lt:{uuid}`) is placed in `login_hint`. The standard browser flow runs in full — `acr_values`, `Condition – Level of Authentication`, and all step-up logic work natively.
 
 ### How it works
 
 ```
-POST /realms/{realm}/magic-link-v2
+POST /realms/{realm}/login-token
   → credential data (userId, clientId, expiry, optional LOA/rememberMe)
-    stored in Infinispan under key "mlv2:data:{uuid}" with the requested TTL
-  → returns: { "login_hint": "mlv2:{uuid}", "user_id": "..." }
+    stored in Infinispan under key "lt:data:{uuid}" with the requested TTL
+  → returns: { "login_hint": "lt:{uuid}" }
 
 Caller constructs the OIDC authorization URL and opens it in the browser:
   https://keycloak.host/realms/{realm}/protocol/openid-connect/auth
     ?client_id=myapp
     &response_type=code
-    &login_hint=mlv2:{uuid}     ← returned login_hint passed verbatim
+    &login_hint=lt:{uuid}       ← returned login_hint passed verbatim
     &prompt=login               ← required (see note below)
     &redirect_uri=...           ← caller's redirect URI
     &code_challenge=...         ← caller's PKCE challenge
@@ -129,12 +129,12 @@ Caller constructs the OIDC authorization URL and opens it in the browser:
     [+ any other OIDC params]
 
   → standard OIDC browser flow starts
-  → Magic Link Verifier (ext-magic-link-browser-flow) resolves the credential:
-      1. Strips "mlv2:" prefix from login_hint to get the UUID
-      2. Looks up credential data in Infinispan by "mlv2:data:{uuid}"
+  → Login Token Verifier (login-token-verifier) resolves the credential:
+      1. Strips "lt:" prefix from login_hint to get the UUID
+      2. Looks up credential data in Infinispan by "lt:data:{uuid}"
       3. Checks expiry (TTL-enforced by Infinispan + explicit timestamp check)
       4. Verifies stored clientId matches the current OIDC client
-      5. Enforces single-use via putIfAbsent("mlv2:used:{uuid}", ttl)
+      5. Enforces single-use via putIfAbsent("lt:used:{uuid}", ttl)
          (unless reusable=true)
       6. Sets user, optional LOA, optional remember-me
       7. context.success() → flow continues normally
@@ -142,25 +142,25 @@ Caller constructs the OIDC authorization URL and opens it in the browser:
 ```
 
 > **`prompt=login` is required.** Without it, Keycloak may find an existing session cookie before
-> the Magic Link Verifier runs and pre-populate the auth session with the cookie user.
+> the Login Token Verifier runs and pre-populate the auth session with the cookie user.
 > This causes an `already authenticated as different user` error when the Verifier later tries
-> to authenticate the magic-link target user.
+> to authenticate the login token target user.
 
 > **Why UUID instead of a signed JWT?**  Keycloak silently ignores OIDC parameters longer than
 > 255 characters. A typical HS512/RS256 JWT is 500–700 characters and would be dropped, causing
-> authentication to fail silently. The UUID reference (`mlv2:{uuid}`) is ~42 characters.
+> authentication to fail silently. The UUID reference (`lt:{uuid}`) is ~42 characters.
 > Security is equivalent to v1 action tokens: 128-bit random UUID entropy + Infinispan TTL +
 > atomic single-use tracking.
 
 ### Browser flow setup
 
-Add the **Magic Link Verifier** (`ext-magic-link-browser-flow`) as an **ALTERNATIVE** execution **before Cookie** in your browser flow. When `login_hint` does not start with `mlv2:`, the verifier calls `context.attempted()` and lets the next alternative (Cookie, then Username/Password) handle the request normally.
+Add the **Login Token Verifier** (`login-token-verifier`) as an **ALTERNATIVE** execution **before Cookie** in your browser flow. When `login_hint` does not start with `lt:`, the verifier calls `context.attempted()` and lets the next alternative (Cookie, then Username/Password) handle the request normally.
 
-Placing the verifier _before_ Cookie is important: if Cookie runs first and finds an active session, Keycloak stops there and never reaches the verifier — meaning a magic link for User B would silently return User A's token.
+Placing the verifier _before_ Cookie is important: if Cookie runs first and finds an active session, Keycloak stops there and never reaches the verifier — meaning a login token for User B would silently return User A's token.
 
 ```
 Browser Flow
-├── Magic Link Verifier (ext-magic-link-browser-flow)  [ALTERNATIVE]  ← add this, before Cookie
+├── Login Token Verifier (login-token-verifier)  [ALTERNATIVE]  ← add this, before Cookie
 ├── Cookie  [ALTERNATIVE]
 ├── Kerberos  [ALTERNATIVE]
 └── Username/Password Form  [ALTERNATIVE]
@@ -170,12 +170,12 @@ For step-up / LOA flows, place the verifier inside a Conditional sub-flow:
 
 ```
 Browser Flow
-├── Magic Link Verifier (ext-magic-link-browser-flow)  [ALTERNATIVE]  ← before Cookie
+├── Login Token Verifier (login-token-verifier)  [ALTERNATIVE]  ← before Cookie
 ├── Cookie  [ALTERNATIVE]
 └── Authentication  [ALTERNATIVE]
     ├── LOA=1 sub-flow  [CONDITIONAL]
     │   ├── Condition – Level of Authentication  (loa=1)
-    │   └── Magic Link Verifier  [ALTERNATIVE]   ← also here for LOA=1
+    │   └── Login Token Verifier  [ALTERNATIVE]   ← also here for LOA=1
     └── LOA=2 sub-flow  [CONDITIONAL]
         ├── Condition – Level of Authentication  (loa=2)
         └── Email OTP / TOTP  [REQUIRED]          ← runs after the verifier
@@ -183,7 +183,7 @@ Browser Flow
 
 When placed inside a Conditional sub-flow, the verifier automatically reads the configured LOA level from the sibling `Condition – Level of Authentication` as a fallback (overridden by `loa` in the API request).
 
-### REST API — `/magic-link-v2`
+### REST API — `/login-token`
 
 Requires `manage-users` role (same as `/magic-link`).
 
@@ -194,36 +194,36 @@ Requires `manage-users` role (same as `/magic-link`).
 | `user_id` | Y* | | Keycloak user ID. Takes precedence over `email` and `username` when provided. `force_create` is ignored. |
 | `email` | Y* | | Email address of the user. Mutually exclusive with `username`. |
 | `username` | Y* | | Username of the user. When provided, `force_create` is ignored. |
-| `client_id` | Y | | Client ID validated when the magic link is redeemed. The verifier rejects redemption attempts from any other client. |
+| `client_id` | Y | | Client ID validated when the login token is redeemed. The verifier rejects redemption attempts from any other client. |
 | `expiration_seconds` | N | 300 (5 min) | Token validity in seconds. |
 | `loa` | N | | Force the session to this LOA level, overriding the flow's Condition configuration. |
 | `remember_me` | N | false | Set the remember-me flag on the session. |
 | `force_create` | N | false | Create the user if they do not exist (email only). |
 | `reusable` | N | true | Allow the token to be used more than once within its validity window. |
 | `set_email_verified` | N | false | When `true`, marks the user's email as verified after the token is successfully validated. |
-| `confirm_user_switch` | N | false | Controls behaviour when a different user is already logged in on the device. When `false` (default), the existing session is silently logged out and the magic link is processed automatically. When `true`, a confirmation screen is shown asking the user to approve the logout before continuing. |
+| `confirm_user_switch` | N | false | Controls behaviour when a different user is already logged in on the device. When `false` (default), the existing session is silently logged out and the login token is processed automatically. When `true`, a confirmation screen is shown asking the user to approve the logout before continuing. |
 
 *One of `user_id`, `email`, or `username` is required. `user_id` takes precedence if multiple are provided.
 
-> **Important: place the Magic Link (v2) Verifier before the Cookie authenticator in your flow.**
+> **Important: place the Login Token Verifier before the Cookie authenticator in your flow.**
 > Keycloak evaluates ALTERNATIVE executions in order and stops at the first success. If Cookie
 > runs before the Verifier and an active session exists, Keycloak silently returns that session's
-> token — even if it belongs to a different user than the one in the magic link. Placing the
+> token — even if it belongs to a different user than the one in the login token. Placing the
 > Verifier first ensures it always gets to evaluate `login_hint` before Cookie can short-circuit
 > the flow:
 >
 > ```
 > Browser Flow
-> ├── Magic Link (v2) Verifier  [ALTERNATIVE]  ← must be first
-> ├── Cookie                    [ALTERNATIVE]
-> ├── Kerberos                  [ALTERNATIVE]
-> └── Username/Password         [ALTERNATIVE]
+> ├── Login Token Verifier  [ALTERNATIVE]  ← must be first
+> ├── Cookie                [ALTERNATIVE]
+> ├── Kerberos              [ALTERNATIVE]
+> └── Username/Password     [ALTERNATIVE]
 > ```
 
 **Sample request:**
 
 ```
-curl --request POST https://keycloak.host/realms/test/magic-link-v2 \
+curl --request POST https://keycloak.host/realms/test/login-token \
  --header "Accept: application/json" \
  --header "Content-Type: application/json" \
  --header "Authorization: Bearer <access_token>" \
@@ -238,7 +238,7 @@ curl --request POST https://keycloak.host/realms/test/magic-link-v2 \
 
 ```json
 {
-  "login_hint": "mlv2:5713e2a7-53a6-4fbc-8ff5-53d5d8862418"
+  "login_hint": "lt:5713e2a7-53a6-4fbc-8ff5-53d5d8862418"
 }
 ```
 
@@ -248,7 +248,7 @@ The caller then constructs the OIDC authorization URL using the returned `login_
 https://keycloak.host/realms/test/protocol/openid-connect/auth
   ?client_id=myapp
   &response_type=code
-  &login_hint=mlv2:5713e2a7-53a6-4fbc-8ff5-53d5d8862418
+  &login_hint=lt:5713e2a7-53a6-4fbc-8ff5-53d5d8862418
   &prompt=login
   &redirect_uri=https://myapp.example.com/callback
   &scope=openid profile
@@ -262,10 +262,10 @@ The caller is fully responsible for PKCE (`code_challenge`, `code_challenge_meth
 
 ### User-switch behaviour
 
-When a magic link is opened for User B while User A is already logged in on the same device, the verifier detects the session conflict and handles it based on the `confirm_user_switch` parameter:
+When a login token is opened for User B while User A is already logged in on the same device, the verifier detects the session conflict and handles it based on the `confirm_user_switch` parameter:
 
 **Default (`confirm_user_switch: false`) — automatic logout:**
-The existing session cookies are silently expired and the browser is redirected to a fresh OIDC authorization request. The magic link token is still valid (single-use mark is not set until authentication completes), so the fresh flow picks it up and logs User B in transparently — no screen is shown.
+The existing session cookies are silently expired and the browser is redirected to a fresh OIDC authorization request. The login token is still valid (single-use mark is not set until authentication completes), so the fresh flow picks it up and logs User B in transparently — no screen is shown.
 
 **`confirm_user_switch: true` — confirmation screen:**
 A confirmation page is shown informing the user that they are currently signed in on this device and asking whether they want to continue. Two options are presented:
@@ -274,9 +274,9 @@ A confirmation page is shown informing the user that they are currently signed i
 
 ### Differences from Magic Link v1
 
-| | Magic Link (v1) | Magic Link v2 |
+| | Magic Link (v1) | Login Token |
 |---|---|---|
-| Endpoint | `POST /magic-link` | `POST /magic-link-v2` |
+| Endpoint | `POST /magic-link` | `POST /login-token` |
 | Returned URL | Action-token URL (`login-actions/action-token?key=...`) | OIDC auth URL (`protocol/openid-connect/auth?...`) |
 | Authentication | Direct — bypasses browser flow | Via browser flow — full flow executes |
 | `acr_values` / step-up | Not supported | Fully supported |
@@ -285,8 +285,8 @@ A confirmation page is shown informing the user that they are currently signed i
 | `prompt=login` | Not set | Always set — prevents silent session reuse |
 | `reusable` default | `true` | `true` (reusable) |
 | User-switch (different user already logged in) | Not handled | Auto-logout by default; optional confirmation screen via `confirm_user_switch` |
-| Flow authenticator required | No | Yes — Magic Link Verifier must be in the flow |
-| Breaking change risk | — | None — v1 and v2 coexist independently |
+| Flow authenticator required | No | Yes — Login Token Verifier must be in the flow |
+| Breaking change risk | — | None — Magic Link v1 and Login Token coexist independently |
 
 ---
 

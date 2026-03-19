@@ -12,18 +12,18 @@ import org.keycloak.provider.ProviderConfigProperty;
 import java.util.List;
 
 /**
- * Factory for {@link MagicLinkBFAuthenticator}.
+ * Factory for {@link LoginTokenVerifier}.
  *
- * <p>Configure a default {@code loa.level} in the browser flow if you want the magic-link
- * authenticator to set a LOA even when the API caller does not provide one. The API's {@code loa}
+ * <p>Configure a default {@code loa.level} in the browser flow if you want the login token
+ * verifier to set a LOA even when the API caller does not provide one. The API's {@code loa}
  * field always takes precedence over this setting when present.
  */
 @AutoService(AuthenticatorFactory.class)
-public class MagicLinkBFAuthenticatorFactory implements AuthenticatorFactory {
+public class LoginTokenVerifierFactory implements AuthenticatorFactory {
 
-  public static final String PROVIDER_ID = "ext-magic-link-browser-flow";
+  public static final String PROVIDER_ID = "login-token-verifier";
 
-  private static final MagicLinkBFAuthenticator SINGLETON = new MagicLinkBFAuthenticator();
+  private static final LoginTokenVerifier SINGLETON = new LoginTokenVerifier();
 
   @Override
   public String getId() {
@@ -37,12 +37,12 @@ public class MagicLinkBFAuthenticatorFactory implements AuthenticatorFactory {
 
   @Override
   public String getDisplayType() {
-    return "Magic Link (v2) Verifier";
+    return "Login Token Verifier";
   }
 
   @Override
   public String getHelpText() {
-    return "Verifies a Magic Link (v2) if a Magic Link UUID is provided via login_hint.";
+    return "Verifies a Login Token if a Login Token UUID is provided via login_hint.";
   }
 
   @Override

@@ -9,9 +9,9 @@ import org.keycloak.services.resource.RealmResourceProviderFactory;
 
 @JBossLog
 @AutoService(RealmResourceProviderFactory.class)
-public class MagicLinkV2ResourceProviderFactory implements RealmResourceProviderFactory {
+public class LoginTokenResourceProviderFactory implements RealmResourceProviderFactory {
 
-  private static final String ID = "magic-link-v2";
+  private static final String ID = "login-token";
 
   @Override
   public String getId() {
@@ -19,8 +19,8 @@ public class MagicLinkV2ResourceProviderFactory implements RealmResourceProvider
   }
 
   @Override
-  public MagicLinkV2ResourceProvider create(KeycloakSession session) {
-    return new MagicLinkV2ResourceProvider(session);
+  public LoginTokenResourceProvider create(KeycloakSession session) {
+    return new LoginTokenResourceProvider(session);
   }
 
   @Override

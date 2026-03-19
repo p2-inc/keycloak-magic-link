@@ -1,7 +1,7 @@
 package io.phasetwo.keycloak.magic.web;
 
 import io.phasetwo.keycloak.magic.Helpers;
-import io.phasetwo.keycloak.magic.representation.MagicLinkV2Request;
+import io.phasetwo.keycloak.magic.representation.LoginTokenRequest;
 import lombok.extern.jbosslog.JBossLog;
 import org.junit.jupiter.api.DynamicContainer;
 import org.junit.jupiter.api.TestFactory;
@@ -19,10 +19,10 @@ import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.emptyOrNullString;
 
 /**
- * Cypress-based integration tests for Magic Link v2 user-switch behaviour.
+ * Cypress-based integration tests for Login Token user-switch behaviour.
  *
  * <p>Two users (User A and User B) are created in the test realm. The browser flow has the
- * Magic Link Verifier placed <em>before</em> the Cookie authenticator so that the verifier
+ * Login Token Verifier placed <em>before</em> the Cookie authenticator so that the verifier
  * always evaluates {@code login_hint} before an existing session can short-circuit the flow.
  *
  * <p>Three scenarios are verified:
@@ -38,11 +38,11 @@ import static org.hamcrest.Matchers.emptyOrNullString;
 @JBossLog
 @org.testcontainers.junit.jupiter.Testcontainers
 @EnabledIfSystemProperty(named = "include.cypress", matches = "true")
-public class MagicLinkV2UserSwitchTest extends AbstractMagicLinkTest {
+public class LoginTokenUserSwitchTest extends AbstractMagicLinkTest {
 
     private static final String TEST_REALM  = "test-realm-v2-user-switch";
     private static final String TEST_CLIENT = "v2-user-switch-client";
-    private static final String V2_PATH     = "realms/" + TEST_REALM + "/magic-link-v2";
+    private static final String LOGIN_TOKEN_PATH = "realms/" + TEST_REALM + "/login-token";
 
     private static final String USER_A_EMAIL = "usera@phasetwo.io";
     private static final String USER_B_EMAIL = "userb@phasetwo.io";
@@ -89,7 +89,7 @@ public class MagicLinkV2UserSwitchTest extends AbstractMagicLinkTest {
     private String generateLink(String email, String redirectUri,
                                 boolean reusable, boolean confirmUserSwitch)
             throws com.fasterxml.jackson.core.JsonProcessingException {
-        MagicLinkV2Request req = new MagicLinkV2Request();
+        LoginTokenRequest req = new LoginTokenRequest();
         req.setEmail(email);
         req.setClientId(TEST_CLIENT);
         req.setReusable(reusable);
@@ -100,7 +100,7 @@ public class MagicLinkV2UserSwitchTest extends AbstractMagicLinkTest {
                 .auth().oauth2(keycloak.tokenManager().getAccessTokenString())
                 .contentType("application/json")
                 .body(Helpers.toJsonString(req))
-                .post(V2_PATH)
+                .post(LOGIN_TOKEN_PATH)
                 .then()
                 .statusCode(200)
                 .extract().jsonPath().getString("login_hint");

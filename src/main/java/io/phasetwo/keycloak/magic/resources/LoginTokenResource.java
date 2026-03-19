@@ -1,12 +1,12 @@
 package io.phasetwo.keycloak.magic.resources;
 
 import static io.phasetwo.keycloak.magic.MagicLink.MAGIC_LINK;
-import static io.phasetwo.keycloak.magic.auth.token.MagicLinkV2Token.*;
+import static io.phasetwo.keycloak.magic.auth.token.LoginToken.*;
 
 import io.phasetwo.keycloak.magic.MagicLink;
-import io.phasetwo.keycloak.magic.auth.MagicLinkBFAuthenticator;
-import io.phasetwo.keycloak.magic.representation.MagicLinkV2Request;
-import io.phasetwo.keycloak.magic.representation.MagicLinkV2Response;
+import io.phasetwo.keycloak.magic.auth.LoginTokenVerifier;
+import io.phasetwo.keycloak.magic.representation.LoginTokenRequest;
+import io.phasetwo.keycloak.magic.representation.LoginTokenResponse;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.ForbiddenException;
@@ -26,12 +26,12 @@ import org.keycloak.models.SingleUseObjectProvider;
 import org.keycloak.models.UserModel;
 
 /**
- * REST endpoint for generating Magic Link v2 credentials.
+ * REST endpoint for generating Login Token credentials.
  *
  * <p>Unlike the v1 {@code /magic-link} endpoint, this endpoint does <em>not</em> authenticate the
  * user directly and does <em>not</em> build an OIDC authorization URL. Instead it stores the
  * credential in {@link SingleUseObjectProvider} (Infinispan) under a random UUID and returns the
- * {@code login_hint} value ({@code mlv2:{uuid}}) that the caller must pass to the OIDC
+ * {@code login_hint} value ({@code lt:{uuid}}) that the caller must pass to the OIDC
  * authorization endpoint.
  *
  * <p>The caller is responsible for constructing the full OIDC authorization URL, including PKCE
@@ -40,28 +40,28 @@ import org.keycloak.models.UserModel;
  * <strong>must</strong> include {@code prompt=login} to prevent Keycloak from short-circuiting the
  * flow with an existing session belonging to a different user.
  *
- * <p>The {@link MagicLinkBFAuthenticator} inside the browser flow looks up the credential by UUID
+ * <p>The {@link LoginTokenVerifier} inside the browser flow looks up the credential by UUID
  * and completes authentication.
  *
  * <p>Requires the same {@code manage-users} permission as the v1 endpoint.
  */
 @JBossLog
-public class MagicLinkV2Resource extends AbstractAdminResource {
+public class LoginTokenResource extends AbstractAdminResource {
 
-  public MagicLinkV2Resource(KeycloakSession session) {
+  public LoginTokenResource(KeycloakSession session) {
     super(session);
   }
 
   @POST
   @Consumes(MediaType.APPLICATION_JSON)
   @Produces(MediaType.APPLICATION_JSON)
-  public MagicLinkV2Response createMagicLinkV2(final MagicLinkV2Request req) {
+  public LoginTokenResponse createLoginToken(final LoginTokenRequest req) {
     if (!permissions.users().canManage()) {
-      throw new ForbiddenException("magic link v2 requires manage-users");
+      throw new ForbiddenException("login token requires manage-users");
     }
 
     if (Config.getAdminRealm().equals(realm.getName())) {
-      throw new BadRequestException("Magic links are not allowed for the master realm");
+      throw new BadRequestException("Login tokens are not allowed for the master realm");
     }
 
     if (req.getClientId() == null || req.getClientId().isBlank()) {
@@ -134,16 +134,16 @@ public class MagicLinkV2Resource extends AbstractAdminResource {
     }
 
     SingleUseObjectProvider singleUse = session.getProvider(SingleUseObjectProvider.class);
-    singleUse.put(MagicLinkBFAuthenticator.DATA_KEY_PREFIX + tokenId,
+    singleUse.put(LoginTokenVerifier.DATA_KEY_PREFIX + tokenId,
         (long) req.getExpirationSeconds(), notes);
 
     log.debugf(
-        "[MLv2] token stored for user=%s client=%s expiry=%d loa=%s reusable=%s",
+        "[LT] token stored for user=%s client=%s expiry=%d loa=%s reusable=%s",
         user.getId(), req.getClientId(), absoluteExpiry,
         req.getForceSessionLoa(), req.getReusable());
 
-    MagicLinkV2Response resp = new MagicLinkV2Response();
-    resp.setLoginHint(MagicLinkBFAuthenticator.RESUME_PREFIX + tokenId);
+    LoginTokenResponse resp = new LoginTokenResponse();
+    resp.setLoginHint(LoginTokenVerifier.RESUME_PREFIX + tokenId);
     return resp;
   }
 }
