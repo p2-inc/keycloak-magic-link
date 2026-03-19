@@ -107,7 +107,7 @@ The original Magic Link authenticates the user *directly* via the action-token h
 - `acr_values` / step-up authentication cannot be evaluated natively.
 - Subsequent authenticators (e.g. TOTP for LOA=2) cannot run in the same browser session.
 
-Login Token solves this by returning a **standard OIDC authorization URL** instead of an action-token URL. The credential is stored server-side in Infinispan; only a short UUID reference (`lt:{uuid}`) is placed in `login_hint`. The standard browser flow runs in full — `acr_values`, `Condition – Level of Authentication`, and all step-up logic work natively.
+Login Token solves this by returning a **login token** instead of an action-token URL. The credential is stored server-side in Infinispan; only a short UUID reference (`lt:{uuid}`) is returned in `login_hint`. The standard browser flow runs in full — `acr_values`, `Condition – Level of Authentication`, and all step-up logic work natively.
 
 ### How it works
 
@@ -151,37 +151,6 @@ Caller constructs the OIDC authorization URL and opens it in the browser:
 > authentication to fail silently. The UUID reference (`lt:{uuid}`) is ~42 characters.
 > Security is equivalent to v1 action tokens: 128-bit random UUID entropy + Infinispan TTL +
 > atomic single-use tracking.
-
-### Browser flow setup
-
-Add the **Login Token Verifier** (`login-token-verifier`) as an **ALTERNATIVE** execution **before Cookie** in your browser flow. When `login_hint` does not start with `lt:`, the verifier calls `context.attempted()` and lets the next alternative (Cookie, then Username/Password) handle the request normally.
-
-Placing the verifier _before_ Cookie is important: if Cookie runs first and finds an active session, Keycloak stops there and never reaches the verifier — meaning a login token for User B would silently return User A's token.
-
-```
-Browser Flow
-├── Login Token Verifier (login-token-verifier)  [ALTERNATIVE]  ← add this, before Cookie
-├── Cookie  [ALTERNATIVE]
-├── Kerberos  [ALTERNATIVE]
-└── Username/Password Form  [ALTERNATIVE]
-```
-
-For step-up / LOA flows, place the verifier inside a Conditional sub-flow:
-
-```
-Browser Flow
-├── Login Token Verifier (login-token-verifier)  [ALTERNATIVE]  ← before Cookie
-├── Cookie  [ALTERNATIVE]
-└── Authentication  [ALTERNATIVE]
-    ├── LOA=1 sub-flow  [CONDITIONAL]
-    │   ├── Condition – Level of Authentication  (loa=1)
-    │   └── Login Token Verifier  [ALTERNATIVE]   ← also here for LOA=1
-    └── LOA=2 sub-flow  [CONDITIONAL]
-        ├── Condition – Level of Authentication  (loa=2)
-        └── Email OTP / TOTP  [REQUIRED]          ← runs after the verifier
-```
-
-When placed inside a Conditional sub-flow, the verifier automatically reads the configured LOA level from the sibling `Condition – Level of Authentication` as a fallback (overridden by `loa` in the API request).
 
 ### REST API — `/login-token`
 
