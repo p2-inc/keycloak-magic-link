@@ -14,6 +14,7 @@ import org.keycloak.authentication.authenticators.conditional.ConditionalLoaAuth
 import org.keycloak.authentication.authenticators.util.AcrStore;
 import org.keycloak.authentication.authenticators.util.LoAUtil;
 import org.keycloak.events.Details;
+import org.keycloak.authentication.authenticators.browser.AbstractUsernameFormAuthenticator;
 import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
@@ -112,6 +113,8 @@ public class MagicLinkBFAuthenticator implements Authenticator {
    */
   private static void clearLoginHint(AuthenticationFlowContext context) {
     context.getAuthenticationSession().removeClientNote(OIDCLoginProtocol.LOGIN_HINT_PARAM);
+    context.getAuthenticationSession().removeAuthNote(
+        AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME);
   }
 
   private void handleTokenId(AuthenticationFlowContext context, String tokenId) {
@@ -226,6 +229,10 @@ public class MagicLinkBFAuthenticator implements Authenticator {
       context.getAuthenticationSession().setAuthNote(Details.REMEMBER_ME, "true");
     }
 
+    clearLoginHint(context);
+    String displayEmail = user.getEmail() != null ? user.getEmail() : user.getUsername();
+    context.getAuthenticationSession().setAuthNote(
+        AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME, displayEmail);
     log.debugf("[MLv2] authentication complete for user '%s'", user.getId());
     context.success();
   }
