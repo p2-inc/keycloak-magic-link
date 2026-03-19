@@ -241,22 +241,6 @@ A confirmation page is shown informing the user that they are currently signed i
 - **Sign out and continue** — performs the same automatic logout and redirect as the default behaviour.
 - **Cancel** — aborts the flow and redirects back to the client with `error=access_denied`.
 
-### Differences from Magic Link v1
-
-| | Magic Link (v1) | Login Token |
-|---|---|---|
-| Endpoint | `POST /magic-link` | `POST /login-token` |
-| Returned URL | Action-token URL (`login-actions/action-token?key=...`) | OIDC auth URL (`protocol/openid-connect/auth?...`) |
-| Authentication | Direct — bypasses browser flow | Via browser flow — full flow executes |
-| `acr_values` / step-up | Not supported | Fully supported |
-| OIDC params in request | Supplied in API body | Supplied via `additional_parameters` or appended to URL |
-| `redirect_uri` in request | Required | Optional — top-level field or via `additional_parameters` |
-| `prompt=login` | Not set | Always set — prevents silent session reuse |
-| `reusable` default | `true` | `true` (reusable) |
-| User-switch (different user already logged in) | Not handled | Auto-logout by default; optional confirmation screen via `confirm_user_switch` |
-| Flow authenticator required | No | Yes — Login Token Verifier must be in the flow |
-| Breaking change risk | — | None — Magic Link v1 and Login Token coexist independently |
-
 ---
 
 ## Email OTP
