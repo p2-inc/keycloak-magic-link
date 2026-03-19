@@ -6,6 +6,11 @@ export default defineConfig({
     env: {
       mailhogUrl: process.env.MAILHOG_URL || 'undefined',
       generatedMagicLink: process.env.GENERATED_MAGIC_LINK || 'undefined',
+      generatedMagicLinkV2: process.env.GENERATED_MAGIC_LINK_V2 || 'undefined',
+      linkUserA:       process.env.LINK_USER_A        || 'undefined',
+      linkUserBAuto:   process.env.LINK_USER_B_AUTO   || 'undefined',
+      linkUserBConfirm: process.env.LINK_USER_B_CONFIRM || 'undefined',
+      linkUserBCancel: process.env.LINK_USER_B_CANCEL  || 'undefined',
     },
     reporter: 'cypress-multi-reporters',
     reporterOptions: {

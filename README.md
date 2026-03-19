@@ -46,13 +46,13 @@ When the period is exceeded the authentication flow will reset.
 
 ### Keycloakify Theme Templates
 
-If you are using Keycloakify and need the templates, you can find them in our Keycloakify Starter [fork](https://github.com/p2-inc/keycloakify-starter/tree/p2/magic-link-extension-templates) (go into the [pages](https://github.com/p2-inc/keycloakify-starter/tree/p2/magic-link-extension-templates/src/login/pages) folder). 
+If you are using Keycloakify and need the templates, you can find them in our Keycloakify Starter [fork](https://github.com/p2-inc/keycloakify-starter/tree/p2/magic-link-extension-templates) (go into the [pages](https://github.com/p2-inc/keycloakify-starter/tree/p2/magic-link-extension-templates/src/login/pages) folder).
 
 ### Resource
 
 A Resource you can call with `manage-users` role, which allows you to specify the email, clientId, redirectUri, tokenExpiry and optionally if the email is sent, or the link is just returned to the caller.
 
-Resources created with this API method return a URL that uses an Action Token. This will log a user in directly and skip any Authentication Flows defined. 
+Resources created with this API method return a URL that uses an Action Token. This will log a user in directly and skip any Authentication Flows defined.
 
 Parameters:
 | Name | Required | Default | Description |
@@ -93,6 +93,177 @@ Sample response:
   "sent": false
 }
 ```
+
+---
+
+## Login Token
+
+Login Token is a drop-in parallel implementation that can be deployed alongside the existing Magic Link without any breaking changes or flow migration.
+
+### Why Login Token?
+
+The original Magic Link authenticates the user *directly* via the action-token handler, bypassing the standard Keycloak browser flow entirely. This means:
+
+- `acr_values` / step-up authentication cannot be evaluated natively.
+- Subsequent authenticators (e.g. TOTP for LOA=2) cannot run in the same browser session.
+
+Login Token solves this by returning a **login token** instead of an action-token URL. The credential is stored server-side in Infinispan; only a short UUID reference (`lt:{uuid}`) is returned in `login_hint`. The standard browser flow runs in full — `acr_values`, `Condition – Level of Authentication`, and all step-up logic work natively.
+
+### How it works
+
+```
+POST /realms/{realm}/login-token
+  → credential data (userId, clientId, expiry, optional LOA/rememberMe)
+    stored in Infinispan under key "lt:data:{uuid}" with the requested TTL
+  → returns: { "login_hint": "lt:{uuid}" }
+
+Caller constructs the OIDC authorization URL and opens it in the browser:
+  https://keycloak.host/realms/{realm}/protocol/openid-connect/auth
+    ?client_id=myapp
+    &response_type=code
+    &login_hint=lt:{uuid}       ← returned login_hint passed verbatim
+    &prompt=login               ← required (see note below)
+    &redirect_uri=...           ← caller's redirect URI
+    &code_challenge=...         ← caller's PKCE challenge
+    &state=...                  ← caller's state
+    [+ any other OIDC params]
+
+  → standard OIDC browser flow starts
+  → Login Token Verifier (login-token-verifier) resolves the credential:
+      1. Strips "lt:" prefix from login_hint to get the UUID
+      2. Looks up credential data in Infinispan by "lt:data:{uuid}"
+      3. Checks expiry (TTL-enforced by Infinispan + explicit timestamp check)
+      4. Verifies stored clientId matches the current OIDC client
+      5. Enforces single-use via putIfAbsent("lt:used:{uuid}", ttl)
+         (unless reusable=true)
+      6. Sets user, optional LOA, optional remember-me
+      7. context.success() → flow continues normally
+  → Any subsequent step-up authenticators run in the same browser session
+```
+
+> **`prompt=login` is required.** Without it, Keycloak may find an existing session cookie before
+> the Login Token Verifier runs and pre-populate the auth session with the cookie user.
+> This causes an `already authenticated as different user` error when the Verifier later tries
+> to authenticate the login token target user.
+
+> **Why UUID instead of a signed JWT?**  Keycloak silently ignores OIDC parameters longer than
+> 255 characters. A typical HS512/RS256 JWT is 500–700 characters and would be dropped, causing
+> authentication to fail silently. The UUID reference (`lt:{uuid}`) is ~42 characters.
+> Security is equivalent to v1 action tokens: 128-bit random UUID entropy + Infinispan TTL +
+> atomic single-use tracking.
+
+### REST API — `/login-token`
+
+Requires `manage-users` role (same as `/magic-link`).
+
+**Parameters:**
+
+| Name | Required | Default | Description |
+| ----- | ----- | ----- | ----- |
+| `user_id` | Y* | | Keycloak user ID. Takes precedence over `email` and `username` when provided. `force_create` is ignored. |
+| `email` | Y* | | Email address of the user. Mutually exclusive with `username`. |
+| `username` | Y* | | Username of the user. When provided, `force_create` is ignored. |
+| `client_id` | Y | | Client ID validated when the login token is redeemed. The verifier rejects redemption attempts from any other client. |
+| `expiration_seconds` | N | 300 (5 min) | Token validity in seconds. |
+| `loa` | N | | Force the session to this LOA level, overriding the flow's Condition configuration. |
+| `remember_me` | N | false | Set the remember-me flag on the session. |
+| `force_create` | N | false | Create the user if they do not exist (email only). |
+| `reusable` | N | true | Allow the token to be used more than once within its validity window. |
+| `set_email_verified` | N | false | When `true`, marks the user's email as verified after the token is successfully validated. |
+| `confirm_user_switch` | N | false | Controls behaviour when a different user is already logged in on the device. When `false` (default), the existing session is silently logged out and the login token is processed automatically. When `true`, a confirmation screen is shown asking the user to approve the logout before continuing. |
+
+*One of `user_id`, `email`, or `username` is required. `user_id` takes precedence if multiple are provided.
+
+> **Important: place the Login Token Verifier before the Cookie authenticator in your flow.**
+> Keycloak evaluates ALTERNATIVE executions in order and stops at the first success. If Cookie
+> runs before the Verifier and an active session exists, Keycloak silently returns that session's
+> token — even if it belongs to a different user than the one in the login token. Placing the
+> Verifier first ensures it always gets to evaluate `login_hint` before Cookie can short-circuit
+> the flow:
+>
+> ```
+> Browser Flow
+> ├── Login Token Verifier  [ALTERNATIVE]  ← must be first
+> ├── Cookie                [ALTERNATIVE]
+> ├── Kerberos              [ALTERNATIVE]
+> └── Username/Password     [ALTERNATIVE]
+> ```
+
+**Sample request:**
+
+```
+curl --request POST https://keycloak.host/realms/test/login-token \
+ --header "Accept: application/json" \
+ --header "Content-Type: application/json" \
+ --header "Authorization: Bearer <access_token>" \
+ --data '{
+   "email": "foo@example.com",
+   "client_id": "myapp",
+   "expiration_seconds": 300
+ }'
+```
+
+**Sample response:**
+
+```json
+{
+  "login_hint": "lt:5713e2a7-53a6-4fbc-8ff5-53d5d8862418"
+}
+```
+
+The caller then constructs the OIDC authorization URL using the returned `login_hint` and opens it in the browser (or sends it to the user by email/SMS):
+
+```
+https://keycloak.host/realms/test/protocol/openid-connect/auth
+  ?client_id=myapp
+  &response_type=code
+  &login_hint=lt:5713e2a7-53a6-4fbc-8ff5-53d5d8862418
+  &prompt=login
+  &redirect_uri=https://myapp.example.com/callback
+  &scope=openid profile
+  &state=abc123
+  &nonce=xyz789
+  &code_challenge=<S256-challenge>
+  &code_challenge_method=S256
+```
+
+The caller is fully responsible for PKCE (`code_challenge`, `code_challenge_method`, `code_verifier`), `state`, `nonce`, `redirect_uri`, and `scope`. This design ensures that the entity generating the PKCE `code_verifier` is always the same entity that handles the authorization code callback — regardless of whether the link is opened on the same device or clicked on a different device (e.g. from an email).
+
+### User-switch behaviour
+
+When a login token is opened for User B while User A is already logged in on the same device, the verifier detects the session conflict and handles it based on the `confirm_user_switch` parameter:
+
+**Default (`confirm_user_switch: false`) — automatic logout:**
+The existing session cookies are silently expired and the browser is redirected to a fresh OIDC authorization request. The login token is still valid (single-use mark is not set until authentication completes), so the fresh flow picks it up and logs User B in transparently — no screen is shown.
+
+**`confirm_user_switch: true` — confirmation screen:**
+A confirmation page is shown informing the user that they are currently signed in on this device and asking whether they want to continue. Two options are presented:
+- **Sign out and continue** — performs the same automatic logout and redirect as the default behaviour.
+- **Cancel** — aborts the flow and redirects back to the client with `error=access_denied`.
+
+### Login Token (form-based)
+
+In addition to the `login_hint`-based flow, there is a form-based authenticator that presents a UI input field so users can manually enter a login token.
+
+**Provider ID:** `login-token-form` · **UI display name:** `Login Token`
+
+The form accepts the token with or without the `lt:` prefix — the prefix is added automatically if absent. On an invalid or expired token the form is re-displayed with an error message; the flow never falls through silently to the next alternative.
+
+**Placement:** Add as `ALTERNATIVE` or `REQUIRED` in the browser flow. Unlike `Login Token (with login_hint)`, this authenticator always shows a UI — do not place it before the Cookie authenticator unless you want every unauthenticated visit to show the token form.
+
+**User-switch behaviour:** When a user-switch is needed (an active session exists for a different user), the confirmation dialog is always shown regardless of the token's `confirm_user_switch` flag. Auto-logout without confirmation is inappropriate in an interactive form context. After confirmation, session cookies are expired and the browser is redirected to a fresh OIDC authorization URL with `login_hint=lt:{tokenId}` so that `Login Token (with login_hint)` can complete the authentication automatically if it is present in the same flow.
+
+**Example flow using both authenticators:**
+
+```
+Browser Flow
+├── Login Token (with login_hint)  [ALTERNATIVE]  ← automated redemption via login_hint
+├── Cookie                         [ALTERNATIVE]
+└── Forms sub-flow                 [ALTERNATIVE]
+    └── Login Token                [ALTERNATIVE]  ← manual entry form as fallback
+```
+
+---
 
 ## Email OTP
 

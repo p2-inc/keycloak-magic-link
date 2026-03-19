@@ -1,0 +1,86 @@
+{
+  "realm": "test-realm-v2",
+  "displayName": "Login Token API Test Realm",
+  "enabled": true,
+  "smtpServer": {
+    "host": "mailhog",
+    "port": 1025,
+    "from": "noreply@phasetwo.io",
+    "password": "**********",
+    "user": "username",
+    "auth": "true"
+  },
+  "clients": [
+    {
+      "clientId": "v2-test-client",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "redirectUris": ["http://localhost/*", "http://host.testcontainers.internal:*"],
+      "webOrigins": ["+"],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "basic",
+        "email"
+      ]
+    }
+  ],
+  "authenticationFlows": [
+    {
+      "alias": "login-token-flow",
+      "description": "Browser flow with Login Token Verifier for integration tests.",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-cookie",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticatorFlow": true,
+          "requirement": "ALTERNATIVE",
+          "priority": 20,
+          "autheticatorFlow": true,
+          "flowAlias": "Login Token forms",
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "alias": "Login Token forms",
+      "description": "",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "login-token-verifier",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        }
+      ]
+    }
+  ],
+  "browserFlow": "login-token-flow",
+  "users": [
+    {
+      "username": "testuser@phasetwo.io",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "testuser@phasetwo.io",
+      "firstName": "Test",
+      "lastName": "User"
+    }
+  ]
+}
