@@ -49,7 +49,6 @@ public class MagicLinkResource extends AbstractAdminResource {
     if (rep.getUsername() != null) {
       emailOrUsername = rep.getUsername();
       forceCreate = false;
-      sendEmail = false;
     }
 
     UserModel user =
@@ -65,6 +64,10 @@ public class MagicLinkResource extends AbstractAdminResource {
       throw new NotFoundException(
           String.format(
               "User with email/username %s not found, and forceCreate is off.", emailOrUsername));
+
+    if (user.getEmail() == null || user.getEmail().isBlank()) {
+      sendEmail = false;
+    }
 
     MagicLinkActionToken token =
         MagicLink.createActionToken(
