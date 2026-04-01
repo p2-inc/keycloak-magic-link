@@ -30,8 +30,31 @@ public class MagicLinkResource extends AbstractAdminResource {
   @Consumes(MediaType.APPLICATION_JSON)
   @Produces(MediaType.APPLICATION_JSON)
   public MagicLinkResponse createMagicLink(final MagicLinkRequest rep) {
-    if (!permissions.users().canManage())
-      throw new ForbiddenException("magic link requires manage-users");
+    String emailOrUsername = rep.getEmail();
+    boolean forceCreate = rep.isForceCreate();
+    boolean sendEmail = rep.isSendEmail();
+
+    if (rep.getUsername() != null) {
+      emailOrUsername = rep.getUsername();
+      forceCreate = false;
+    }
+
+    UserModel user = MagicLink.findUser(session, realm, emailOrUsername);
+
+    if (user != null) {
+        if (!permissions.users().canManage(user))
+          throw new ForbiddenException("can't manager user " + user.getUsername());
+    } else {
+        if (!forceCreate) {
+            throw new NotFoundException(
+                    String.format(
+                            "User with email/username %s not found, and forceCreate is off.", emailOrUsername));
+        }
+
+        if (!permissions.users().canManage()) {
+            throw new ForbiddenException("magic link requires manage-users");
+        }
+    }
 
     ClientModel client = session.clients().getClientByClientId(realm, rep.getClientId());
     if (client == null)
@@ -40,30 +63,18 @@ public class MagicLinkResource extends AbstractAdminResource {
       throw new BadRequestException(
           String.format("redirectUri %s disallowed by client.", rep.getRedirectUri()));
 
-    String emailOrUsername = rep.getEmail();
-    boolean forceCreate = rep.isForceCreate();
-    boolean updateProfile = rep.isUpdateProfile();
-    boolean updatePassword = rep.isUpdatePassword();
-    boolean sendEmail = rep.isSendEmail();
-
-    if (rep.getUsername() != null) {
-      emailOrUsername = rep.getUsername();
-      forceCreate = false;
-    }
-
-    UserModel user =
-        MagicLink.getOrCreate(
-            session,
-            realm,
-            emailOrUsername,
-            forceCreate,
-            updateProfile,
-            updatePassword,
-            MagicLink.registerEvent(event, MAGIC_LINK));
+    // previous lookup failed, permission to manage all users is verified, so try to create the user now
     if (user == null)
-      throw new NotFoundException(
-          String.format(
-              "User with email/username %s not found, and forceCreate is off.", emailOrUsername));
+    {
+        user = MagicLink.getOrCreate(
+                session,
+                realm,
+                emailOrUsername,
+                true,
+                rep.isUpdateProfile(),
+                rep.isUpdatePassword(),
+                MagicLink.registerEvent(event, MAGIC_LINK));
+    }
 
     if (user.getEmail() == null || user.getEmail().isBlank()) {
       sendEmail = false;
