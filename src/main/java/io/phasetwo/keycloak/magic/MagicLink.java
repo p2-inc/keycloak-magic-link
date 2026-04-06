@@ -98,6 +98,12 @@ public class MagicLink {
       return null;
     }
     UserModel user = findUserByNameOrEmail(session, realm, emailOrUsername);
+    // findUserByNameOrEmail skips the email lookup when loginWithEmailAllowed=false.
+    // Fall back to a direct email lookup so users whose username differs from their
+    // email (e.g. multi-tenant composite usernames) can still receive magic links.
+    if (user == null && isValidEmail(emailOrUsername)) {
+      user = session.users().getUserByEmail(realm, emailOrUsername);
+    }
     // If the user does not exist, we create it ONLY if forceCreate is true
     if (user == null && forceCreate) {
       user = session.users().addUser(realm, emailOrUsername);
