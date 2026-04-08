@@ -250,6 +250,10 @@ class LoginTokenHelper {
         context.getAuthenticationSession().getClientNote(OIDCLoginProtocol.CODE_CHALLENGE_PARAM);
     String codeChallengeMethod =
         context.getAuthenticationSession().getClientNote(OIDCLoginProtocol.CODE_CHALLENGE_METHOD_PARAM);
+    String state               =
+        context.getAuthenticationSession().getClientNote(OIDCLoginProtocol.STATE_PARAM);
+    String nonce               =
+        context.getAuthenticationSession().getClientNote(OIDCLoginProtocol.NONCE_PARAM);
 
     // Expire the Keycloak identity cookies (KEYCLOAK_IDENTITY / KEYCLOAK_SESSION) AND the
     // auth-session cookie (AUTH_SESSION_ID). Without expiring AUTH_SESSION_ID, the redirect
@@ -279,6 +283,12 @@ class LoginTokenHelper {
     }
     if (codeChallengeMethod != null && !codeChallengeMethod.isBlank()) {
       authUri.queryParam("code_challenge_method", codeChallengeMethod);
+    }
+    if (state != null && !state.isBlank()) {
+      authUri.queryParam("state", state);
+    }
+    if (nonce != null && !nonce.isBlank()) {
+      authUri.queryParam("nonce", nonce);
     }
 
     log.debugf("[LT] cookie expiry + redirect for token '%s'", tokenId);
