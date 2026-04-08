@@ -5,7 +5,7 @@
     <#elseif section = "form">
       <form id="kc-user-switch-form" class="${properties.kcFormClass!}" action="${url.loginAction}" method="post">
         <div class="${properties.kcFormGroupClass!}">
-          <p>${msg("magicLinkUserSwitchInfoPre")}<strong>${currentUsername}</strong>${msg("magicLinkUserSwitchInfoPost")}</p>
+          <p>${kcSanitize(msg("magicLinkUserSwitchInfo", currentUsername, targetUsername))?no_esc}</p>
         </div>
 
         <div class="${properties.kcFormGroupClass!}">
