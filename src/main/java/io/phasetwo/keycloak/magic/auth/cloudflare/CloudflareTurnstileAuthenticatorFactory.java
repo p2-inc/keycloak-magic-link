@@ -1,4 +1,4 @@
-package io.phasetwo.keycloak.magic.auth;
+package io.phasetwo.keycloak.magic.auth.cloudflare;
 
 import com.google.auto.service.AutoService;
 import io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile;

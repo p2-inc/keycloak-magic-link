@@ -1,0 +1,10 @@
+{
+  "themes": [
+    {
+      "name": "cloudflare-turnstile",
+      "types": [
+        "login"
+      ]
+    }
+  ]
+}

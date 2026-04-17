@@ -1,13 +1,21 @@
 package io.phasetwo.keycloak.magic.auth.util;
 
 import com.google.common.collect.ImmutableList;
+
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+
+import io.phasetwo.keycloak.magic.auth.cloudflare.TurnstileAssessmentRequest;
 import lombok.extern.jbosslog.JBossLog;
-import org.keycloak.broker.provider.util.SimpleHttp;
-import org.keycloak.forms.login.LoginFormsProvider;
-import org.keycloak.models.KeycloakSession;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.StringEntity;
+import org.keycloak.authentication.AuthenticationFlowContext;
+import org.keycloak.authentication.ValidationContext;
+import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.provider.ProviderConfigProperty;
+import org.keycloak.util.JsonSerialization;
+import org.keycloak.utils.StringUtil;
 
 @JBossLog
 public class CloudflareTurnstile {
@@ -16,10 +24,10 @@ public class CloudflareTurnstile {
   public static final String MSG_CAPTCHA_NOT_CONFIGURED = "captchaNotConfigured";
   public static final String CF_TURNSTILE_RESPONSE = "cf-turnstile-response";
 
-  private static final String CF_SITE_KEY = "cloudflare_site_key";
-  private static final String CF_SITE_SECRET = "cloudflare_secret";
-  private static final String CF_ACTION = "cloudflare_action";
-  private static final String DEFAULT_CF_ACTION = "login";
+  public static final String CF_SITE_KEY = "cloudflare_site_key";
+  public static final String CF_SITE_SECRET = "cloudflare_secret";
+  public static final String CF_ACTION = "cloudflare_action";
+  public static final String DEFAULT_CF_ACTION = "login";
 
   public static class Config {
     private final String siteKey;
@@ -80,35 +88,34 @@ public class CloudflareTurnstile {
     configProperties = builder.build();
   }
 
-  private static final String TURNSTILE_DUMMY_TOKEN = "XXXX.DUMMY.TOKEN.XXXX";
-
-  public static boolean validate(
-      Config config, String captcha, String remoteAddr, KeycloakSession session) {
-    try {
-      Map<String, Object> response =
-          SimpleHttp.doPost("https://challenges.cloudflare.com/turnstile/v0/siteverify", session)
-              .param("secret", config.getSecret())
-              .param("response", captcha)
-              .param("remoteip", remoteAddr)
-              .asJson(Map.class);
-
-      log.debugf("Turnstile response: %s", response);
-
-      return Boolean.TRUE.equals(response.get("success"))
-          && (TURNSTILE_DUMMY_TOKEN.equals(captcha)
-              || config.getAction().equals(response.get("action")));
-    } catch (Exception e) {
-      log.warnf(e, "Failed to validate Turnstile response: %s", e.getMessage());
-      return false;
+    public static String getClientIpAddress(AuthenticationFlowContext context) {
+        return context.getConnection().getRemoteAddr();
     }
-  }
 
-  public static LoginFormsProvider prepareForm(
-      LoginFormsProvider form, Config config, String lang) {
-    form.addScript("https://challenges.cloudflare.com/turnstile/v0/api.js");
-    return form.setAttribute("captchaRequired", true)
-        .setAttribute("captchaSiteKey", config != null ? config.getSiteKey() : null)
-        .setAttribute("captchaAction", config != null ? config.getAction() : null)
-        .setAttribute("captchaLanguage", lang != null ? lang : "en");
-  }
+    public static String getClientIpAddress(ValidationContext context) {
+        return context.getConnection().getRemoteAddr();
+    }
+
+    public static HttpPost buildAssessmentRequest(String ipAddress, String captcha, Map<String, String> config) throws IOException {
+        String url = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+
+        HttpPost request = new HttpPost(url);
+        TurnstileAssessmentRequest body = new TurnstileAssessmentRequest(config.get(CloudflareTurnstile.CF_SITE_SECRET),
+                captcha,ipAddress);
+        request.setEntity(new StringEntity(JsonSerialization.writeValueAsString(body)));
+        request.setHeader("Content-type", "application/json; charset=utf-8");
+        return request;
+    }
+
+    public static boolean isTurnstileCaptchaConfigured(AuthenticatorConfigModel authenticatorConfig) {
+        if (authenticatorConfig == null) {
+            log.debug("Authentication model config is null");
+            return false;
+        }
+
+        Map<String, String> config = authenticatorConfig.getConfig();
+        return !StringUtil.isNullOrEmpty(config.get(CF_SITE_KEY))
+                && !StringUtil.isNullOrEmpty(config.get(CF_SITE_KEY))
+                && !StringUtil.isNullOrEmpty(config.get(CF_ACTION));
+    }
 }
