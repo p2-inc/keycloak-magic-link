@@ -99,15 +99,54 @@ Sample response:
 There is a simple authenticator to email a 6-digit OTP to the users email address. This implementation sends the email using a theme-resources template, which you can override. It is recommended to use this in an Authentication flow following the _Username form_. An example flow looks like this:
 ![Install Email OTP Authenticator in Browser Flow](docs/assets/email-otp-authenticator.png)
 
-## Captcha
+## Cloudflare Turnstile CAPTCHA
 
-There is an implementation of the Cloudflare captcha authenticator that renders a standalone page with the [Cloudflare Turnstile](https://www.cloudflare.com/application-services/products/turnstile/) widget to challenge for non-human or bot users.
+There are three [Cloudflare Turnstile](https://www.cloudflare.com/application-services/products/turnstile/) integrations available, each suited for a different flow type. All three share the same configuration — you will need a Cloudflare account with a Turnstile widget set up to obtain a **Site Key**, **Secret**, and **Action** value.
 
-The reason this is in this repository is that users of the Magic Link extension (with force create user enabed) have encountered issues with bots and automatic form submission, causing large numbers of illegitimate users to be created and large numbers of magic link emails to be sent. Using this before the Magic Link authenticator in your flow (or any authenticator with such issues) can help mitigate or prevent such issues. 
+Before using any of them:
 
-You will need to create an account with Cloudflare and enable a widget in the Turnstile product in order to get the site key, secret and action.
+- Go to **Realm Settings → Security Defenses → Content-Security-Policy** and add `https://challenges.cloudflare.com` to the `frame-src` directive (space-separated list) so Keycloak can load the Turnstile widget.
+- Set the login theme to `cloudflare-turnstile`. This can be applied to the entire realm under **Realm Settings → Themes → Login theme**, or to a specific client under the client's **Settings → Login settings → Login theme**.
 
-In order to allow Keycloak to frame the Cloudflare javascript, you must go to "Realm Settings" -> "Security Defenses" -> "Content-Security-Policy" and add `https://challenges.cloudflare.com` to `frame-src` (space-separated list).
+![Setting the cloudflare-turnstile login theme](docs/assets/cloudflare-turnstile-theme.png)
+
+All three share the same configuration dialog — enter your **Turnstile Site Key**, **Turnstile Secret**, and **Action** from your Cloudflare dashboard:
+
+![Cloudflare Turnstile authenticator configuration](docs/assets/cloudflare-turnstile-config.png)
+
+### Cloudflare Turnstile Validation (standalone)
+
+**Display name:** `Cloudflare Turnstile validation`
+
+A standalone authenticator step that presents a dedicated Turnstile challenge page to the user. This is the most flexible option — it can be placed before any step in a login flow that needs bot protection (e.g., before Magic Link or Email OTP). It does not require the user to be identified beforehand.
+
+**When to use:** Add it as a step in your browser flow immediately before any authenticator you want to protect, such as the Magic Link authenticator.
+
+![Cloudflare Turnstile standalone step in a browser flow](docs/assets/cloudflare-turnstile-standalone.png)
+
+### Cloudflare Turnstile Username Password Form
+
+**Display name:** `Cloudflare Turnstile Username Password Form`
+
+A drop-in replacement for Keycloak's standard **Username Password Form** step. It embeds the Turnstile widget directly into the login page alongside the username and password fields, so users complete the CAPTCHA as part of signing in rather than on a separate page.
+
+If the Turnstile check fails but the user provides valid credentials, the account is flagged for email verification before the session is granted. This acts as a soft enforcement layer so legitimate users are not hard-blocked while still raising friction for bots.
+
+> **Note:** If the authenticator configuration is missing or incomplete (no Site Key, Secret, or Action set), it falls back to behaving exactly like the standard Keycloak Username Password Form — no CAPTCHA is shown and login proceeds normally.
+
+**When to use:** Replace the standard `Username Password Form` execution in a browser flow when you want Turnstile protection on the login page itself without adding a separate step.
+
+![Cloudflare Turnstile Username Password Form in a browser flow](docs/assets/cloudflare-turnstile-username-password.png)
+
+### Cloudflare Turnstile Validation (registration form action)
+
+**Display name:** `Cloudflare Turnstile validation` (under form actions)
+
+A form action designed specifically for the **Registration** flow. It adds the Turnstile widget to the registration form and validates the challenge when the user submits. The check is automatically skipped if the user is already identified (e.g., in an invite flow).
+
+**When to use:** Add it as a form action inside the built-in Registration flow to prevent bots from bulk-creating accounts through self-registration.
+
+![Cloudflare Turnstile form action in a registration flow](docs/assets/cloudflare-turnstile-registration.png)
 
 ## Installation
 
