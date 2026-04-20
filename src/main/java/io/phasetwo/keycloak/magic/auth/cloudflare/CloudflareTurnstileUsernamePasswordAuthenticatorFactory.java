@@ -12,7 +12,8 @@ import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.provider.ProviderConfigProperty;
 
 @AutoService(AuthenticatorFactory.class)
-public class CloudflareTurnstileUsernamePasswordAuthenticatorFactory implements AuthenticatorFactory {
+public class CloudflareTurnstileUsernamePasswordAuthenticatorFactory
+    implements AuthenticatorFactory {
 
   public static final String PROVIDER_ID = "ext-auth-turnstile-username-password";
 

@@ -1,5 +1,7 @@
 package io.phasetwo.keycloak.magic.auth.cloudflare;
 
+import static io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile.*;
+
 import io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
@@ -22,118 +24,120 @@ import org.keycloak.services.ServicesLogger;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.util.JsonSerialization;
 
-import static io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile.*;
-
 @JBossLog
 public class CloudflareTurnstileUsernamePasswordAuthenticator extends UsernamePasswordForm
-        implements Authenticator {
-    private static final Logger LOGGER = Logger.getLogger(CloudflareTurnstileUsernamePasswordAuthenticator.class);
+    implements Authenticator {
+  private static final Logger LOGGER =
+      Logger.getLogger(CloudflareTurnstileUsernamePasswordAuthenticator.class);
 
-    @Override
-    public void authenticate(AuthenticationFlowContext context) {
-        AuthenticatorConfigModel authenticatorConfig = context.getAuthenticatorConfig();
-        boolean captchaRequired = isTurnstileCaptchaConfigured(authenticatorConfig);
+  @Override
+  public void authenticate(AuthenticationFlowContext context) {
+    AuthenticatorConfigModel authenticatorConfig = context.getAuthenticatorConfig();
+    boolean captchaRequired = isTurnstileCaptchaConfigured(authenticatorConfig);
 
-        if (captchaRequired) {
-            enableCloudflareTurnstile(context);
-        }
-
-        super.authenticate(context);
+    if (captchaRequired) {
+      enableCloudflareTurnstile(context);
     }
 
-    private void enableCloudflareTurnstile(AuthenticationFlowContext context) {
-        CloudflareTurnstile.Config turnstileConfig =
-                CloudflareTurnstile.readConfig(context.getAuthenticatorConfig().getConfig());
-        LoginFormsProvider form = context.form();
+    super.authenticate(context);
+  }
 
-        form.setAttribute("turnstileRequired", true);
-        form.setAttribute("turnstileSiteKey", turnstileConfig.getSiteKey());
-        form.setAttribute("turnstileAction", turnstileConfig.getAction());
+  private void enableCloudflareTurnstile(AuthenticationFlowContext context) {
+    CloudflareTurnstile.Config turnstileConfig =
+        CloudflareTurnstile.readConfig(context.getAuthenticatorConfig().getConfig());
+    LoginFormsProvider form = context.form();
+
+    form.setAttribute("turnstileRequired", true);
+    form.setAttribute("turnstileSiteKey", turnstileConfig.getSiteKey());
+    form.setAttribute("turnstileAction", turnstileConfig.getAction());
+  }
+
+  @Override
+  public void action(AuthenticationFlowContext context) {
+    AuthenticatorConfigModel authenticatorConfig = context.getAuthenticatorConfig();
+    boolean captchaRequired = isTurnstileCaptchaConfigured(authenticatorConfig);
+    boolean validRecaptcha = false;
+    if (captchaRequired) {
+      MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
+      String captcha = formData.getFirst(CloudflareTurnstile.CF_TURNSTILE_RESPONSE);
+      log.trace("Got captcha: " + captcha);
+
+      validRecaptcha = validate(context);
+    }
+    String executionIdBefore = context.getExecution().getId();
+
+    super.action(context);
+
+    boolean flowSucceeded =
+        (context.getUser() != null) || (!executionIdBefore.equals(context.getExecution().getId()));
+
+    if (captchaRequired && !validRecaptcha && flowSucceeded) {
+      // we could implement a challenge based on the last configured credential. Verify email is a
+      // default
+      context.getUser().setEmailVerified(false);
+      context.getUser().addRequiredAction(UserModel.RequiredAction.VERIFY_EMAIL);
+    }
+  }
+
+  @Override
+  protected Response challenge(AuthenticationFlowContext context, String error, String field) {
+    LoginFormsProvider form = context.form().setExecution(context.getExecution().getId());
+    AuthenticationSessionModel authenticationSession = context.getAuthenticationSession();
+    if (Boolean.parseBoolean(authenticationSession.getAuthNote("USERNAME_HIDDEN"))) {
+      field = "password";
     }
 
-    @Override
-    public void action(AuthenticationFlowContext context) {
-        AuthenticatorConfigModel authenticatorConfig = context.getAuthenticatorConfig();
-        boolean captchaRequired = isTurnstileCaptchaConfigured(authenticatorConfig);
-        boolean validRecaptcha = false;
-        if (captchaRequired) {
-            MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
-            String captcha = formData.getFirst(CloudflareTurnstile.CF_TURNSTILE_RESPONSE);
-            log.trace("Got captcha: " + captcha);
-
-            validRecaptcha = validate(context);
-        }
-        String executionIdBefore = context.getExecution().getId();
-
-        super.action(context);
-
-        boolean flowSucceeded = (context.getUser() != null) ||
-                (!executionIdBefore.equals(context.getExecution().getId()));
-
-        if (captchaRequired && !validRecaptcha && flowSucceeded){
-            // we could implement a challenge based on the last configured credential. Verify email is a default
-            context.getUser().setEmailVerified(false);
-            context.getUser().addRequiredAction(UserModel.RequiredAction.VERIFY_EMAIL);
-        }
+    if (error != null) {
+      if (field != null) {
+        form.addError(new FormMessage(field, error));
+      } else {
+        form.setError(error);
+      }
+    }
+    AuthenticatorConfigModel authenticatorConfig = context.getAuthenticatorConfig();
+    boolean captchaRequired = isTurnstileCaptchaConfigured(authenticatorConfig);
+    if (captchaRequired) {
+      enableCloudflareTurnstile(context);
     }
 
-    @Override
-    protected Response challenge(AuthenticationFlowContext context, String error, String field) {
-        LoginFormsProvider form = context.form().setExecution(context.getExecution().getId());
-        AuthenticationSessionModel authenticationSession = context.getAuthenticationSession();
-        if (Boolean.parseBoolean(authenticationSession.getAuthNote("USERNAME_HIDDEN"))) {
-            field = "password";
-        }
+    return this.createLoginForm(form);
+  }
 
-        if (error != null) {
-            if (field != null) {
-                form.addError(new FormMessage(field, error));
-            } else {
-                form.setError(error);
-            }
-        }
-        AuthenticatorConfigModel authenticatorConfig = context.getAuthenticatorConfig();
-        boolean captchaRequired = isTurnstileCaptchaConfigured(authenticatorConfig);
-        if (captchaRequired) {
-            enableCloudflareTurnstile(context);
-        }
+  protected boolean validate(AuthenticationFlowContext context) {
+    MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
+    AuthenticatorConfigModel config = context.getAuthenticatorConfig();
 
-        return this.createLoginForm(form);
+    if (config == null) {
+      LOGGER.warn("No authenticator configuration found for Turnstile Authenticator Action");
+      return false;
     }
 
-    protected boolean validate(AuthenticationFlowContext context) {
-        MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
-        AuthenticatorConfigModel config = context.getAuthenticatorConfig();
+    // Verify Turnstile token
+    String turnstileResponse = formData.getFirst(CloudflareTurnstile.CF_TURNSTILE_RESPONSE);
+    String ipAddress = getClientIpAddress(context);
+    TurnstileResponse assessment = null;
+    try {
+      HttpPost request = buildAssessmentRequest(ipAddress, turnstileResponse, config.getConfig());
+      HttpClient httpClient =
+          context.getSession().getProvider(HttpClientProvider.class).getHttpClient();
+      HttpResponse response = httpClient.execute(request);
 
-        if (config == null) {
-            LOGGER.warn("No authenticator configuration found for Turnstile Authenticator Action");
-            return false;
-        }
+      if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
+        LOGGER.errorf("Could not create Turnstile assessment: %s", response.getStatusLine());
+        EntityUtils.consumeQuietly(response.getEntity());
+        throw new Exception(response.getStatusLine().getReasonPhrase());
+      }
 
-        // Verify Turnstile token
-        String turnstileResponse = formData.getFirst(CloudflareTurnstile.CF_TURNSTILE_RESPONSE);
-        String ipAddress = getClientIpAddress(context);
-        TurnstileResponse assessment = null;
-        try {
-            HttpPost request = buildAssessmentRequest(ipAddress, turnstileResponse, config.getConfig());
-            HttpClient httpClient = context.getSession().getProvider(HttpClientProvider.class).getHttpClient();
-            HttpResponse response = httpClient.execute(request);
+      assessment =
+          JsonSerialization.readValue(response.getEntity().getContent(), TurnstileResponse.class);
+      LOGGER.tracef("Got assessment response: %s", assessment);
 
-            if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
-                LOGGER.errorf("Could not create Turnstile assessment: %s", response.getStatusLine());
-                EntityUtils.consumeQuietly(response.getEntity());
-                throw new Exception(response.getStatusLine().getReasonPhrase());
-            }
+      return assessment.isSuccess()
+          && config.getConfig().getOrDefault(CF_ACTION, "login").equals(assessment.getAction());
+    } catch (Exception e) {
+      ServicesLogger.LOGGER.recaptchaFailed(e);
 
-            assessment = JsonSerialization.readValue(
-                    response.getEntity().getContent(), TurnstileResponse.class);
-            LOGGER.tracef("Got assessment response: %s", assessment);
-
-            return assessment.isSuccess();
-        } catch (Exception e) {
-            ServicesLogger.LOGGER.recaptchaFailed(e);
-
-            return false;
-        }
+      return false;
     }
+  }
 }

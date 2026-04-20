@@ -79,6 +79,7 @@
                                  <div class="${properties.kcInputWrapperClass!}">
                                      <div class="cf-turnstile"
                                           data-sitekey="${turnstileSiteKey}"
+                                          data-action="${turnstileAction}"
                                          >
                                      </div>
                                      <#if messagesPerField.existsError('cf-turnstile-response')>

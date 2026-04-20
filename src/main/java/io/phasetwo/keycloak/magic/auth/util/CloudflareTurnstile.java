@@ -1,12 +1,10 @@
 package io.phasetwo.keycloak.magic.auth.util;
 
 import com.google.common.collect.ImmutableList;
-
+import io.phasetwo.keycloak.magic.auth.cloudflare.TurnstileAssessmentRequest;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-
-import io.phasetwo.keycloak.magic.auth.cloudflare.TurnstileAssessmentRequest;
 import lombok.extern.jbosslog.JBossLog;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
@@ -88,34 +86,36 @@ public class CloudflareTurnstile {
     configProperties = builder.build();
   }
 
-    public static String getClientIpAddress(AuthenticationFlowContext context) {
-        return context.getConnection().getRemoteAddr();
+  public static String getClientIpAddress(AuthenticationFlowContext context) {
+    return context.getConnection().getRemoteAddr();
+  }
+
+  public static String getClientIpAddress(ValidationContext context) {
+    return context.getConnection().getRemoteAddr();
+  }
+
+  public static HttpPost buildAssessmentRequest(
+      String ipAddress, String captcha, Map<String, String> config) throws IOException {
+    String url = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+
+    HttpPost request = new HttpPost(url);
+    TurnstileAssessmentRequest body =
+        new TurnstileAssessmentRequest(
+            config.get(CloudflareTurnstile.CF_SITE_SECRET), captcha, ipAddress);
+    request.setEntity(new StringEntity(JsonSerialization.writeValueAsString(body)));
+    request.setHeader("Content-type", "application/json; charset=utf-8");
+    return request;
+  }
+
+  public static boolean isTurnstileCaptchaConfigured(AuthenticatorConfigModel authenticatorConfig) {
+    if (authenticatorConfig == null) {
+      log.debug("Authentication model config is null");
+      return false;
     }
 
-    public static String getClientIpAddress(ValidationContext context) {
-        return context.getConnection().getRemoteAddr();
-    }
-
-    public static HttpPost buildAssessmentRequest(String ipAddress, String captcha, Map<String, String> config) throws IOException {
-        String url = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
-
-        HttpPost request = new HttpPost(url);
-        TurnstileAssessmentRequest body = new TurnstileAssessmentRequest(config.get(CloudflareTurnstile.CF_SITE_SECRET),
-                captcha,ipAddress);
-        request.setEntity(new StringEntity(JsonSerialization.writeValueAsString(body)));
-        request.setHeader("Content-type", "application/json; charset=utf-8");
-        return request;
-    }
-
-    public static boolean isTurnstileCaptchaConfigured(AuthenticatorConfigModel authenticatorConfig) {
-        if (authenticatorConfig == null) {
-            log.debug("Authentication model config is null");
-            return false;
-        }
-
-        Map<String, String> config = authenticatorConfig.getConfig();
-        return !StringUtil.isNullOrEmpty(config.get(CF_SITE_KEY))
-                && !StringUtil.isNullOrEmpty(config.get(CF_SITE_KEY))
-                && !StringUtil.isNullOrEmpty(config.get(CF_ACTION));
-    }
+    Map<String, String> config = authenticatorConfig.getConfig();
+    return !StringUtil.isNullOrEmpty(config.get(CF_SITE_KEY))
+        && !StringUtil.isNullOrEmpty(config.get(CF_SITE_KEY))
+        && !StringUtil.isNullOrEmpty(config.get(CF_ACTION));
+  }
 }
