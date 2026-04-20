@@ -89,6 +89,7 @@
                                      </#if>
                                  </div>
                              </div>
+                             <input type="hidden" name="cf-turnstile-response" value=""/>
                              <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
                           </#if>
                          <input tabindex="7" class="${properties.kcButtonClass!} ${properties.kcButtonPrimaryClass!} ${properties.kcButtonBlockClass!} ${properties.kcButtonLargeClass!}" name="login" id="kc-login" type="submit" value="${msg("doLogIn")}"/>

@@ -5,6 +5,8 @@ import io.phasetwo.keycloak.magic.auth.cloudflare.TurnstileAssessmentRequest;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+
 import lombok.extern.jbosslog.JBossLog;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
@@ -97,7 +99,8 @@ public class CloudflareTurnstile {
 
   public static HttpPost buildAssessmentRequest(
       String ipAddress, String captcha, Map<String, String> config) throws IOException {
-    String url = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+    String url = Optional.ofNullable(System.getenv("CLOUDFLARE_SITEVERIFY_URL"))
+        .orElse("https://challenges.cloudflare.com/turnstile/v0/siteverify");
 
     HttpPost request = new HttpPost(url);
     TurnstileAssessmentRequest body =

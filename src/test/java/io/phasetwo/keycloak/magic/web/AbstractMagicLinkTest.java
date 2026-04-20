@@ -21,7 +21,9 @@ import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.testcontainers.Testcontainers;
 import org.testcontainers.containers.BindMode;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
+import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.images.PullPolicy;
 import org.testcontainers.utility.MountableFile;
 
@@ -67,6 +69,15 @@ public abstract class AbstractMagicLinkTest {
                 .asList(File.class);
     }
 
+    // WireMock mocks the Cloudflare Turnstile siteverify API for Turnstile E2E tests.
+    // It is harmless for non-Turnstile test classes (Cloudflare is never called in magic-link flows).
+    public static final GenericContainer<?> wireMock =
+            new GenericContainer<>("wiremock/wiremock:3.10.0")
+                    .withNetwork(network)
+                    .withNetworkAliases("wiremock")
+                    .withExposedPorts(8080)
+                    .waitingFor(Wait.forHttp("/__admin/mappings").forStatusCode(200));
+
     public static Keycloak keycloak;
     public static ResteasyClient resteasyClient;
 
@@ -79,15 +90,18 @@ public abstract class AbstractMagicLinkTest {
                 .withProviderClassesFrom("target/classes")
                 .withProviderLibsFrom(getDeps())
                 .withNetwork(network)
-                .withAccessToHost(true);
+                .withExposedPorts(8787, 8080, 9000)
+                .withAccessToHost(true)
+                // Routes Turnstile siteverify calls to WireMock; safe for non-Turnstile tests
+                .withEnv("CLOUDFLARE_SITEVERIFY_URL", "http://wiremock:8080/turnstile/v0/siteverify");
         if (isJacocoPresent()) {
             keycloakContainer = keycloakContainer.withCopyFileToContainer(
                             MountableFile.forHostPath("target/jacoco-agent/"),
                             "/jacoco-agent"
                     )
-                    .withEnv("JAVA_OPTS", "-XX:MetaspaceSize=96M -XX:MaxMetaspaceSize=256m -javaagent:/jacoco-agent/org.jacoco.agent-runtime.jar=destfile=/tmp/jacoco.exec");
+                    .withEnv("JAVA_OPTS", "-agentlib:jdwp=transport=dt_socket,address=*:8787,server=y,suspend=n -XX:MetaspaceSize=96M -XX:MaxMetaspaceSize=256m -javaagent:/jacoco-agent/org.jacoco.agent-runtime.jar=destfile=/tmp/jacoco.exec");
         } else {
-            keycloakContainer = keycloakContainer.withEnv("JAVA_OPTS", "-XX:MetaspaceSize=96M -XX:MaxMetaspaceSize=256m");
+            keycloakContainer = keycloakContainer.withEnv("JAVA_OPTS", "-agentlib:jdwp=transport=dt_socket,address=*:8787,server=y,suspend=n -XX:MetaspaceSize=96M -XX:MaxMetaspaceSize=256m");
         }
 
         return keycloakContainer;
@@ -114,11 +128,13 @@ public abstract class AbstractMagicLinkTest {
             container.copyFileFromContainer("/tmp/jacoco.exec", "./target/jacoco-report/jacoco-%s.exec".formatted(containerShortId));
         }
         container.stop();
+        wireMock.stop();
         network.close();
     }
 
     @BeforeAll
     public static void beforeAll() {
+        wireMock.start();
         container.start();
 
         Testcontainers.exposeHostPorts(WEBHOOK_SERVER_PORT);
@@ -138,6 +154,11 @@ public abstract class AbstractMagicLinkTest {
 
     public static String getAuthUrl() {
         return container.getAuthServerUrl();
+    }
+
+    /** WireMock admin URL accessible from the test JVM (not from inside Docker). */
+    public static String getWireMockAdminUrl() {
+        return "http://" + wireMock.getHost() + ":" + wireMock.getMappedPort(8080) + "/__admin";
     }
 
     protected final RealmRepresentation importRealm(String jsonRepresentationPath) {
