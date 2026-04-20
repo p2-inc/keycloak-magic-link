@@ -26,6 +26,7 @@ public class CloudflareTurnstile {
   public static final String CF_SITE_SECRET = "cloudflare_secret";
   public static final String CF_ACTION = "cloudflare_action";
   public static final String DEFAULT_CF_ACTION = "login";
+  public static final String TURNSTILE_FAILED = "turnstile_failed";
 
   public static class Config {
     private final String siteKey;

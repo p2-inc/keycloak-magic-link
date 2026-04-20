@@ -138,6 +138,24 @@ If the Turnstile check fails but the user provides valid credentials, the accoun
 
 ![Cloudflare Turnstile Username Password Form in a browser flow](docs/assets/cloudflare-turnstile-username-password.png)
 
+#### Use case: CAPTCHA-gated 2FA
+
+A powerful pattern enabled by combining this authenticator with the **Condition - Turnstile Failed** conditional authenticator is CAPTCHA-controlled 2FA enforcement. The idea is to place a conditional subflow after the login step that contains your 2FA executions (OTP, WebAuthn, etc.) and use the two conditions below to decide when it runs.
+
+**2FA triggered by Turnstile failure**
+
+Add `Condition - Turnstile Failed` as **Required** inside the conditional subflow. The 2FA challenge is only presented to users for whom the CAPTCHA failed — suspected bots or automated submissions — while normal users who pass the widget proceed without any extra step.
+
+![2FA subflow gated by Turnstile failure](docs/assets/cloudflare-turnstile-failed-conditional-flow.png)
+
+**2FA based on user settings**
+
+Set `Condition - Turnstile Failed` to **Disabled** and rely solely on `Condition - user configured` and `Condition - credential`. The 2FA subflow now runs for any user who has a second factor enrolled, regardless of the CAPTCHA result — the standard Keycloak 2FA behaviour.
+
+![2FA subflow based on user settings](docs/assets/cloudflare-turnstile-conditioned-by-user-settings.png)
+
+By toggling the `Condition - Turnstile Failed` step between **Required** and **Disabled** you can switch the flow between bot-targeted 2FA and universal 2FA without restructuring the flow.
+
 ### Cloudflare Turnstile Validation (registration form action)
 
 **Display name:** `Cloudflare Turnstile validation` (under form actions)

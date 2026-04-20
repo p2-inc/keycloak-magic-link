@@ -19,6 +19,7 @@ import org.keycloak.connections.httpclient.HttpClientProvider;
 import org.keycloak.forms.login.LoginFormsProvider;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.UserModel;
+import org.keycloak.models.credential.PasswordCredentialModel;
 import org.keycloak.models.utils.FormMessage;
 import org.keycloak.services.ServicesLogger;
 import org.keycloak.sessions.AuthenticationSessionModel;
@@ -72,10 +73,21 @@ public class CloudflareTurnstileUsernamePasswordAuthenticator extends UsernamePa
         (context.getUser() != null) || (!executionIdBefore.equals(context.getExecution().getId()));
 
     if (captchaRequired && !validRecaptcha && flowSucceeded) {
-      // we could implement a challenge based on the last configured credential. Verify email is a
-      // default
-      context.getUser().setEmailVerified(false);
-      context.getUser().addRequiredAction(UserModel.RequiredAction.VERIFY_EMAIL);
+      var user = context.getUser();
+      context.getAuthenticationSession().setAuthNote(TURNSTILE_FAILED, "true");
+
+      boolean has2FA =
+          user.credentialManager()
+              .getCredentials()
+              .anyMatch(
+                  c ->
+                      !c.getType().equals(PasswordCredentialModel.TYPE)
+                      && !c.getType().equals(PasswordCredentialModel.PASSWORD_HISTORY));
+      //default
+      if (!has2FA) {
+          user.setEmailVerified(false);
+          user.addRequiredAction(UserModel.RequiredAction.VERIFY_EMAIL);
+      }
     }
   }
 
