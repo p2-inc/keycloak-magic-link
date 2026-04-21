@@ -1,15 +1,13 @@
 package io.phasetwo.keycloak.magic.auth.cloudflare;
 
-import static io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile.isTurnstileCaptchaConfigured;
+import static io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile.*;
 
 import io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
-import java.util.Map;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.Authenticator;
-import org.keycloak.broker.provider.util.SimpleHttp;
 import org.keycloak.forms.login.LoginFormsProvider;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
@@ -36,10 +34,14 @@ public class CloudflareTurnstileAuthenticator implements Authenticator {
     CloudflareTurnstile.Config config =
         CloudflareTurnstile.readConfig(context.getAuthenticatorConfig().getConfig());
 
-    String lang =
-        context.getUser() != null
-            ? context.getSession().getContext().resolveLocale(context.getUser()).toLanguageTag()
-            : "en";
+    String lang = null;
+    if (context.getUser() != null) {
+      lang = context.getSession().getContext().resolveLocale(context.getUser()).toLanguageTag();
+    } else if (context.getRealm() != null && context.getRealm().getDefaultLocale() != null) {
+      lang = context.getRealm().getDefaultLocale();
+    } else {
+      lang = "en";
+    }
     prepareForm(form, config, lang);
 
     Response response = form.createForm("cf-captcha.ftl");
@@ -69,36 +71,13 @@ public class CloudflareTurnstileAuthenticator implements Authenticator {
     }
   }
 
-  public boolean validate(
-      CloudflareTurnstile.Config config,
-      String captcha,
-      String remoteAddr,
-      KeycloakSession session) {
-    try {
-      Map response =
-          SimpleHttp.doPost("https://challenges.cloudflare.com/turnstile/v0/siteverify", session)
-              .param("secret", config.getSecret())
-              .param("response", captcha)
-              .param("remoteip", remoteAddr)
-              .asJson(Map.class);
-
-      log.tracef("Turnstile response: %s", response);
-
-      return Boolean.TRUE.equals(response.get("success"))
-          && config.getAction().equals(response.get("action"));
-    } catch (Exception e) {
-      log.warnf(e, "Failed to validate Turnstile response: %s", e.getMessage());
-      return false;
-    }
-  }
-
-  public static void prepareForm(
+  private void prepareForm(
       LoginFormsProvider form, CloudflareTurnstile.Config config, String lang) {
     form.addScript("https://challenges.cloudflare.com/turnstile/v0/api.js");
     form.setAttribute("captchaRequired", true)
-        .setAttribute("captchaSiteKey", config != null ? config.getSiteKey() : null)
-        .setAttribute("captchaAction", config != null ? config.getAction() : null)
-        .setAttribute("captchaLanguage", lang != null ? lang : "en");
+        .setAttribute("captchaSiteKey", config.getSiteKey())
+        .setAttribute("captchaAction", config.getAction())
+        .setAttribute("captchaLanguage", lang);
   }
 
   @Override

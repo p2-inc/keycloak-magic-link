@@ -2,18 +2,25 @@ package io.phasetwo.keycloak.magic.auth.util;
 
 import com.google.common.collect.ImmutableList;
 import io.phasetwo.keycloak.magic.auth.cloudflare.TurnstileAssessmentRequest;
+import io.phasetwo.keycloak.magic.auth.cloudflare.TurnstileResponse;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
 import lombok.extern.jbosslog.JBossLog;
+import org.apache.http.HttpResponse;
+import org.apache.http.HttpStatus;
+import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
+import org.apache.http.util.EntityUtils;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.ValidationContext;
+import org.keycloak.connections.httpclient.HttpClientProvider;
 import org.keycloak.models.AuthenticatorConfigModel;
+import org.keycloak.models.KeycloakSession;
 import org.keycloak.provider.ProviderConfigProperty;
+import org.keycloak.services.ServicesLogger;
 import org.keycloak.util.JsonSerialization;
 import org.keycloak.utils.StringUtil;
 
@@ -97,15 +104,15 @@ public class CloudflareTurnstile {
     return context.getConnection().getRemoteAddr();
   }
 
-  public static HttpPost buildAssessmentRequest(
-      String ipAddress, String captcha, Map<String, String> config) throws IOException {
-    String url = Optional.ofNullable(System.getenv("CLOUDFLARE_SITEVERIFY_URL"))
-        .orElse("https://challenges.cloudflare.com/turnstile/v0/siteverify");
+  private static HttpPost buildAssessmentRequest(String ipAddress, String captcha, Config config)
+      throws IOException {
+    String url =
+        Optional.ofNullable(System.getenv("CLOUDFLARE_SITEVERIFY_URL"))
+            .orElse("https://challenges.cloudflare.com/turnstile/v0/siteverify");
 
     HttpPost request = new HttpPost(url);
     TurnstileAssessmentRequest body =
-        new TurnstileAssessmentRequest(
-            config.get(CloudflareTurnstile.CF_SITE_SECRET), captcha, ipAddress);
+        new TurnstileAssessmentRequest(config.getSecret(), captcha, ipAddress);
     request.setEntity(new StringEntity(JsonSerialization.writeValueAsString(body)));
     request.setHeader("Content-type", "application/json; charset=utf-8");
     return request;
@@ -121,5 +128,34 @@ public class CloudflareTurnstile {
     return !StringUtil.isNullOrEmpty(config.get(CF_SITE_KEY))
         && !StringUtil.isNullOrEmpty(config.get(CF_SITE_KEY))
         && !StringUtil.isNullOrEmpty(config.get(CF_ACTION));
+  }
+
+  public static boolean validate(
+      CloudflareTurnstile.Config config,
+      String turnstileResponse,
+      String remoteAddr,
+      KeycloakSession session) {
+
+    try {
+      HttpPost request = buildAssessmentRequest(remoteAddr, turnstileResponse, config);
+      HttpClient httpClient = session.getProvider(HttpClientProvider.class).getHttpClient();
+      HttpResponse response = httpClient.execute(request);
+
+      if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
+        log.errorf("Could not create Turnstile assessment: %s", response.getStatusLine());
+        EntityUtils.consumeQuietly(response.getEntity());
+        throw new Exception(response.getStatusLine().getReasonPhrase());
+      }
+
+      var assessment =
+          JsonSerialization.readValue(response.getEntity().getContent(), TurnstileResponse.class);
+      log.tracef("Got assessment response: %s", assessment);
+
+      return assessment.isSuccess() && config.getAction().equals(assessment.getAction());
+    } catch (Exception e) {
+      ServicesLogger.LOGGER.recaptchaFailed(e);
+
+      return false;
+    }
   }
 }

@@ -6,30 +6,19 @@ import io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
 import lombok.extern.jbosslog.JBossLog;
-import org.apache.http.HttpResponse;
-import org.apache.http.HttpStatus;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.util.EntityUtils;
-import org.jboss.logging.Logger;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.authentication.authenticators.browser.UsernamePasswordForm;
-import org.keycloak.connections.httpclient.HttpClientProvider;
 import org.keycloak.forms.login.LoginFormsProvider;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.credential.PasswordCredentialModel;
 import org.keycloak.models.utils.FormMessage;
-import org.keycloak.services.ServicesLogger;
 import org.keycloak.sessions.AuthenticationSessionModel;
-import org.keycloak.util.JsonSerialization;
 
 @JBossLog
 public class CloudflareTurnstileUsernamePasswordAuthenticator extends UsernamePasswordForm
     implements Authenticator {
-  private static final Logger LOGGER =
-      Logger.getLogger(CloudflareTurnstileUsernamePasswordAuthenticator.class);
 
   @Override
   public void authenticate(AuthenticationFlowContext context) {
@@ -62,8 +51,14 @@ public class CloudflareTurnstileUsernamePasswordAuthenticator extends UsernamePa
       MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
       String captcha = formData.getFirst(CloudflareTurnstile.CF_TURNSTILE_RESPONSE);
       log.trace("Got captcha: " + captcha);
+      String turnstileResponse = formData.getFirst(CloudflareTurnstile.CF_TURNSTILE_RESPONSE);
+      String ipAddress = getClientIpAddress(context);
+      CloudflareTurnstile.Config turnstileConfig =
+          CloudflareTurnstile.readConfig(authenticatorConfig.getConfig());
 
-      validRecaptcha = validate(context);
+      validRecaptcha =
+          CloudflareTurnstile.validate(
+              turnstileConfig, turnstileResponse, ipAddress, context.getSession());
     }
     String executionIdBefore = context.getExecution().getId();
 
@@ -82,11 +77,11 @@ public class CloudflareTurnstileUsernamePasswordAuthenticator extends UsernamePa
               .anyMatch(
                   c ->
                       !c.getType().equals(PasswordCredentialModel.TYPE)
-                      && !c.getType().equals(PasswordCredentialModel.PASSWORD_HISTORY));
-      //default
+                          && !c.getType().equals(PasswordCredentialModel.PASSWORD_HISTORY));
+      // default
       if (!has2FA) {
-          user.setEmailVerified(false);
-          user.addRequiredAction(UserModel.RequiredAction.VERIFY_EMAIL);
+        user.setEmailVerified(false);
+        user.addRequiredAction(UserModel.RequiredAction.VERIFY_EMAIL);
       }
     }
   }
@@ -113,43 +108,5 @@ public class CloudflareTurnstileUsernamePasswordAuthenticator extends UsernamePa
     }
 
     return this.createLoginForm(form);
-  }
-
-  protected boolean validate(AuthenticationFlowContext context) {
-    MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
-    AuthenticatorConfigModel config = context.getAuthenticatorConfig();
-
-    if (config == null) {
-      LOGGER.warn("No authenticator configuration found for Turnstile Authenticator Action");
-      return false;
-    }
-
-    // Verify Turnstile token
-    String turnstileResponse = formData.getFirst(CloudflareTurnstile.CF_TURNSTILE_RESPONSE);
-    String ipAddress = getClientIpAddress(context);
-    TurnstileResponse assessment = null;
-    try {
-      HttpPost request = buildAssessmentRequest(ipAddress, turnstileResponse, config.getConfig());
-      HttpClient httpClient =
-          context.getSession().getProvider(HttpClientProvider.class).getHttpClient();
-      HttpResponse response = httpClient.execute(request);
-
-      if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
-        LOGGER.errorf("Could not create Turnstile assessment: %s", response.getStatusLine());
-        EntityUtils.consumeQuietly(response.getEntity());
-        throw new Exception(response.getStatusLine().getReasonPhrase());
-      }
-
-      assessment =
-          JsonSerialization.readValue(response.getEntity().getContent(), TurnstileResponse.class);
-      LOGGER.tracef("Got assessment response: %s", assessment);
-
-      return assessment.isSuccess()
-          && config.getConfig().getOrDefault(CF_ACTION, "login").equals(assessment.getAction());
-    } catch (Exception e) {
-      ServicesLogger.LOGGER.recaptchaFailed(e);
-
-      return false;
-    }
   }
 }
