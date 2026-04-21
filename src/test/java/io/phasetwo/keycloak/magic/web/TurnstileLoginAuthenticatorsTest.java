@@ -16,7 +16,7 @@ import org.testcontainers.Testcontainers;
 @JBossLog
 @org.testcontainers.junit.jupiter.Testcontainers
 @EnabledIfSystemProperty(named = "include.cypress", matches = "true")
-public class TurnstileUsernamePasswordAuthenticatorTest extends AbstractMagicLinkTest {
+public class TurnstileLoginAuthenticatorsTest extends AbstractMagicLinkTest {
 
   @TestFactory
   @DisplayName("Turnstile Username Password — CAPTCHA passes")
@@ -46,6 +46,21 @@ public class TurnstileUsernamePasswordAuthenticatorTest extends AbstractMagicLin
 
     return runCypressTests("cypress/e2e/turnstile-login-fail.cy.ts", Map.of());
   }
+
+//  @TestFactory
+//  @DisplayName("Turnstile Standalone — CAPTCHA passes")
+//  public List<DynamicContainer> testStandaloneCaptchaPasses()
+//          throws IOException, InterruptedException, TimeoutException {
+//
+//      Testcontainers.exposeHostPorts(container.getHttpPort());
+//
+//      importRealm("/realms/turnstile-standalone.json");
+//
+//      stubSiteverify(
+//              "{\"success\":true,\"action\":\"login\",\"challenge_ts\":\"2024-01-01T00:00:00Z\",\"hostname\":\"localhost\"}");
+//
+//      return runCypressTests("cypress/e2e/turnstile-standalone-login-pass.cy", Map.of());
+//  }
 
   private void stubSiteverify(String responseBody) {
     given().baseUri(getWireMockAdminUrl()).post("/reset").then().statusCode(200);

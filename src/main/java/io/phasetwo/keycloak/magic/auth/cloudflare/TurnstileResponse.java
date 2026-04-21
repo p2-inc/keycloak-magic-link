@@ -87,6 +87,9 @@ public class TurnstileResponse {
     @JsonProperty(value = "interactive", required = false)
     private String interactive;
 
+    @JsonProperty(value = "result_with_testing_key", required = false)
+    private String resultWithTestKey;
+
     public String getEphemeralId() {
       return ephemeralId;
     }
@@ -101,6 +104,14 @@ public class TurnstileResponse {
 
     public void setInteractive(String interactive) {
       this.interactive = interactive;
+    }
+
+    public String getResultWithTestKey() {
+        return resultWithTestKey;
+    }
+
+    public void setResultWithTestKey(String resultWithTestKey) {
+        this.resultWithTestKey = resultWithTestKey;
     }
   }
 }

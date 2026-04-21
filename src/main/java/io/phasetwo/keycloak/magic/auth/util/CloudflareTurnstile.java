@@ -35,17 +35,22 @@ public class CloudflareTurnstile {
   public static final String CF_SITE_SECRET = "cloudflare_secret";
   public static final String CF_ACTION = "cloudflare_action";
   public static final String DEFAULT_CF_ACTION = "login";
+  public static final String CF_SITEVERIFY_URL = "cloudflare_siteverify_url";
+  public static final String DEFAULT_CF_SITEVERIFY_URL =
+      "https://challenges.cloudflare.com/turnstile/v0/siteverify";
   public static final String TURNSTILE_FAILED = "turnstile_failed";
 
   public static class Config {
     private final String siteKey;
     private final String secret;
     private final String action;
+    private final String siteverifyUrl;
 
-    public Config(String siteKey, String secret, String action) {
+    public Config(String siteKey, String secret, String action, String siteverifyUrl) {
       this.siteKey = siteKey;
       this.secret = secret;
       this.action = action;
+      this.siteverifyUrl = siteverifyUrl;
     }
 
     public String getSiteKey() {
@@ -59,10 +64,18 @@ public class CloudflareTurnstile {
     public String getAction() {
       return action;
     }
+
+    public String getSiteverifyUrl() {
+      return siteverifyUrl;
+    }
   }
 
   public static Config readConfig(Map<String, String> config) {
-    return new Config(config.get(CF_SITE_KEY), config.get(CF_SITE_SECRET), config.get(CF_ACTION));
+    return new Config(
+        config.get(CF_SITE_KEY),
+        config.get(CF_SITE_SECRET),
+        config.get(CF_ACTION),
+        Optional.ofNullable(config.get(CF_SITEVERIFY_URL)).orElse(DEFAULT_CF_SITEVERIFY_URL));
   }
 
   public static List<ProviderConfigProperty> configProperties;
@@ -93,6 +106,14 @@ public class CloudflareTurnstile {
     prop.setDefaultValue(DEFAULT_CF_ACTION);
     builder.add(prop);
 
+    prop = new ProviderConfigProperty();
+    prop.setName(CF_SITEVERIFY_URL);
+    prop.setLabel("Siteverify URL");
+    prop.setHelpText("Cloudflare Turnstile siteverify endpoint URL.");
+    prop.setType(ProviderConfigProperty.STRING_TYPE);
+    prop.setDefaultValue(DEFAULT_CF_SITEVERIFY_URL);
+    builder.add(prop);
+
     configProperties = builder.build();
   }
 
@@ -106,11 +127,7 @@ public class CloudflareTurnstile {
 
   private static HttpPost buildAssessmentRequest(String ipAddress, String captcha, Config config)
       throws IOException {
-    String url =
-        Optional.ofNullable(System.getenv("CLOUDFLARE_SITEVERIFY_URL"))
-            .orElse("https://challenges.cloudflare.com/turnstile/v0/siteverify");
-
-    HttpPost request = new HttpPost(url);
+    HttpPost request = new HttpPost(config.getSiteverifyUrl());
     TurnstileAssessmentRequest body =
         new TurnstileAssessmentRequest(config.getSecret(), captcha, ipAddress);
     request.setEntity(new StringEntity(JsonSerialization.writeValueAsString(body)));

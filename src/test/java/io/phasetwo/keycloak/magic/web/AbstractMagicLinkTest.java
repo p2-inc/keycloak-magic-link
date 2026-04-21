@@ -1,6 +1,5 @@
 package io.phasetwo.keycloak.magic.web;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import dasniko.testcontainers.keycloak.KeycloakContainer;
 import io.github.wimdeblauwe.testcontainers.cypress.CypressContainer;
 import io.github.wimdeblauwe.testcontainers.cypress.CypressTest;
@@ -91,9 +90,7 @@ public abstract class AbstractMagicLinkTest {
                 .withProviderLibsFrom(getDeps())
                 .withNetwork(network)
                 .withExposedPorts(8787, 8080, 9000)
-                .withAccessToHost(true)
-                // Routes Turnstile siteverify calls to WireMock; safe for non-Turnstile tests
-                .withEnv("CLOUDFLARE_SITEVERIFY_URL", "http://wiremock:8080/turnstile/v0/siteverify");
+                .withAccessToHost(true);
         if (isJacocoPresent()) {
             keycloakContainer = keycloakContainer.withCopyFileToContainer(
                             MountableFile.forHostPath("target/jacoco-agent/"),
