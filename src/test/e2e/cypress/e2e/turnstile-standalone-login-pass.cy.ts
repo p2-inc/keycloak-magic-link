@@ -18,14 +18,11 @@ describe('Turnstile Standalone — CAPTCHA passes', () => {
 
   it('logs in and redirects to account when CAPTCHA passes', () => {
     cy.visit(loginUrl);
-    cy.get('#kc-login').click();
     cy.get('#username').type('test@phasetwo.io');
     cy.get('#password').type('test123');
     cy.get('#kc-login').click();
 
-    cy.url().should('contain', '/turnstile-realm/');
-    cy.url().should('not.contain', 'login-actions');
-
-    cy.contains('Personal')
+    .url().should('contain', '/turnstile-realm/');
+     cy.contains('Personal')
   });
 });

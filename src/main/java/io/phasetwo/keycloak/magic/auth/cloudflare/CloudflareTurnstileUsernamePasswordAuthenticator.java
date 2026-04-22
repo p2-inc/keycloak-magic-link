@@ -20,6 +20,8 @@ import org.keycloak.sessions.AuthenticationSessionModel;
 public class CloudflareTurnstileUsernamePasswordAuthenticator extends UsernamePasswordForm
     implements Authenticator {
 
+  public static final String CF_VERIFY_EMAIL_ON_FAIL = "verify_email_on_captcha_fail";
+
   @Override
   public void authenticate(AuthenticationFlowContext context) {
     AuthenticatorConfigModel authenticatorConfig = context.getAuthenticatorConfig();
@@ -71,15 +73,11 @@ public class CloudflareTurnstileUsernamePasswordAuthenticator extends UsernamePa
       var user = context.getUser();
       context.getAuthenticationSession().setAuthNote(TURNSTILE_FAILED, "true");
 
-      boolean has2FA =
-          user.credentialManager()
-              .getCredentials()
-              .anyMatch(
-                  c ->
-                      !c.getType().equals(PasswordCredentialModel.TYPE)
-                          && !c.getType().equals(PasswordCredentialModel.PASSWORD_HISTORY));
-      // default
-      if (!has2FA) {
+      boolean verifyEmailOnFail =
+          Boolean.parseBoolean(
+              authenticatorConfig.getConfig().getOrDefault(CF_VERIFY_EMAIL_ON_FAIL, "false"));
+      // rudimentary MFA fallback for environments without 2FA flows; disabled by default
+      if (verifyEmailOnFail) {
         user.setEmailVerified(false);
         user.addRequiredAction(UserModel.RequiredAction.VERIFY_EMAIL);
       }

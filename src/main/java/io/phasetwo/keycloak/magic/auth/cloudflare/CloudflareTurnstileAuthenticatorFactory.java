@@ -65,7 +65,8 @@ public class CloudflareTurnstileAuthenticatorFactory implements AuthenticatorFac
   @Override
   public AuthenticationExecutionModel.Requirement[] getRequirementChoices() {
     return new AuthenticationExecutionModel.Requirement[] {
-      AuthenticationExecutionModel.Requirement.REQUIRED
+      AuthenticationExecutionModel.Requirement.REQUIRED,
+      AuthenticationExecutionModel.Requirement.DISABLED,
     };
   }
 

@@ -2,6 +2,7 @@ package io.phasetwo.keycloak.magic.auth.cloudflare;
 
 import com.google.auto.service.AutoService;
 import io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile;
+import java.util.ArrayList;
 import java.util.List;
 import org.keycloak.Config;
 import org.keycloak.authentication.Authenticator;
@@ -71,6 +72,17 @@ public class CloudflareTurnstileUsernamePasswordAuthenticatorFactory
 
   @Override
   public List<ProviderConfigProperty> getConfigProperties() {
-    return CloudflareTurnstile.configProperties;
+    List<ProviderConfigProperty> props = new ArrayList<>(CloudflareTurnstile.configProperties);
+    ProviderConfigProperty prop = new ProviderConfigProperty();
+    prop.setName(CloudflareTurnstileUsernamePasswordAuthenticator.CF_VERIFY_EMAIL_ON_FAIL);
+    prop.setLabel("Verify email on CAPTCHA failure");
+    prop.setHelpText(
+        "When enabled, marks the user's email as unverified and triggers email verification if"
+            + " valid credentials are submitted but the Turnstile CAPTCHA check fails."
+            + " Disabled by default.");
+    prop.setType(ProviderConfigProperty.BOOLEAN_TYPE);
+    prop.setDefaultValue("false");
+    props.add(prop);
+    return props;
   }
 }

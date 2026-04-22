@@ -130,7 +130,7 @@ A standalone authenticator step that presents a dedicated Turnstile challenge pa
 
 A drop-in replacement for Keycloak's standard **Username Password Form** step. It embeds the Turnstile widget directly into the login page alongside the username and password fields, so users complete the CAPTCHA as part of signing in rather than on a separate page.
 
-If the Turnstile check fails but the user provides valid credentials, the account is flagged for email verification before the session is granted. This acts as a soft enforcement layer so legitimate users are not hard-blocked while still raising friction for bots.
+If the Turnstile check fails but the user provides valid credentials, the authenticator can optionally flag the account for email verification before the session is granted. This is controlled by the **Verify email on CAPTCHA failure** configuration option, which is **disabled by default**. When enabled, it acts as a rudimentary MFA fallback for environments that do not support full 2FA flows — legitimate users are not hard-blocked but must verify their email, raising friction for bots.
 
 > **Note:** If the authenticator configuration is missing or incomplete (no Site Key, Secret, or Action set), it falls back to behaving exactly like the standard Keycloak Username Password Form — no CAPTCHA is shown and login proceeds normally.
 
