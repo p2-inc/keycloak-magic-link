@@ -81,7 +81,7 @@ public class EmailOtpAuthenticator implements Authenticator {
         MagicLink.registerEvent(event, EMAIL_OTP));
 
       if (user == null) {
-        log.debugf("User with email %s not found.", context.getUser().getEmail());
+        log.infof("User with email %s not found.", email);
         return;
       }
 
