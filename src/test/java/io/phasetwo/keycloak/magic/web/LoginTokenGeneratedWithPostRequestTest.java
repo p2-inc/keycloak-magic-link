@@ -64,7 +64,7 @@ public class LoginTokenGeneratedWithPostRequestTest extends AbstractMagicLinkTes
         String dockerBase = getAuthUrl().replace(
                 "http://localhost:" + container.getHttpPort(),
                 "http://host.testcontainers.internal:" + container.getHttpPort());
-        String dockerLink = dockerBase + "realms/" + TEST_REALM + "/protocol/openid-connect/auth"
+        String dockerLink = dockerBase + "/realms/" + TEST_REALM + "/protocol/openid-connect/auth"
                 + "?client_id=" + TEST_CLIENT
                 + "&response_type=code"
                 + "&login_hint=" + loginHint

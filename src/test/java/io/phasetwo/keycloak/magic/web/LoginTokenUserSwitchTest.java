@@ -115,7 +115,7 @@ public class LoginTokenUserSwitchTest extends AbstractMagicLinkTest {
                 "http://localhost:" + container.getHttpPort(),
                 "http://host.testcontainers.internal:" + container.getHttpPort());
 
-        return baseUrl + "realms/" + TEST_REALM + "/protocol/openid-connect/auth"
+        return baseUrl + "/realms/" + TEST_REALM + "/protocol/openid-connect/auth"
                 + "?client_id=" + TEST_CLIENT
                 + "&response_type=code"
                 + "&login_hint=" + loginHint
