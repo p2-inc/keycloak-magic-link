@@ -1,10 +1,10 @@
-package io.phasetwo.keycloak.magic.auth.token;
+package io.phasetwo.keycloak.magic.auth.magic;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.UUID;
 import org.keycloak.authentication.actiontoken.DefaultActionToken;
 
-public class MagicLinkActionToken extends DefaultActionToken {
+public final class MagicLinkActionToken extends DefaultActionToken {
 
   public static final String TOKEN_TYPE = "ext-magic-link";
 

@@ -11,63 +11,47 @@
       </a>
     </div>
   <#elseif section = "form">
-    <div id="mlc-status">${msg("magicLinkContinuationWaiting")!msg("magicLinkContinuationConfirmation")}</div>
-    <div id="mlc-exp"></div>
-    <script>
-      (function(){
-        const pollingUrl = "${pollingUrl!""}";
-        const loginActionUrl = "${url.loginAction?no_esc}";
-        const statusEl = document.getElementById("mlc-status");
-        const expEl = document.getElementById("mlc-exp");
-        let stopped = false;
-
-        async function tick(){
-          if(stopped) return;
-          try{
-            const r = await fetch(pollingUrl, {
-              cache: "no-store",
-              credentials: "same-origin"
-            });
-            
-            if(!r.ok){
-              if(r.status === 404 || r.status === 401){
-                stopped = true;
-                statusEl.textContent = "${msg("magicLinkContinuationExpired")!"Your link has expired. Please request a new one."}";
-                expEl.textContent = "";
-                return;
-              }
-              throw new Error("status:" + r.status);
-            }
-            
-            const data = await r.json();
-
-            if(typeof data.expires_in === "number"){
-              expEl.textContent = data.expires_in > 0
-                ? "${msg("magicLinkContinuationExpiresIn")!"Expires in"} " + data.expires_in + "s"
-                : "";
-            }
-
-            switch(data.state){
-              case "confirmed":
-                stopped = true;
-                statusEl.textContent = "${msg("magicLinkContinuationRedirecting")!"Redirecting..."}";
-                window.location.href = loginActionUrl;
-                return;
-              case "expired":
-                stopped = true;
-                statusEl.textContent = "${msg("magicLinkContinuationExpired")!"Your link has expired. Please request a new one."}";
-                expEl.textContent = "";
-                return;
-              default: // pending
-                setTimeout(tick, 2500);
-            }
-          } catch(e){
-            // Network error or server unavailable - retry with backoff
-            setTimeout(tick, 4000);
-          }
-        }
-        tick();
-      })();
-  </script>
+    ${msg("magicLinkContinuationConfirmation")}
+    <div id="kc-form">
+      <div id="kc-form-wrapper">
+        <form id="kc-form-login" action="${url.loginAction}" method="post">
+          <div id="kc-form-buttons" class="${properties.kcFormGroupClass!}">
+            <input style="display: none;" id="kc-login" type="submit"/>
+          </div>
+        </form>
+      </div>
+    </div>
   </#if>
+  <script>
+    (function (w, d) {
+      function pollAuthStatus() {
+        fetch('${realmUri}/magic-link-public/magic-link-continuation/verify', {
+          method: 'POST',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Pragma': 'no-cache',
+            'Cache-Control': 'no-cache, no-store',
+            'Content-Type': 'application/json'
+          },
+          cache: 'no-store',
+          body: JSON.stringify({ "sessionId": "${authSessionId}" })
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data === true) {
+            console.log("Authentication verified successfully.");
+            const button = d.getElementById('kc-login');
+            button.click();
+          } else {
+            console.log("Authentication pending... Retrying in 5 seconds.");
+          }
+        })
+        .catch(error => {
+          console.error('[Magic Link] Error checking auth status:', error);
+        });
+      }
+
+      setInterval(pollAuthStatus, 5000);
+    })(window, document);
+  </script>
 </@layout.registrationLayout>

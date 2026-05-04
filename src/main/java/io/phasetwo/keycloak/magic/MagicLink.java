@@ -6,9 +6,9 @@ import static org.keycloak.models.utils.KeycloakModelUtils.findUserByNameOrEmail
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
-import io.phasetwo.keycloak.magic.auth.MagicLinkAuthenticatorFactory;
-import io.phasetwo.keycloak.magic.auth.token.MagicLinkActionToken;
-import io.phasetwo.keycloak.magic.auth.token.MagicLinkContinuationActionToken;
+import io.phasetwo.keycloak.magic.auth.magic.MagicLinkAuthenticatorFactory;
+import io.phasetwo.keycloak.magic.auth.magic.MagicLinkActionToken;
+import io.phasetwo.keycloak.magic.auth.magic.continuation.MagicLinkContinuationActionToken;
 import jakarta.mail.internet.AddressException;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.ws.rs.core.UriBuilder;
@@ -50,7 +50,9 @@ import org.keycloak.sessions.AuthenticationSessionModel;
 
 /** common utilities for Magic Link authentication, used by the authenticator and resource */
 @JBossLog
-public class MagicLink {
+public final class MagicLink {
+
+  private MagicLink() {}
 
   public static String MAGIC_LINK = "magic";
   public static String EMAIL_OTP = "email-otp";
@@ -119,15 +121,6 @@ public class MagicLink {
     }
 
     return user;
-  }
-
-  public static MagicLinkActionToken createActionToken(
-      UserModel user,
-      String clientId,
-      OptionalInt validity,
-      Boolean rememberMe,
-      AuthenticationSessionModel authSession) {
-    return createActionToken(user, clientId, validity, rememberMe, authSession, true);
   }
 
   public static MagicLinkContinuationActionToken createExpandedActionToken(
