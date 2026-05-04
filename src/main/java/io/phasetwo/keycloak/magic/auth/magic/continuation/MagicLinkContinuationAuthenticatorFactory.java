@@ -3,54 +3,28 @@ package io.phasetwo.keycloak.magic.auth.magic.continuation;
 import static io.phasetwo.keycloak.magic.MagicLink.CREATE_NONEXISTENT_USER_CONFIG_PROPERTY;
 
 import com.google.auto.service.AutoService;
-import io.phasetwo.keycloak.magic.auth.magic.AbstractMagicLinkAuthenticatorFactory;
 import io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants;
 import java.util.List;
 import lombok.extern.jbosslog.JBossLog;
+import org.keycloak.Config;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.authentication.AuthenticatorFactory;
+import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.provider.ProviderConfigProperty;
 
-/**
- * Factory for {@link MagicLinkContinuationAuthenticator} (provider ID:
- * {@code magic-link-continuation-form}).
- *
- * <p>The continuation flow uses a long-polling mechanism so the browser tab waits while the user
- * clicks the link in a different browser or device. It does not participate in the
- * {@link io.phasetwo.keycloak.magic.auth.magic.spi.MagicLinkCustomizationSpi}.
- */
 @JBossLog
 @AutoService(AuthenticatorFactory.class)
-public final class MagicLinkContinuationAuthenticatorFactory
-    extends AbstractMagicLinkAuthenticatorFactory {
+public class MagicLinkContinuationAuthenticatorFactory implements AuthenticatorFactory {
 
   public static final String PROVIDER_ID = "magic-link-continuation-form";
 
-  private static final ProviderConfigProperty CREATE_USER_PROPERTY;
-  private static final ProviderConfigProperty TIMEOUT_PROPERTY;
-
-  static {
-    CREATE_USER_PROPERTY = new ProviderConfigProperty();
-    CREATE_USER_PROPERTY.setType(ProviderConfigProperty.BOOLEAN_TYPE);
-    CREATE_USER_PROPERTY.setName(CREATE_NONEXISTENT_USER_CONFIG_PROPERTY);
-    CREATE_USER_PROPERTY.setLabel("Force create user");
-    CREATE_USER_PROPERTY.setHelpText(
-        "Creates a new user when an email is provided that does not match an existing user.");
-    CREATE_USER_PROPERTY.setDefaultValue(true);
-
-    TIMEOUT_PROPERTY = new ProviderConfigProperty();
-    TIMEOUT_PROPERTY.setType(ProviderConfigProperty.STRING_TYPE);
-    TIMEOUT_PROPERTY.setName(MagicLinkConstants.TIMEOUT);
-    TIMEOUT_PROPERTY.setLabel("Expiration time");
-    TIMEOUT_PROPERTY.setHelpText(
-        "Magic link authenticator expiration time in minutes. Default expiration period 10 minutes.");
-    TIMEOUT_PROPERTY.setDefaultValue("10");
-  }
-
-  public MagicLinkContinuationAuthenticatorFactory() {
-    super();
-  }
+  private static final AuthenticationExecutionModel.Requirement[] REQUIREMENT_CHOICES = {
+    AuthenticationExecutionModel.Requirement.REQUIRED,
+    AuthenticationExecutionModel.Requirement.ALTERNATIVE,
+    AuthenticationExecutionModel.Requirement.DISABLED
+  };
 
   @Override
   public Authenticator create(KeycloakSession session) {
@@ -60,6 +34,26 @@ public final class MagicLinkContinuationAuthenticatorFactory
   @Override
   public String getId() {
     return PROVIDER_ID;
+  }
+
+  @Override
+  public String getReferenceCategory() {
+    return "alternate-auth";
+  }
+
+  @Override
+  public boolean isConfigurable() {
+    return true;
+  }
+
+  @Override
+  public boolean isUserSetupAllowed() {
+    return true;
+  }
+
+  @Override
+  public AuthenticationExecutionModel.Requirement[] getRequirementChoices() {
+    return REQUIREMENT_CHOICES;
   }
 
   @Override
@@ -74,6 +68,33 @@ public final class MagicLinkContinuationAuthenticatorFactory
 
   @Override
   public List<ProviderConfigProperty> getConfigProperties() {
-    return List.of(CREATE_USER_PROPERTY, TIMEOUT_PROPERTY);
+    // Force create user property configuration
+    ProviderConfigProperty createUser = new ProviderConfigProperty();
+    createUser.setType(ProviderConfigProperty.BOOLEAN_TYPE);
+    createUser.setName(CREATE_NONEXISTENT_USER_CONFIG_PROPERTY);
+    createUser.setLabel("Force create user");
+    createUser.setHelpText(
+        "Creates a new user when an email is provided that does not match an existing user.");
+    createUser.setDefaultValue(true);
+
+    // Expiration time property configuration
+    ProviderConfigProperty timeout = new ProviderConfigProperty();
+    timeout.setType(ProviderConfigProperty.STRING_TYPE);
+    timeout.setName(MagicLinkConstants.TIMEOUT);
+    timeout.setLabel("Expiration time");
+    timeout.setHelpText(
+        "Magic link authenticator expiration time in minutes. Default expiration period 10 minutes.");
+    timeout.setDefaultValue("10");
+
+    return List.of(createUser, timeout);
   }
+
+  @Override
+  public void init(Config.Scope config) {}
+
+  @Override
+  public void postInit(KeycloakSessionFactory factory) {}
+
+  @Override
+  public void close() {}
 }

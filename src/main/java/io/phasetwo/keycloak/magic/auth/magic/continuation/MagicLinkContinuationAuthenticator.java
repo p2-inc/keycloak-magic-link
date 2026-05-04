@@ -3,8 +3,13 @@ package io.phasetwo.keycloak.magic.auth.magic.continuation;
 import static io.phasetwo.keycloak.magic.MagicLink.CREATE_NONEXISTENT_USER_CONFIG_PROPERTY;
 import static io.phasetwo.keycloak.magic.MagicLink.MAGIC_LINK;
 import static io.phasetwo.keycloak.magic.auth.util.Authenticators.is;
+import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.AUTH_SESSION_EXP;
+import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.MLC_STATE;
 import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.SESSION_CONFIRMED;
 import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.SESSION_EXPIRATION;
+import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.SESSION_INITIATED;
+import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.STATE_EXPIRED;
+import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.STATE_PENDING;
 import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.TIMEOUT;
 import static org.keycloak.services.validation.Validation.FIELD_USERNAME;
 
@@ -12,9 +17,7 @@ import io.phasetwo.keycloak.magic.MagicLink;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
 import java.time.ZonedDateTime;
-import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.AuthenticationFlowError;
@@ -25,7 +28,6 @@ import org.keycloak.events.EventBuilder;
 import org.keycloak.events.EventType;
 import org.keycloak.forms.login.LoginFormsProvider;
 import org.keycloak.models.AuthenticatorConfigModel;
-import org.keycloak.models.SingleUseObjectProvider;
 import org.keycloak.models.UserModel;
 import org.keycloak.services.managers.AuthenticationManager;
 import org.keycloak.services.managers.AuthenticationSessionManager;
@@ -33,56 +35,11 @@ import org.keycloak.services.messages.Messages;
 import org.keycloak.utils.StringUtil;
 
 @JBossLog
-public final class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
+public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
 
   @Override
   public void authenticate(AuthenticationFlowContext context) {
     log.debug("MagicLinkContinuationAuthenticator.authenticate");
-
-    String attemptedUsername = MagicLink.getAttemptedUsername(context);
-    if (attemptedUsername == null) {
-      super.authenticate(context);
-    } else {
-      var parentSessionId = context.getAuthenticationSession().getParentSession().getId();
-      context.challenge(
-          context
-              .form()
-              .setAttribute("authSessionId", parentSessionId)
-              .setAttribute(
-                  "realmUri",
-                  context.getUriInfo().getBaseUri() + "realms/" + context.getRealm().getName())
-              .createForm("view-email-continuation.ftl"));
-    }
-  }
-
-  private boolean sessionExpired(AuthenticationFlowContext context) {
-    String expiration = context.getAuthenticationSession().getAuthNote(SESSION_EXPIRATION);
-    if (StringUtil.isNotBlank(expiration)) {
-      ZonedDateTime expirationTime = ZonedDateTime.parse(expiration);
-      return expirationTime.isBefore(ZonedDateTime.now());
-    }
-    return false;
-  }
-
-  @Override
-  public void action(AuthenticationFlowContext context) {
-    log.debug("MagicLinkContinuationAuthenticator.action");
-
-    MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
-
-    String email = MagicLink.trimToNull(formData.getFirst(AuthenticationManager.FORM_USERNAME));
-    if (email == null) {
-      email = MagicLink.getAttemptedUsername(context);
-    }
-    log.debugf("email in action is %s", email);
-
-    if (email == null) {
-      context.getEvent().error(Errors.USER_NOT_FOUND);
-      Response challengeResponse =
-          challenge(context, getDefaultChallengeMessage(context), FIELD_USERNAME);
-      context.failureChallenge(AuthenticationFlowError.INVALID_USER, challengeResponse);
-      return;
-    }
 
     if (sessionExpired(context)) {
       AuthenticationSessionManager manager = new AuthenticationSessionManager(context.getSession());
@@ -97,96 +54,196 @@ public final class MagicLinkContinuationAuthenticator extends UsernamePasswordFo
       return;
     }
 
-    var parentSessionId = context.getAuthenticationSession().getParentSession().getId();
-    SingleUseObjectProvider singleUseStore = context.getSession().singleUseObjects();
-    Map<String, String> storedSession = singleUseStore.get(parentSessionId);
-
-    if (isSessionConfirmed(storedSession)) {
-      authenticateUser(context, email);
+    String attemptedUsername = MagicLink.getAttemptedUsername(context);
+    String sessionConfirmed = context.getAuthenticationSession().getAuthNote(SESSION_CONFIRMED);
+    if (StringUtil.isNotBlank(sessionConfirmed)) {
+      UserModel user;
+      if (MagicLink.isValidEmail(attemptedUsername)) {
+        user = context.getSession().users().getUserByEmail(context.getRealm(), attemptedUsername);
+      } else {
+        user =
+            context.getSession().users().getUserByUsername(context.getRealm(), attemptedUsername);
+      }
+      context.setUser(user);
+      context.getAuthenticationSession().setAuthenticatedUser(user);
+      context.success();
+    } else if (attemptedUsername == null) {
+      super.authenticate(context);
     } else {
-      int timeout = getTimeout(context, 10);
-      int validityInSecs = 60 * timeout;
-
-      Map<String, String> sessionConfirmedMap = new HashMap<>();
-      sessionConfirmedMap.put(SESSION_CONFIRMED, "false");
-      singleUseStore.put(parentSessionId, validityInSecs, sessionConfirmedMap);
-
-      String clientId = context.getSession().getContext().getClient().getClientId();
-      EventBuilder event = context.newEvent();
-
-      UserModel user =
-          MagicLink.getOrCreate(
-              context.getSession(),
-              context.getRealm(),
-              email,
-              isForceCreate(context, false),
-              false,
-              false,
-              MagicLink.registerEvent(event, MAGIC_LINK));
-
-      if (user == null
-          || MagicLink.trimToNull(user.getEmail()) == null
-          || !MagicLink.isValidEmail(user.getEmail())) {
-        context
-            .getEvent()
-            .detail(AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME, email)
-            .event(EventType.LOGIN_ERROR)
-            .error(Errors.INVALID_EMAIL);
-        context
-            .getAuthenticationSession()
-            .setAuthNote(AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME, email);
-        log.debugf("user attempted to login with username/email: %s", email);
-        context.forceChallenge(context.form().createForm("view-email.ftl"));
-        return;
+      String sessionInitiated = context.getAuthenticationSession().getAuthNote(SESSION_INITIATED);
+      if (StringUtil.isBlank(sessionInitiated)) {
+        log.debugf(
+            "Found attempted username %s from previous authenticator, skipping login form",
+            attemptedUsername);
+        action(context);
+      } else {
+        // Pass tabId, sessionId and polling URL to template for JavaScript polling
+        String tabId = context.getAuthenticationSession().getTabId();
+        String sessionId = context.getAuthenticationSession().getParentSession().getId();
+        String baseUri = context.getUriInfo().getBaseUri().toString();
+        if (!baseUri.endsWith("/")) {
+          baseUri += "/";
+        }
+        String pollingUrl =
+            baseUri
+                + "realms/"
+                + context.getRealm().getName()
+                + "/magic-link-continuation/"
+                + sessionId
+                + "/"
+                + tabId
+                + "/status";
+        context.challenge(
+            context
+                .form()
+                .setAttribute("tabId", tabId)
+                .setAttribute("pollingUrl", pollingUrl)
+                .createForm("view-email-continuation.ftl"));
       }
+    }
+  }
 
-      log.debugf("user is %s %s", user.getEmail(), user.isEnabled());
-
-      if (!enabledUser(context, user)) {
-        return;
+  private boolean sessionExpired(AuthenticationFlowContext context) {
+    String expiration = context.getAuthenticationSession().getAuthNote(SESSION_EXPIRATION);
+    if (StringUtil.isNotBlank(expiration)) {
+      ZonedDateTime expirationTime = ZonedDateTime.parse(expiration);
+      boolean expired = expirationTime.isBefore(ZonedDateTime.now());
+      if (expired) {
+        // Set MLC_STATE to expired when session expires
+        context.getAuthenticationSession().setAuthNote(MLC_STATE, STATE_EXPIRED);
       }
+      return expired;
+    }
+    return false;
+  }
 
-      MagicLinkContinuationActionToken token =
-          MagicLink.createExpandedActionToken(
-              user, clientId, validityInSecs, context.getAuthenticationSession());
-      String link = MagicLink.linkFromActionToken(context.getSession(), context.getRealm(), token);
-      boolean sent = MagicLink.sendMagicLinkContinuationEmail(context.getSession(), user, link);
-      log.debugf("sent email to %s? %b. Link? %s", user.getEmail(), sent, link);
+  @Override
+  public void action(AuthenticationFlowContext context) {
+    log.debug("MagicLinkAuthenticator.action");
 
+    // If session is already confirmed, complete the authentication
+    String sessionConfirmed = context.getAuthenticationSession().getAuthNote(SESSION_CONFIRMED);
+    if (StringUtil.isNotBlank(sessionConfirmed)) {
+      log.debugf("[MLC] Session already confirmed in action(), completing authentication");
+      String attemptedUsername = MagicLink.getAttemptedUsername(context);
+      UserModel user;
+      if (MagicLink.isValidEmail(attemptedUsername)) {
+        user = context.getSession().users().getUserByEmail(context.getRealm(), attemptedUsername);
+      } else {
+        user =
+            context.getSession().users().getUserByUsername(context.getRealm(), attemptedUsername);
+      }
+      context.setUser(user);
+      context.getAuthenticationSession().setAuthenticatedUser(user);
+      context.success();
+      return;
+    }
+
+    MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
+
+    String email = MagicLink.trimToNull(formData.getFirst(AuthenticationManager.FORM_USERNAME));
+    // check for empty email
+    if (email == null) {
+      // - first check for email from previous authenticator
+      email = MagicLink.getAttemptedUsername(context);
+    }
+    log.debugf("email in action is %s", email);
+    // - throw error if still empty
+    if (email == null) {
+      context.getEvent().error(Errors.USER_NOT_FOUND);
+      Response challengeResponse =
+          challenge(context, getDefaultChallengeMessage(context), FIELD_USERNAME);
+      context.failureChallenge(AuthenticationFlowError.INVALID_USER, challengeResponse);
+      return;
+    }
+
+    String clientId = context.getSession().getContext().getClient().getClientId();
+
+    EventBuilder event = context.newEvent();
+
+    UserModel user =
+        MagicLink.getOrCreate(
+            context.getSession(),
+            context.getRealm(),
+            email,
+            isForceCreate(context, false),
+            false,
+            false,
+            MagicLink.registerEvent(event, MAGIC_LINK));
+
+    // check for no/invalid email address
+    if (user == null
+        || MagicLink.trimToNull(user.getEmail()) == null
+        || !MagicLink.isValidEmail(user.getEmail())) {
+      context
+          .getEvent()
+          .detail(AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME, email)
+          .event(EventType.LOGIN_ERROR)
+          .error(Errors.INVALID_EMAIL);
       context
           .getAuthenticationSession()
           .setAuthNote(AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME, email);
-
-      String sessionExpiration =
-          ZonedDateTime.now().plusMinutes(timeout).plusSeconds(2).toString();
-      context.getAuthenticationSession().setAuthNote(SESSION_EXPIRATION, sessionExpiration);
-
-      context.challenge(
-          context
-              .form()
-              .setAttribute("authSessionId", parentSessionId)
-              .setAttribute(
-                  "realmUri",
-                  context.getUriInfo().getBaseUri() + "realms/" + context.getRealm().getName())
-              .createForm("view-email-continuation.ftl"));
+      log.debugf("user attempted to login with username/email: %s", email);
+      context.forceChallenge(context.form().createForm("view-email.ftl"));
+      return;
     }
-  }
 
-  private static void authenticateUser(AuthenticationFlowContext context, String email) {
-    UserModel user;
-    if (MagicLink.isValidEmail(email)) {
-      user = context.getSession().users().getUserByEmail(context.getRealm(), email);
-    } else {
-      user = context.getSession().users().getUserByUsername(context.getRealm(), email);
+    log.debugf("user is %s %s", user.getEmail(), user.isEnabled());
+
+    // check for enabled user
+    if (!enabledUser(context, user)) {
+      return; // the enabledUser method sets the challenge
     }
-    context.setUser(user);
-    context.success();
-  }
 
-  private static boolean isSessionConfirmed(Map<String, String> session) {
-    return Objects.nonNull(session)
-        && StringUtil.isNotBlank(session.get(SESSION_CONFIRMED))
-        && Boolean.parseBoolean(session.get(SESSION_CONFIRMED));
+    int timeout = getTimeout(context, 10);
+
+    int validityInSecs = 60 * timeout;
+    MagicLinkContinuationActionToken token =
+        MagicLink.createExpandedActionToken(
+            user, clientId, validityInSecs, context.getAuthenticationSession());
+    String link = MagicLink.linkFromActionToken(context.getSession(), context.getRealm(), token);
+    boolean sent = MagicLink.sendMagicLinkContinuationEmail(context.getSession(), user, link);
+    log.debugf("sent email to %s? %b. Link? %s", user.getEmail(), sent, link);
+
+    context
+        .getAuthenticationSession()
+        .setAuthNote(AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME, email);
+    context.getAuthenticationSession().setAuthNote(SESSION_INITIATED, "true");
+
+    String sessionExpiration =
+        ZonedDateTime.now()
+            .plusMinutes(timeout)
+            .plusSeconds(2) // clock skew
+            .toString();
+    context.getAuthenticationSession().setAuthNote(SESSION_EXPIRATION, sessionExpiration);
+
+    // Set MLC_STATE to pending and auth_session_exp for polling endpoint
+    context.getAuthenticationSession().setAuthNote(MLC_STATE, STATE_PENDING);
+    long exp = (System.currentTimeMillis() / 1000L) + (timeout * 60);
+    context.getAuthenticationSession().setClientNote(AUTH_SESSION_EXP, String.valueOf(exp));
+
+    // Pass tabId, sessionId and polling URL to template for JavaScript polling
+    String tabId = context.getAuthenticationSession().getTabId();
+    String sessionId = context.getAuthenticationSession().getParentSession().getId();
+    String baseUri = context.getUriInfo().getBaseUri().toString();
+    if (!baseUri.endsWith("/")) {
+      baseUri += "/";
+    }
+    String pollingUrl =
+        baseUri
+            + "realms/"
+            + context.getRealm().getName()
+            + "/magic-link-continuation/"
+            + sessionId
+            + "/"
+            + tabId
+            + "/status";
+    context.challenge(
+        context
+            .form()
+            .setAttribute("tabId", tabId)
+            .setAttribute("pollingUrl", pollingUrl)
+            .createForm("view-email-continuation.ftl"));
   }
 
   private boolean isForceCreate(AuthenticationFlowContext context, boolean defaultValue) {

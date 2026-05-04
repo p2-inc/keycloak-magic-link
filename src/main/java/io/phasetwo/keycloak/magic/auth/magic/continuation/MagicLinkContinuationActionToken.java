@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.UUID;
 import org.keycloak.authentication.actiontoken.DefaultActionToken;
 
-public final class MagicLinkContinuationActionToken extends DefaultActionToken {
+public class MagicLinkContinuationActionToken extends DefaultActionToken {
 
   public static final String TOKEN_TYPE = "magic-link-continuation";
 
