@@ -37,9 +37,4 @@ public abstract class MagicLinkCustomizationConfig {
     String val = config.get(key);
     return Strings.isNullOrEmpty(val) ? defaultValue : val.trim();
   }
-
-  /** Raw map, use sparingly — prefer typed accessors defined in the subclass. */
-  protected Map<String, String> raw() {
-    return config;
-  }
 }

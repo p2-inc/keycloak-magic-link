@@ -1,4 +1,4 @@
-package io.phasetwo.keycloak.magic.auth.magic.spi.org;
+package io.phasetwo.keycloak.magic.auth.magic.spi.activeorg;
 
 import com.google.auto.service.AutoService;
 import io.phasetwo.keycloak.magic.auth.magic.spi.MagicLinkCustomizationProvider;
@@ -9,26 +9,20 @@ import org.keycloak.Config;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.provider.ProviderConfigProperty;
-import org.keycloak.provider.ProviderFactory;
 
 /**
- * Factory for {@link OrganizationMagicLinkCustomizationProvider}.
+ * Factory for {@link ActiveOrgMagicLinkCustomizationProvider}.
  *
  * <p>Exposes two config properties in the authenticator's admin-console panel:
  * <ul>
  *   <li>{@code ext-magic-org-id} — the organization ID users must belong to</li>
  *   <li>{@code ext-magic-org-require-membership} — whether to deny non-members</li>
  * </ul>
- *
- * <p>To activate: pass {@code new OrganizationMagicLinkCustomizationProviderFactory()} to a
- * concrete {@link io.phasetwo.keycloak.magic.auth.magic.AbstractMagicLinkAuthenticatorFactory}
- * subclass constructor.
  */
-@AutoService(MagicLinkCustomizationProviderFactory.class)
-public final class OrganizationMagicLinkCustomizationProviderFactory
+public final class ActiveOrgMagicLinkCustomizationProviderFactory
     implements MagicLinkCustomizationProviderFactory {
 
-  public static final String PROVIDER_ID = "org";
+  public static final String PROVIDER_ID = "active-org";
 
   private static final ProviderConfigProperty ORG_ID_PROP;
   private static final ProviderConfigProperty REQUIRE_MEMBERSHIP_PROP;
@@ -36,15 +30,15 @@ public final class OrganizationMagicLinkCustomizationProviderFactory
   static {
     ORG_ID_PROP = new ProviderConfigProperty();
     ORG_ID_PROP.setType(ProviderConfigProperty.STRING_TYPE);
-    ORG_ID_PROP.setName(OrganizationMagicLinkCustomizationConfig.ORG_ID_PROPERTY);
+    ORG_ID_PROP.setName(ActiveOrgMagicLinkCustomizationConfig.ORG_ID_PROPERTY);
     ORG_ID_PROP.setLabel("Organization ID");
     ORG_ID_PROP.setHelpText(
         "Restrict magic link authentication to members of this organization. "
-            + "Membership is checked via the user attribute org.{orgId}=true.");
+            + "Membership is checked via the user attribute org.ro.active.");
 
     REQUIRE_MEMBERSHIP_PROP = new ProviderConfigProperty();
     REQUIRE_MEMBERSHIP_PROP.setType(ProviderConfigProperty.BOOLEAN_TYPE);
-    REQUIRE_MEMBERSHIP_PROP.setName(OrganizationMagicLinkCustomizationConfig.REQUIRE_MEMBERSHIP_PROPERTY);
+    REQUIRE_MEMBERSHIP_PROP.setName(ActiveOrgMagicLinkCustomizationConfig.REQUIRE_MEMBERSHIP_PROPERTY);
     REQUIRE_MEMBERSHIP_PROP.setLabel("Require organization membership");
     REQUIRE_MEMBERSHIP_PROP.setHelpText(
         "If enabled, denies authentication for users who are not members of the configured organization.");
@@ -64,8 +58,8 @@ public final class OrganizationMagicLinkCustomizationProviderFactory
   @Override
   public MagicLinkCustomizationProvider create(
       KeycloakSession session, Map<String, String> authenticatorConfig) {
-    return new OrganizationMagicLinkCustomizationProvider(
-        session, new OrganizationMagicLinkCustomizationConfig(authenticatorConfig));
+    return new ActiveOrgMagicLinkCustomizationProvider(
+        session, new ActiveOrgMagicLinkCustomizationConfig(authenticatorConfig));
   }
 
   @Override

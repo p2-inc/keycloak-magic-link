@@ -1,4 +1,4 @@
-package io.phasetwo.keycloak.magic.auth.magic.spi.org;
+package io.phasetwo.keycloak.magic.auth.magic.spi.activeorg;
 
 import io.phasetwo.keycloak.magic.MagicLink;
 import io.phasetwo.keycloak.magic.auth.magic.MagicLinkConfig;
@@ -11,24 +11,19 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.UserModel;
 
 /**
- * Organization-scoped magic link customization.
+ * Active-org–scoped magic link customization.
  *
  * <p>Denies authentication when {@code ext-magic-org-require-membership=true} and the resolved
- * user does not carry the attribute {@code org.{orgId}=true}. In a real deployment this attribute
- * would be set (or derived) by the keycloak-orgs extension or a custom user-storage provider; for
- * a pure-Keycloak setup a mapper or script can set it at login time.
- *
- * <p>Email sending delegates to the standard {@code magic-link-email.ftl} template. Override
- * {@link #sendMagicLinkEmail} to use an organisation-specific template.
+ * user does not carry the attribute {@code org.ro.active} matching the configured org ID.
  */
 @JBossLog
-public final class OrganizationMagicLinkCustomizationProvider implements MagicLinkCustomizationProvider {
+public final class ActiveOrgMagicLinkCustomizationProvider implements MagicLinkCustomizationProvider {
 
   private final KeycloakSession session;
-  private final OrganizationMagicLinkCustomizationConfig orgConfig;
+  private final ActiveOrgMagicLinkCustomizationConfig orgConfig;
 
-  OrganizationMagicLinkCustomizationProvider(
-      KeycloakSession session, OrganizationMagicLinkCustomizationConfig orgConfig) {
+  ActiveOrgMagicLinkCustomizationProvider(
+      KeycloakSession session, ActiveOrgMagicLinkCustomizationConfig orgConfig) {
     this.session = session;
     this.orgConfig = orgConfig;
   }
@@ -43,10 +38,10 @@ public final class OrganizationMagicLinkCustomizationProvider implements MagicLi
     if (orgId == null || orgId.isEmpty()) {
       return true;
     }
-    boolean isMember = user.getAttributeStream("org." + orgId)
-        .anyMatch("true"::equalsIgnoreCase);
+    boolean isMember = user.getAttributeStream("org.ro.active")
+        .anyMatch(org -> org.equalsIgnoreCase(orgId));
     if (!isMember) {
-      log.debugf("User %s is not a member of org %s — denying magic link", user.getEmail(), orgId);
+      log.debugf("User %s active organization is not %s — denying magic link", user.getEmail(), orgId);
       Response deny = context.form()
           .setError("magicLinkOrgDenied")
           .createErrorPage(Response.Status.FORBIDDEN);

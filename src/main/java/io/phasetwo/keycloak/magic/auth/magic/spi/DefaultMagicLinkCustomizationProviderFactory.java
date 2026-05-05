@@ -12,7 +12,6 @@ import org.keycloak.provider.ProviderConfigProperty;
  * Factory for the default magic link customization — no extra config properties, all users allowed,
  * standard email template.
  */
-@AutoService(MagicLinkCustomizationProviderFactory.class)
 public final class DefaultMagicLinkCustomizationProviderFactory
     implements MagicLinkCustomizationProviderFactory {
 
