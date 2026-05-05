@@ -21,8 +21,6 @@ import org.keycloak.provider.ProviderConfigProperty;
 public final class ActiveOrgMagicLinkCustomizationProviderFactory
     implements MagicLinkCustomizationProviderFactory {
 
-  public static final String PROVIDER_ID = "active-org";
-
   private static final ProviderConfigProperty ORG_ID_PROP;
   private static final ProviderConfigProperty REQUIRE_MEMBERSHIP_PROP;
 
@@ -45,11 +43,6 @@ public final class ActiveOrgMagicLinkCustomizationProviderFactory
   }
 
   @Override
-  public String getId() {
-    return PROVIDER_ID;
-  }
-
-  @Override
   public List<ProviderConfigProperty> getConfigProperties() {
     return List.of(ORG_ID_PROP, REQUIRE_MEMBERSHIP_PROP);
   }
@@ -61,12 +54,4 @@ public final class ActiveOrgMagicLinkCustomizationProviderFactory
         session, new ActiveOrgMagicLinkCustomizationConfig(authenticatorConfig));
   }
 
-  @Override
-  public void init(Config.Scope config) {}
-
-  @Override
-  public void postInit(KeycloakSessionFactory factory) {}
-
-  @Override
-  public void close() {}
 }

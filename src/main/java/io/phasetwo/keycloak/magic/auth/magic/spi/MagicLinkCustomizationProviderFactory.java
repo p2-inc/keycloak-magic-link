@@ -17,8 +17,7 @@ import org.keycloak.provider.ProviderFactory;
  * <p>The config properties returned by {@link #getConfigProperties()} are automatically appended
  * to the authenticator's configuration panel in the Keycloak admin UI.
  */
-public interface MagicLinkCustomizationProviderFactory
-    extends ProviderFactory<MagicLinkCustomizationProvider> {
+public interface MagicLinkCustomizationProviderFactory {
 
   /**
    * Config properties contributed by this customization to the authenticator's configuration.
@@ -36,7 +35,6 @@ public interface MagicLinkCustomizationProviderFactory
   MagicLinkCustomizationProvider create(KeycloakSession session, Map<String, String> authenticatorConfig);
 
   /** Delegates to {@link #create(KeycloakSession, Map)} with an empty config map. */
-  @Override
   default MagicLinkCustomizationProvider create(KeycloakSession session) {
     return create(session, Map.of());
   }

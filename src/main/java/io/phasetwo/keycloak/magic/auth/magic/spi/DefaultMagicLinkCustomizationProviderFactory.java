@@ -14,13 +14,6 @@ import org.keycloak.provider.ProviderConfigProperty;
 public final class DefaultMagicLinkCustomizationProviderFactory
     implements MagicLinkCustomizationProviderFactory {
 
-  public static final String PROVIDER_ID = "default";
-
-  @Override
-  public String getId() {
-    return PROVIDER_ID;
-  }
-
   @Override
   public List<ProviderConfigProperty> getConfigProperties() {
     return List.of();
@@ -32,12 +25,4 @@ public final class DefaultMagicLinkCustomizationProviderFactory
     return new DefaultMagicLinkCustomizationProvider();
   }
 
-  @Override
-  public void init(Config.Scope config) {}
-
-  @Override
-  public void postInit(KeycloakSessionFactory factory) {}
-
-  @Override
-  public void close() {}
 }
