@@ -45,17 +45,16 @@ This is a **Keycloak SPI extension** — a JAR deployed into a Keycloak server's
 - `MagicLinkActionTokenHandler` / `MagicLinkActionTokenHandlerFactory` (provider ID: `ext-magic-link`) — Called when the magic link URL is visited. Bypasses the normal browser flow entirely, so it manually replicates what Keycloak's flow machinery would do: sets AMR via `AuthenticatorUtils.updateCompletedExecutions()`, sets LOA via `AcrStore.setLevelAuthenticated()`, and merges existing session state (LOA, AMR, remember-me) into the new `AuthenticationSession` when the browser already has an active session (session continuity).
 - `MagicLinkConfig` — Typed wrapper around the authenticator config map. Config properties: `CREATE_NONEXISTENT_USER_CONFIG_PROPERTY`, `UPDATE_PROFILE_ACTION_CONFIG_PROPERTY`, `UPDATE_PASSWORD_ACTION_CONFIG_PROPERTY`, `ACTION_TOKEN_PERSISTENT_CONFIG_PROPERTY`, `ACTION_TOKEN_LIFE_SPAN`.
 
-**Magic Link SPI customization** (`src/main/java/.../auth/magic/spi/`):
-- `MagicLinkCustomizationSpi` (SPI ID: `magic-link-customization`) — Keycloak SPI definition, registered via `@AutoService(Spi.class)`. Third parties can supply custom providers by implementing `MagicLinkCustomizationProviderFactory` and annotating it with `@AutoService(ProviderFactory.class)`.
+**Magic Link customization extension point** (`src/main/java/.../auth/magic/spi/`):
 - `MagicLinkCustomizationProvider` — Interface with two extension points: `canAuthenticate()` (gate user before token creation) and `sendMagicLinkEmail()` (custom email delivery).
-- `MagicLinkCustomizationProviderFactory` — Factory interface extending `ProviderFactory<MagicLinkCustomizationProvider>`. Adds `getConfigProperties()` (properties appended to the authenticator's admin-console panel) and `create(session, authenticatorConfig)` (config-aware instantiation).
-- `DefaultMagicLinkCustomizationProvider` / `DefaultMagicLinkCustomizationProviderFactory` (provider ID: `default`) — Built-in no-op implementation; allows all users and uses the standard `magic-link-email.ftl` template. **Not registered via `@AutoService`** — instantiated directly by `MagicLinkAuthenticatorFactory`.
+- `MagicLinkCustomizationProviderFactory` — Plain Java interface (not a Keycloak `ProviderFactory`). Two methods: `getConfigProperties()` (properties appended to the authenticator's admin-console panel) and `create(session, authenticatorConfig)` (config-aware instantiation). Implementations are passed directly to `AbstractMagicLinkAuthenticatorFactory` constructors — no `@AutoService`, no service loader, no SPI registration required.
+- `DefaultMagicLinkCustomizationProvider` / `DefaultMagicLinkCustomizationProviderFactory` — Built-in no-op implementation; allows all users and uses the standard `magic-link-email.ftl` template. Instantiated directly by `MagicLinkAuthenticatorFactory`.
 - `MagicLinkCustomizationConfig` — Abstract base class for typed config wrappers used by customization providers.
 
 **Active Org customization** (`src/main/java/.../auth/magic/spi/activeorg/`):
 - `ActiveOrgMagicLinkAuthenticatorFactory` (provider ID: `ext-magic-active-org`, display name: **"Magic Link (Active Org)"**) — Concrete factory passing `ActiveOrgMagicLinkCustomizationProviderFactory` to the base.
 - `ActiveOrgMagicLinkCustomizationProvider` — Checks the `org.ro.active` user attribute against the configured `ext-magic-org-id`; denies non-members with `ACCESS_DENIED`.
-- `ActiveOrgMagicLinkCustomizationProviderFactory` (provider ID: `active-org`) — Exposes two admin-console properties: `ext-magic-org-id` (org to restrict to) and `ext-magic-org-require-membership` (toggle, default `true`). **Not registered via `@AutoService`** — instantiated directly by `ActiveOrgMagicLinkAuthenticatorFactory`.
+- `ActiveOrgMagicLinkCustomizationProviderFactory` — Exposes two admin-console properties: `ext-magic-org-id` (org to restrict to) and `ext-magic-org-require-membership` (toggle, default `true`). Instantiated directly by `ActiveOrgMagicLinkAuthenticatorFactory`.
 
 **Continuation flow** (`src/main/java/.../auth/magic/continuation/`):
 - `MagicLinkContinuationAuthenticatorFactory` (provider ID: `magic-link-continuation-form`) / `MagicLinkContinuationAuthenticator` — Extends `UsernamePasswordForm`. Shows `view-email-continuation.ftl` with a polling URL. The original browser tab polls for completion while the magic link is clicked on another device/tab.
@@ -95,7 +94,7 @@ The abstract base classes (`service/AbstractMagicLinkTest`, `web/AbstractMagicLi
 
 Factories use `@AutoService` to generate `META-INF/services/` entries at compile time. No manual service files needed. The annotation processor is configured in `pom.xml`.
 
-**Important distinction for `MagicLinkCustomizationProviderFactory` implementations**: The built-in factories (`DefaultMagicLinkCustomizationProviderFactory`, `ActiveOrgMagicLinkCustomizationProviderFactory`) are **not** registered via `@AutoService` — they are instantiated directly inside their paired `AuthenticatorFactory` constructors. Third-party custom implementations **should** use `@AutoService(ProviderFactory.class)` so Keycloak's service loader discovers them.
+**`MagicLinkCustomizationProviderFactory` is not a Keycloak SPI provider.** It is a plain Java interface — no `@AutoService`, no service loader, no SPI registration. Implementations are instantiated directly inside `AbstractMagicLinkAuthenticatorFactory` subclass constructors and are invisible to Keycloak's provider registry. Only the `AuthenticatorFactory` subclass itself needs `@AutoService(AuthenticatorFactory.class)`.
 
 ### Code Style
 

@@ -100,11 +100,6 @@ public final class AcmeMagicLinkCustomizationProviderFactory implements MagicLin
     public List<ProviderConfigProperty> getConfigProperties() {
         return List.of(); // add ProviderConfigProperty entries to expose admin-UI config fields
     }
-
-    @Override public String getId()                                  { return "acme"; }
-    @Override public void init(Config.Scope config)                  {}
-    @Override public void postInit(KeycloakSessionFactory factory)   {}
-    @Override public void close()                                    {}
 }
 ```
 
@@ -158,7 +153,7 @@ public MagicLinkCustomizationProvider create(KeycloakSession session, Map<String
 
 #### Built-in default
 
-When no customization is needed the provided `DefaultMagicLinkCustomizationProviderFactory` (provider ID `default`) is used automatically. It allows all users through `canAuthenticate` and delegates to the built-in `magic-link-email.ftl` template.
+When no customization is needed the provided `DefaultMagicLinkCustomizationProviderFactory` is used automatically. It allows all users through `canAuthenticate` and delegates to the built-in `magic-link-email.ftl` template.
 
 ---
 
