@@ -1,4 +1,4 @@
-package io.phasetwo.keycloak.magic.auth.token;
+package io.phasetwo.keycloak.magic.auth.magic.continuation;
 
 import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.MLC_STATE;
 import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.SESSION_CONFIRMED;
@@ -65,7 +65,7 @@ public class MagicLinkContinuationLinkActionTokenHandler
         authenticationFlowSession.setAuthNote(SESSION_CONFIRMED, "true");
         // Set MLC_STATE to confirmed for polling endpoint
         authenticationFlowSession.setAuthNote(MLC_STATE, STATE_CONFIRMED);
-        log.debugf("[MLC] State set. SESSION_CONFIRMED=%s, MLC_STATE=%s", 
+        log.debugf("[MLC] State set. SESSION_CONFIRMED=%s, MLC_STATE=%s",
             authenticationFlowSession.getAuthNote(SESSION_CONFIRMED),
             authenticationFlowSession.getAuthNote(MLC_STATE));
         Cookie cookie =

@@ -1,4 +1,4 @@
-package io.phasetwo.keycloak.magic.rest;
+package io.phasetwo.keycloak.magic.auth.magic.continuation;
 
 import com.google.auto.service.AutoService;
 import org.keycloak.models.KeycloakSession;
@@ -36,4 +36,3 @@ public class MagicLinkContinuationStatusProviderFactory implements RealmResource
     return ID;
   }
 }
-

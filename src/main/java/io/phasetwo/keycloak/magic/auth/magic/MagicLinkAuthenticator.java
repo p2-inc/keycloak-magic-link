@@ -1,16 +1,13 @@
-package io.phasetwo.keycloak.magic.auth;
+package io.phasetwo.keycloak.magic.auth.magic;
 
-import static io.phasetwo.keycloak.magic.MagicLink.CREATE_NONEXISTENT_USER_CONFIG_PROPERTY;
 import static io.phasetwo.keycloak.magic.MagicLink.MAGIC_LINK;
-import static io.phasetwo.keycloak.magic.auth.util.Authenticators.get;
-import static io.phasetwo.keycloak.magic.auth.util.Authenticators.is;
 import static org.keycloak.services.validation.Validation.FIELD_USERNAME;
 
 import io.phasetwo.keycloak.magic.MagicLink;
-import io.phasetwo.keycloak.magic.auth.token.MagicLinkActionToken;
+import io.phasetwo.keycloak.magic.auth.magic.spi.MagicLinkCustomizationProvider;
+import io.phasetwo.keycloak.magic.auth.magic.spi.MagicLinkCustomizationProviderFactory;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
-import java.util.OptionalInt;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.AuthenticationFlowError;
@@ -24,14 +21,21 @@ import org.keycloak.models.UserModel;
 import org.keycloak.services.managers.AuthenticationManager;
 import org.keycloak.services.messages.Messages;
 
+/**
+ * Browser-flow authenticator for the standard magic link flow.
+ *
+ * <p>On form submission, resolves (or creates) the user, delegates pre-send validation and email
+ * dispatch to the active {@link MagicLinkCustomizationProvider}, then presents the
+ * {@code view-email.ftl} waiting screen.
+ */
 @JBossLog
-public class MagicLinkAuthenticator extends UsernamePasswordForm {
+public final class MagicLinkAuthenticator extends UsernamePasswordForm {
 
-  static final String UPDATE_PROFILE_ACTION_CONFIG_PROPERTY = "ext-magic-update-profile-action";
-  static final String UPDATE_PASSWORD_ACTION_CONFIG_PROPERTY = "ext-magic-update-password-action";
+  private final MagicLinkCustomizationProviderFactory customizationProviderFactory;
 
-  static final String ACTION_TOKEN_PERSISTENT_CONFIG_PROPERTY = "ext-magic-allow-token-reuse";
-  static final String ACTION_TOKEN_LIFE_SPAN = "ext-magic-token-life-span";
+  MagicLinkAuthenticator(MagicLinkCustomizationProviderFactory customizationProviderFactory) {
+    this.customizationProviderFactory = customizationProviderFactory;
+  }
 
   @Override
   public void authenticate(AuthenticationFlowContext context) {
@@ -54,13 +58,11 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
     MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
 
     String email = MagicLink.trimToNull(formData.getFirst(AuthenticationManager.FORM_USERNAME));
-    // check for empty email
     if (email == null) {
-      // - first check for email from previous authenticator
       email = MagicLink.getAttemptedUsername(context);
     }
     log.debugf("email in action is %s", email);
-    // - throw error if still empty
+
     if (email == null) {
       context.getEvent().error(Errors.USER_NOT_FOUND);
       Response challengeResponse =
@@ -68,8 +70,9 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
       context.failureChallenge(AuthenticationFlowError.INVALID_USER, challengeResponse);
       return;
     }
-    String clientId = context.getSession().getContext().getClient().getClientId();
 
+    MagicLinkConfig config = new MagicLinkConfig(context.getAuthenticatorConfig());
+    String clientId = context.getSession().getContext().getClient().getClientId();
     EventBuilder event = context.newEvent();
 
     UserModel user =
@@ -77,12 +80,11 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
             context.getSession(),
             context.getRealm(),
             email,
-            isForceCreate(context, false),
-            isUpdateProfile(context, false),
-            isUpdatePassword(context, false),
+            config.isForceCreate(),
+            config.isUpdateProfile(),
+            config.isUpdatePassword(),
             MagicLink.registerEvent(event, MAGIC_LINK));
 
-    // check for no/invalid email address
     if (user == null
         || MagicLink.trimToNull(user.getEmail()) == null
         || !MagicLink.isValidEmail(user.getEmail())) {
@@ -101,23 +103,27 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
 
     log.debugf("user is %s %s", user.getEmail(), user.isEnabled());
 
-    // check for enabled user
     if (!enabledUser(context, user)) {
-      return; // the enabledUser method sets the challenge
+      return;
     }
 
-    OptionalInt lifespan = getActionTokenLifeSpan(context, "");
+    MagicLinkCustomizationProvider customization =
+        customizationProviderFactory.create(context.getSession(), config.raw());
+
+    if (!customization.canAuthenticate(context, user, config)) {
+      return;
+    }
 
     MagicLinkActionToken token =
         MagicLink.createActionToken(
             user,
             clientId,
-            lifespan,
+            config.getTokenLifespan(),
             rememberMe(context),
             context.getAuthenticationSession(),
-            isActionTokenPersistent(context, true));
+            config.isTokenPersistent());
     String link = MagicLink.linkFromActionToken(context.getSession(), context.getRealm(), token);
-    boolean sent = MagicLink.sendMagicLinkEmail(context.getSession(), user, link);
+    boolean sent = customization.sendMagicLinkEmail(context.getSession(), user, link, config);
     log.debugf("sent email to %s? %b. Link? %s", user.getEmail(), sent, link);
 
     context
@@ -132,38 +138,6 @@ public class MagicLinkAuthenticator extends UsernamePasswordForm {
     return context.getRealm().isRememberMe()
         && rememberMe != null
         && rememberMe.equalsIgnoreCase("on");
-  }
-
-  private boolean isForceCreate(AuthenticationFlowContext context, boolean defaultValue) {
-    return is(context, CREATE_NONEXISTENT_USER_CONFIG_PROPERTY, defaultValue);
-  }
-
-  private boolean isUpdateProfile(AuthenticationFlowContext context, boolean defaultValue) {
-    return is(context, UPDATE_PROFILE_ACTION_CONFIG_PROPERTY, defaultValue);
-  }
-
-  private boolean isUpdatePassword(AuthenticationFlowContext context, boolean defaultValue) {
-    return is(context, UPDATE_PASSWORD_ACTION_CONFIG_PROPERTY, defaultValue);
-  }
-
-  private boolean isActionTokenPersistent(AuthenticationFlowContext context, boolean defaultValue) {
-    return is(context, ACTION_TOKEN_PERSISTENT_CONFIG_PROPERTY, defaultValue);
-  }
-
-  private OptionalInt getActionTokenLifeSpan(
-      AuthenticationFlowContext context, String defaultValue) {
-    String lifespan = get(context, ACTION_TOKEN_LIFE_SPAN, defaultValue);
-
-    if ("".equals(lifespan)) {
-      return OptionalInt.empty();
-    }
-
-    try {
-      return OptionalInt.of(Integer.parseInt(lifespan));
-    } catch (NumberFormatException e) {
-      log.error("Failed to parse lifespan", e);
-      return OptionalInt.empty();
-    }
   }
 
   @Override

@@ -1,4 +1,4 @@
-package io.phasetwo.keycloak.magic.rest;
+package io.phasetwo.keycloak.magic.auth.magic.continuation;
 
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
@@ -11,7 +11,6 @@ import java.util.Map;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
-import org.keycloak.services.managers.AuthenticationSessionManager;
 import org.keycloak.services.resource.RealmResourceProvider;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.sessions.RootAuthenticationSessionModel;
@@ -52,7 +51,7 @@ public class MagicLinkContinuationStatusProvider implements RealmResourceProvide
   public Response status(
       @PathParam("sessionId") String sessionId, @PathParam("tabId") String tabId) {
     log.debugf("[MLC] Polling status for sessionId: %s, tabId: %s", sessionId, tabId);
-    
+
     // This endpoint must be accessible during the authentication flow
     // We use sessionId from URL because the magic link is clicked from a different device
     RealmModel realm = session.getContext().getRealm();
@@ -118,4 +117,3 @@ public class MagicLinkContinuationStatusProvider implements RealmResourceProvide
     }
   }
 }
-

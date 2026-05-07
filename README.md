@@ -28,6 +28,135 @@ The authenticator can be configured to create a user with the given email addres
 
 ![Configure Magic Link Authenticator with options](docs/assets/magic-link-config.png)
 
+### Customization (SPI)
+
+The core implementation is **closed for modification and open for extension**. All implementation classes (`MagicLinkAuthenticator`, `MagicLinkActionTokenHandler`) are `final` — do not fork this repository to patch them. Instead, **import this artifact as a Java library** in your own Keycloak extension project and extend it through the SPI:
+
+```xml
+<dependency>
+  <groupId>io.phasetwo.keycloak</groupId>
+  <artifactId>keycloak-magic-link</artifactId>
+  <version>VERSION</version>
+</dependency>
+```
+
+Custom behaviour is added by implementing two SPI interfaces and wiring them into a new authenticator factory subclass. The built-in defaults handle the common case — replace only what your use case requires.
+
+#### How it fits together
+
+```
+AbstractMagicLinkAuthenticatorFactory  (subclass this)
+  └── MagicLinkAuthenticator           (final — do not subclass)
+        └── MagicLinkCustomizationProvider  (implement this interface)
+              ├── canAuthenticate()    ← gate the flow (org check, role check, …)
+              └── sendMagicLinkEmail() ← use built-in template or your own
+```
+
+#### Step 1 — Implement `MagicLinkCustomizationProvider`
+
+```java
+public final class AcmeMagicLinkCustomizationProvider implements MagicLinkCustomizationProvider {
+
+    private final KeycloakSession session;
+
+    AcmeMagicLinkCustomizationProvider(KeycloakSession session) {
+        this.session = session;
+    }
+
+    @Override
+    public boolean canAuthenticate(AuthenticationFlowContext context, UserModel user, MagicLinkConfig config) {
+        // Return false (and set a challenge) to abort — e.g. role check, org membership
+        if (user.getRoleMappingsStream().noneMatch(r -> "acme-user".equals(r.getName()))) {
+            Response deny = context.form()
+                .setError("notAllowed")
+                .createErrorPage(Response.Status.FORBIDDEN);
+            context.failure(AuthenticationFlowError.ACCESS_DENIED, deny);
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public boolean sendMagicLinkEmail(KeycloakSession session, UserModel user, String link, MagicLinkConfig config) {
+        return MagicLink.sendMagicLinkEmail(session, user, link); // built-in template; swap for your own
+    }
+
+    @Override
+    public void close() {}
+}
+```
+
+#### Step 2 — Implement `MagicLinkCustomizationProviderFactory`
+
+```java
+public final class AcmeMagicLinkCustomizationProviderFactory implements MagicLinkCustomizationProviderFactory {
+
+    @Override
+    public MagicLinkCustomizationProvider create(KeycloakSession session, Map<String, String> authenticatorConfig) {
+        return new AcmeMagicLinkCustomizationProvider(session);
+    }
+
+    @Override
+    public List<ProviderConfigProperty> getConfigProperties() {
+        return List.of(); // add ProviderConfigProperty entries to expose admin-UI config fields
+    }
+}
+```
+
+#### Step 3 — Wire into an authenticator factory
+
+Subclass `AbstractMagicLinkAuthenticatorFactory` and annotate with `@AutoService`. The `PROVIDER_ID` must be unique across your Keycloak installation.
+
+```java
+@AutoService(AuthenticatorFactory.class)
+public final class AcmeMagicLinkAuthenticatorFactory extends AbstractMagicLinkAuthenticatorFactory {
+
+    public static final String PROVIDER_ID = "ext-magic-acme";
+
+    public AcmeMagicLinkAuthenticatorFactory() {
+        super(new AcmeMagicLinkCustomizationProviderFactory());
+    }
+
+    @Override public String getId()          { return PROVIDER_ID; }
+    @Override public String getDisplayType() { return "Magic Link (Acme)"; }
+    @Override public String getHelpText()    { return "Magic link restricted to Acme users."; }
+}
+```
+
+After building and deploying the JAR, **"Magic Link (Acme)"** appears in the Keycloak admin console alongside the default **"Magic Link"** option. Each variant is configured independently and can be used in any browser flow.
+
+#### Exposing admin-UI config fields
+
+`getConfigProperties()` in your factory returns additional `ProviderConfigProperty` entries that are appended to the authenticator's configuration panel in the admin UI, after the built-in properties.
+
+```java
+@Override
+public List<ProviderConfigProperty> getConfigProperties() {
+    ProviderConfigProperty orgId = new ProviderConfigProperty();
+    orgId.setType(ProviderConfigProperty.STRING_TYPE);
+    orgId.setName("acme-org-id");
+    orgId.setLabel("Organization ID");
+    orgId.setHelpText("Only members of this organization may receive a magic link.");
+    return List.of(orgId);
+}
+```
+
+The same config map is passed to `create(session, authenticatorConfig)` at runtime:
+
+```java
+@Override
+public MagicLinkCustomizationProvider create(KeycloakSession session, Map<String, String> authenticatorConfig) {
+    String orgId = authenticatorConfig.get("acme-org-id");
+    return new AcmeMagicLinkCustomizationProvider(session, orgId);
+}
+```
+
+#### Built-in default
+
+When no customization is needed the provided `DefaultMagicLinkCustomizationProviderFactory` is used automatically. It allows all users through `canAuthenticate` and delegates to the built-in `magic-link-email.ftl` template.
+
+---
+
 ## Magic link continuation
 
 This Magic link continuation authenticator is similar to the Magic Link authenticator in implementation, but has a different behavior. Instead of creating a session on the device where the link is clicked, the flow continues the login on the initial login page. The login page is polling the authentication page each 5 seconds until the session is confirmed or the authentication flow expires. The default expiration for the Magic link continuation flow is 10 minutes.
@@ -43,6 +172,10 @@ The authenticator can be configured to set the expiration of the authentication 
 When the period is exceeded the authentication flow will reset.
 
 ![Magic Link continuation expired](docs/assets/magic-link-continuation-expiration.png)
+
+### Customization
+
+`MagicLinkContinuationAuthenticator` is `final` and does **not** participate in the `MagicLinkCustomizationSpi`. Its cross-device polling flow is self-contained: email sending and user validation are fixed to the built-in behaviour. To change that behaviour, implement a new `Authenticator` (extending `UsernamePasswordForm`) and register it with its own `AuthenticatorFactory` — not by subclassing any continuation class.
 
 ### Keycloakify Theme Templates
 

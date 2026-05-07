@@ -1,4 +1,4 @@
-package io.phasetwo.keycloak.magic.auth.token;
+package io.phasetwo.keycloak.magic.auth.magic;
 
 import jakarta.ws.rs.core.Response;
 import lombok.extern.jbosslog.JBossLog;
@@ -22,7 +22,7 @@ import org.keycloak.sessions.AuthenticationSessionModel;
  * Handles the magic link action token by logging the user in and forwarding to the redirect uri.
  */
 @JBossLog
-public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<MagicLinkActionToken> {
+public final class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<MagicLinkActionToken> {
 
   public static final String LOGIN_METHOD = "login_method";
 
@@ -35,21 +35,6 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
         Errors.INVALID_REQUEST);
   }
 
-  /*
-  @Override
-  public Predicate<? super MagicLinkActionToken>[] getVerifiers(
-      ActionTokenContext<MagicLinkActionToken> tokenContext) {
-    return TokenUtils.predicates(
-        TokenUtils.checkThat(
-            t ->
-                Objects.equals(
-                    t.getEmail(),
-                    tokenContext.getAuthenticationSession().getAuthenticatedUser().getEmail()),
-            Errors.INVALID_EMAIL,
-            getDefaultErrorMessage()));
-  }
-  */
-
   @Override
   public AuthenticationSessionModel startFreshAuthenticationSession(
       MagicLinkActionToken token, ActionTokenContext<MagicLinkActionToken> tokenContext) {
@@ -59,8 +44,7 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
   @Override
   public boolean canUseTokenRepeatedly(
       MagicLinkActionToken token, ActionTokenContext<MagicLinkActionToken> tokenContext) {
-    return token
-        .getActionTokenPersistent(); // Invalidate action token after one use if configured to do so
+    return token.getActionTokenPersistent();
   }
 
   @Override
@@ -93,11 +77,9 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
         authSession.setClientNote(OIDCLoginProtocol.NONCE_PARAM, token.getNonce());
         authSession.setUserSessionNote(OIDCLoginProtocol.NONCE_PARAM, token.getNonce());
       }
-
       if (token.getCodeChallenge() != null) {
         authSession.setClientNote(OIDCLoginProtocol.CODE_CHALLENGE_PARAM, token.getCodeChallenge());
       }
-
       if (token.getCodeChallengeMethod() != null) {
         authSession.setClientNote(
             OIDCLoginProtocol.CODE_CHALLENGE_METHOD_PARAM, token.getCodeChallengeMethod());
@@ -117,17 +99,12 @@ public class MagicLinkActionTokenHandler extends AbstractActionTokenHandler<Magi
     }
 
     if (OIDCResponseMode.FRAGMENT.value().equals(token.getResponseMode())) {
-      authSession.setClientNote(OIDCLoginProtocol.RESPONSE_MODE_PARAM, OIDCResponseMode.FRAGMENT.value());
+      authSession.setClientNote(
+          OIDCLoginProtocol.RESPONSE_MODE_PARAM, OIDCResponseMode.FRAGMENT.value());
     }
 
-    // Default to switching the email verified toggle to true since they clicked on this link in an
-    // email.
-    // Although, since a magic link can be created by API, we should revisit whether this should be
-    // the
-    // default.
     user.setEmailVerified(true);
 
-    // Create a user session note to indicate that a magic link was used for login.
     authSession.setUserSessionNote(LOGIN_METHOD, MagicLinkActionTokenHandlerFactory.PROVIDER_ID);
 
     String nextAction =

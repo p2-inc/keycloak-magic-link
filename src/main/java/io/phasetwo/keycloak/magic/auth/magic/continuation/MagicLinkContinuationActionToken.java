@@ -1,4 +1,4 @@
-package io.phasetwo.keycloak.magic.auth.token;
+package io.phasetwo.keycloak.magic.auth.magic.continuation;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.UUID;

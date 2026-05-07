@@ -1,4 +1,4 @@
-package io.phasetwo.keycloak.magic.auth;
+package io.phasetwo.keycloak.magic.auth.magic.continuation;
 
 import static io.phasetwo.keycloak.magic.MagicLink.CREATE_NONEXISTENT_USER_CONFIG_PROPERTY;
 

@@ -1,4 +1,4 @@
-package io.phasetwo.keycloak.magic.auth;
+package io.phasetwo.keycloak.magic.auth.magic.continuation;
 
 import static io.phasetwo.keycloak.magic.MagicLink.CREATE_NONEXISTENT_USER_CONFIG_PROPERTY;
 import static io.phasetwo.keycloak.magic.MagicLink.MAGIC_LINK;
@@ -14,7 +14,6 @@ import static io.phasetwo.keycloak.magic.auth.util.MagicLinkConstants.TIMEOUT;
 import static org.keycloak.services.validation.Validation.FIELD_USERNAME;
 
 import io.phasetwo.keycloak.magic.MagicLink;
-import io.phasetwo.keycloak.magic.auth.token.MagicLinkContinuationActionToken;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
 import java.time.ZonedDateTime;
