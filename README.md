@@ -30,7 +30,17 @@ The authenticator can be configured to create a user with the given email addres
 
 ### Customization (SPI)
 
-All magic link implementation classes are `final`. Custom behaviour is added by implementing two SPI interfaces and wiring them into a new authenticator factory subclass. The built-in defaults handle the common case — replace only what your use case requires.
+The core implementation is **closed for modification and open for extension**. All implementation classes (`MagicLinkAuthenticator`, `MagicLinkActionTokenHandler`) are `final` — do not fork this repository to patch them. Instead, **import this artifact as a Java library** in your own Keycloak extension project and extend it through the SPI:
+
+```xml
+<dependency>
+  <groupId>io.phasetwo.keycloak</groupId>
+  <artifactId>keycloak-magic-link</artifactId>
+  <version>VERSION</version>
+</dependency>
+```
+
+Custom behaviour is added by implementing two SPI interfaces and wiring them into a new authenticator factory subclass. The built-in defaults handle the common case — replace only what your use case requires.
 
 #### How it fits together
 

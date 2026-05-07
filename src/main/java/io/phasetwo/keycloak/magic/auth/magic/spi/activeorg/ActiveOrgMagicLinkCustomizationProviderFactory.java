@@ -1,6 +1,5 @@
 package io.phasetwo.keycloak.magic.auth.magic.spi.activeorg;
 
-import com.google.auto.service.AutoService;
 import io.phasetwo.keycloak.magic.auth.magic.spi.MagicLinkCustomizationProvider;
 import io.phasetwo.keycloak.magic.auth.magic.spi.MagicLinkCustomizationProviderFactory;
 import java.util.List;

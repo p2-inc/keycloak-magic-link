@@ -37,21 +37,40 @@ This is a **Keycloak SPI extension** — a JAR deployed into a Keycloak server's
 
 **`MagicLink.java`** — Central utility class. All shared logic for creating action tokens, sending emails, user resolution (`getOrCreate`), redirect URI validation, and default flow setup lives here. Both the authenticator and the REST resource delegate to this class.
 
-**Authenticator path** (`src/main/java/.../auth/`):
-- `MagicLinkAuthenticator` / `MagicLinkAuthenticatorFactory` (provider ID: `ext-magic-form`) — Browser-flow authenticator. Extends `UsernamePasswordForm`. On submit, creates a `MagicLinkActionToken` and emails the link. Also sets `executionId` on the token so AMR is populated correctly on redemption.
-- `MagicLinkContinuationAuthenticator` — Variant where the original browser tab polls for completion while the link is clicked on another device.
+**Magic Link authenticator path** (`src/main/java/.../auth/magic/`):
+- `AbstractMagicLinkAuthenticatorFactory` — Base factory for all magic link authenticator variants. Takes a `MagicLinkCustomizationProviderFactory` at construction time; merges its config properties after the base `MagicLinkConfig` properties and passes it to `MagicLinkAuthenticator` so the customization provider is created per-authentication with the execution config map.
+- `MagicLinkAuthenticatorFactory` (provider ID: `ext-magic-form`) — Default concrete factory. Uses `DefaultMagicLinkCustomizationProviderFactory` (all users allowed, standard email template). Registers `RealmPostCreateEvent` listener.
+- `MagicLinkAuthenticator` — Extends `UsernamePasswordForm`. Resolves/creates users, delegates `canAuthenticate` and `sendMagicLinkEmail` to the active `MagicLinkCustomizationProvider`, creates a `MagicLinkActionToken`, and shows a waiting screen.
+- `MagicLinkActionToken` — JWT subclass encoding OIDC params (`rdu`, `scope`, `state`, `nce`, `cc`, `ccm`, `rme`, `ru`, `rm`, `loa`, `eid`). Token type: `ext-magic-link`.
+- `MagicLinkActionTokenHandler` / `MagicLinkActionTokenHandlerFactory` (provider ID: `ext-magic-link`) — Called when the magic link URL is visited. Bypasses the normal browser flow entirely, so it manually replicates what Keycloak's flow machinery would do: sets AMR via `AuthenticatorUtils.updateCompletedExecutions()`, sets LOA via `AcrStore.setLevelAuthenticated()`, and merges existing session state (LOA, AMR, remember-me) into the new `AuthenticationSession` when the browser already has an active session (session continuity).
+- `MagicLinkConfig` — Typed wrapper around the authenticator config map. Config properties: `CREATE_NONEXISTENT_USER_CONFIG_PROPERTY`, `UPDATE_PROFILE_ACTION_CONFIG_PROPERTY`, `UPDATE_PASSWORD_ACTION_CONFIG_PROPERTY`, `ACTION_TOKEN_PERSISTENT_CONFIG_PROPERTY`, `ACTION_TOKEN_LIFE_SPAN`.
+
+**Magic Link SPI customization** (`src/main/java/.../auth/magic/spi/`):
+- `MagicLinkCustomizationSpi` (SPI ID: `magic-link-customization`) — Keycloak SPI definition, registered via `@AutoService(Spi.class)`. Third parties can supply custom providers by implementing `MagicLinkCustomizationProviderFactory` and annotating it with `@AutoService(ProviderFactory.class)`.
+- `MagicLinkCustomizationProvider` — Interface with two extension points: `canAuthenticate()` (gate user before token creation) and `sendMagicLinkEmail()` (custom email delivery).
+- `MagicLinkCustomizationProviderFactory` — Factory interface extending `ProviderFactory<MagicLinkCustomizationProvider>`. Adds `getConfigProperties()` (properties appended to the authenticator's admin-console panel) and `create(session, authenticatorConfig)` (config-aware instantiation).
+- `DefaultMagicLinkCustomizationProvider` / `DefaultMagicLinkCustomizationProviderFactory` (provider ID: `default`) — Built-in no-op implementation; allows all users and uses the standard `magic-link-email.ftl` template. **Not registered via `@AutoService`** — instantiated directly by `MagicLinkAuthenticatorFactory`.
+- `MagicLinkCustomizationConfig` — Abstract base class for typed config wrappers used by customization providers.
+
+**Active Org customization** (`src/main/java/.../auth/magic/spi/activeorg/`):
+- `ActiveOrgMagicLinkAuthenticatorFactory` (provider ID: `ext-magic-active-org`, display name: **"Magic Link (Active Org)"**) — Concrete factory passing `ActiveOrgMagicLinkCustomizationProviderFactory` to the base.
+- `ActiveOrgMagicLinkCustomizationProvider` — Checks the `org.ro.active` user attribute against the configured `ext-magic-org-id`; denies non-members with `ACCESS_DENIED`.
+- `ActiveOrgMagicLinkCustomizationProviderFactory` (provider ID: `active-org`) — Exposes two admin-console properties: `ext-magic-org-id` (org to restrict to) and `ext-magic-org-require-membership` (toggle, default `true`). **Not registered via `@AutoService`** — instantiated directly by `ActiveOrgMagicLinkAuthenticatorFactory`.
+
+**Continuation flow** (`src/main/java/.../auth/magic/continuation/`):
+- `MagicLinkContinuationAuthenticatorFactory` (provider ID: `magic-link-continuation-form`) / `MagicLinkContinuationAuthenticator` — Extends `UsernamePasswordForm`. Shows `view-email-continuation.ftl` with a polling URL. The original browser tab polls for completion while the magic link is clicked on another device/tab.
+- `MagicLinkContinuationActionToken` — Extends `DefaultActionToken`. Carries `sessionId`, `tabId`, and `redirectUri` for cross-browser scenarios.
+- `MagicLinkContinuationLinkActionTokenHandler` / `MagicLinkContinuationActionTokenHandlerFactory` (provider ID: `magic-link-continuation`) — Handles the magic link click: marks the session as confirmed and returns a confirmation template.
+- `MagicLinkContinuationStatusProvider` / `MagicLinkContinuationStatusProviderFactory` (provider ID: `magic-link-continuation`) — Public REST endpoint at `realms/{realm}/magic-link-continuation/{sessionId}/{tabId}/status`. Returns JSON `{ state: pending|confirmed|expired, expires_in: … }` for the polling tab.
+
+**Other authenticators** (`src/main/java/.../auth/`):
 - `EmailOtpAuthenticator` — Standalone 6-digit OTP via email.
 - `LoginTokenVerifier` / `LoginTokenVerifierFactory` (provider ID: `login-token-verifier`, display name: **"Login Token (with login_hint)"**) — Reads `login_hint=lt:{uuid}` from the OIDC auth request and verifies the token. Passes through silently (`context.attempted()`) when `login_hint` is absent or has a different prefix.
 - `LoginTokenFormAuthenticator` / `LoginTokenFormAuthenticatorFactory` (provider ID: `login-token-form`, display name: **"Login Token"**) — Shows a form for manual token entry. Accepts tokens with or without the `lt:` prefix. Shows a form error on invalid/expired tokens rather than falling through silently.
 - `LoginTokenHelper` — Package-private class with shared constants (`RESUME_PREFIX`, `DATA_KEY_PREFIX`, `USED_KEY_PREFIX`, auth-session note names) and shared static methods (`clearLoginHint`, `displayName`, `resolveLoaLevel`, `completeAuth`) used by both Login Token authenticators.
 
-**Action Token path** (`src/main/java/.../auth/token/`):
-- `MagicLinkActionToken` — JWT subclass encoding all OIDC params (`rdu`, `scope`, `state`, `nce`, `cc`, `ccm`, `rme`, `ru`, `rm`, `loa`, `eid`). Token type: `ext-magic-link`.
-- `MagicLinkActionTokenHandler` — Called when the magic link URL is visited. Bypasses the normal browser flow entirely, so it manually replicates what Keycloak's flow machinery would do: sets AMR via `AuthenticatorUtils.updateCompletedExecutions()`, sets LOA via `AcrStore.setLevelAuthenticated()`, and merges existing session state (LOA, AMR, remember-me) into the new `AuthenticationSession` when the browser already has an active session (session continuity).
-
 **REST Resource path** (`src/main/java/.../resources/`):
-- `MagicLinkResource` — POST endpoint at `realms/{realm}/magic-link`. Requires `manage-users` role. Accepts `MagicLinkRequest`, resolves the `ext-magic-form` execution by `flow_id` to populate `executionId` on the token.
-- Registered via `MagicLinkResourceProviderFactory` (provider ID: `magic-link`).
+- `MagicLinkResource` — `POST realms/{realm}/magic-link`. Requires `manage-users` role. Accepts `MagicLinkRequest`, resolves the `ext-magic-form` execution by `flow_id` to populate `executionId` on the token. Registered via `MagicLinkResourceProviderFactory` (provider ID: `magic-link`).
 
 ### Key Design Constraints
 
@@ -75,6 +94,8 @@ The abstract base classes (`service/AbstractMagicLinkTest`, `web/AbstractMagicLi
 ### Keycloak SPI Registration
 
 Factories use `@AutoService` to generate `META-INF/services/` entries at compile time. No manual service files needed. The annotation processor is configured in `pom.xml`.
+
+**Important distinction for `MagicLinkCustomizationProviderFactory` implementations**: The built-in factories (`DefaultMagicLinkCustomizationProviderFactory`, `ActiveOrgMagicLinkCustomizationProviderFactory`) are **not** registered via `@AutoService` — they are instantiated directly inside their paired `AuthenticatorFactory` constructors. Third-party custom implementations **should** use `@AutoService(ProviderFactory.class)` so Keycloak's service loader discovers them.
 
 ### Code Style
 

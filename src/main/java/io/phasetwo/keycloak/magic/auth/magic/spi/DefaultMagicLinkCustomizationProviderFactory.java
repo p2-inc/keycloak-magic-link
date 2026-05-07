@@ -1,6 +1,5 @@
 package io.phasetwo.keycloak.magic.auth.magic.spi;
 
-import com.google.auto.service.AutoService;
 import java.util.List;
 import java.util.Map;
 import org.keycloak.Config;
