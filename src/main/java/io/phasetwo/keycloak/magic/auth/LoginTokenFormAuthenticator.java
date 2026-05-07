@@ -16,7 +16,7 @@ import org.keycloak.models.UserModel;
  * if absent. On validation failure the form is re-shown with an error message; the flow never falls
  * through to the next alternative silently.
  *
- * <h3>User-switch behaviour</h3>
+ * <h2>User-switch behaviour</h2>
  *
  * When a user-switch is needed (an active session exists for a different user), the confirmation
  * form ({@code login-token-user-switch.ftl}) is always shown regardless of the token's {@code
@@ -25,7 +25,7 @@ import org.keycloak.models.UserModel;
  * fresh OIDC auth URL with {@code login_hint=lt:{tokenId}} so that {@link LoginTokenVerifier} can
  * complete authentication automatically if it is present in the same flow.
  *
- * <h3>Placement</h3>
+ * <h2>Placement</h2>
  *
  * Add as <strong>ALTERNATIVE</strong> or <strong>REQUIRED</strong> in the browser flow. Unlike
  * {@link LoginTokenVerifier}, this authenticator always shows UI — do not place it before Cookie
