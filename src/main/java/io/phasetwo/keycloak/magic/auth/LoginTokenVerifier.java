@@ -15,7 +15,7 @@ import org.keycloak.protocol.oidc.OIDCLoginProtocol;
  * Authenticator that completes Login Token authentication inside the Keycloak browser flow via
  * {@code login_hint}.
  *
- * <h3>Flow</h3>
+ * <h2>Flow</h2>
  *
  * <ol>
  *   <li>Backend calls {@code POST /realms/{realm}/login-token} to obtain a UUID credential
@@ -29,7 +29,7 @@ import org.keycloak.protocol.oidc.OIDCLoginProtocol;
  *   <li>Subsequent authenticators (e.g. TOTP for LOA=2) run in the same browser session.
  * </ol>
  *
- * <h3>Placement</h3>
+ * <h2>Placement</h2>
  *
  * Add as <strong>ALTERNATIVE</strong> <em>before Cookie</em> in the browser flow so that
  * {@code login_hint} is evaluated before the Cookie authenticator can short-circuit the flow with a
