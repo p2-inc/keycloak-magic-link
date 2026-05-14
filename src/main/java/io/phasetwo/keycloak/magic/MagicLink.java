@@ -1,6 +1,7 @@
 package io.phasetwo.keycloak.magic;
 
 import static org.keycloak.authentication.authenticators.browser.AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME;
+import static org.keycloak.models.utils.KeycloakModelUtils.findUserByNameOrEmail;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
@@ -96,12 +97,12 @@ public class MagicLink {
     if (trimToNull(emailOrUsername) == null) {
       return null;
     }
-    UserModel user = null;
-    if (isValidEmail(emailOrUsername)) {
+    UserModel user = findUserByNameOrEmail(session, realm, emailOrUsername);
+    // findUserByNameOrEmail skips the email lookup when loginWithEmailAllowed=false.
+    // Fall back to a direct email lookup so users whose username differs from their
+    // email (e.g. multi-tenant composite usernames) can still receive magic links.
+    if (user == null && isValidEmail(emailOrUsername)) {
       user = session.users().getUserByEmail(realm, emailOrUsername);
-    }
-    if (user == null) {
-      user = session.users().getUserByUsername(realm, emailOrUsername);
     }
     // If the user does not exist, we create it ONLY if forceCreate is true
     if (user == null && forceCreate) {
