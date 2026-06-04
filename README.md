@@ -494,6 +494,22 @@ If you are depending on the library in your own Maven-built project, or using a 
     </dependency>
 ```
 
+## Building and testing
+
+Checkout this project and run `mvn clean install`, which will build the source, run all unit/integration tests, and produce a jar in the `target/` directory. The build enforces Google Java formatting standards via [Spotless](https://github.com/diffplug/spotless); run `mvn spotless:apply` to auto-format your code before committing.
+
+### Code formatting
+
+Spotless replaces the previously used Spotify `fmt-maven-plugin`. Use `mvn spotless:check` to verify formatting and `mvn spotless:apply` to fix it.
+
+To enforce formatting automatically before every push, install the provided git pre-push hook:
+
+```
+mvn spotless:install-git-pre-push-hook
+```
+
+When you push, the hook runs `spotless:check`. If violations are found, it automatically runs `spotless:apply`, aborts the push, and lets you review and commit the formatted files before retrying.
+
 ## Implementation Notes
 
 This is a rough outline of the implementation:
