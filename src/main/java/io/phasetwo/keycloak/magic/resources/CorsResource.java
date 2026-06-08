@@ -1,6 +1,7 @@
 package io.phasetwo.keycloak.magic.resources;
 
-import jakarta.ws.rs.*;
+import jakarta.ws.rs.OPTIONS;
+import jakarta.ws.rs.Path;
 import jakarta.ws.rs.core.Response;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.http.HttpRequest;
@@ -32,7 +33,7 @@ public class CorsResource {
 
   public static void setupCors(KeycloakSession session, AdminAuth auth) {
     Cors.builder()
-        .allowedOrigins(auth.getToken())
+        .checkAllowedOrigins(auth.getToken())
         .allowedMethods(METHODS)
         .exposedHeaders("Location")
         .auth()
