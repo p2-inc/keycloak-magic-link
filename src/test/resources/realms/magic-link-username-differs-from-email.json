@@ -1,0 +1,24 @@
+{
+  "realm": "username-test-realm",
+  "displayName": "Username Test Realm",
+  "enabled": true,
+  "loginWithEmailAllowed": false,
+  "duplicateEmailsAllowed": true,
+  "clients": [
+    {
+      "clientId": "test-client",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["*"],
+      "webOrigins": ["+"]
+    }
+  ],
+  "smtpServer": {
+    "host": "mailhog",
+    "port": 1025,
+    "from": "noreply@test.io",
+    "auth": "false"
+  }
+}
