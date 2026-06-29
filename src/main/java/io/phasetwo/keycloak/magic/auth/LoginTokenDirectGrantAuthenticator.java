@@ -21,7 +21,7 @@ import org.keycloak.provider.ProviderConfigProperty;
  * Direct Grant (Resource Owner Password Credentials) authenticator that authenticates a request
  * using a Login Token reference, with no browser interaction.
  *
- * <h3>Flow</h3>
+ * <h2>Flow</h2>
  *
  * <ol>
  *   <li>Backend calls {@code POST /realms/{realm}/login-token} to obtain a UUID credential
@@ -36,7 +36,7 @@ import org.keycloak.provider.ProviderConfigProperty;
  *       and completes the grant — Keycloak issues the tokens directly.
  * </ol>
  *
- * <h3>Placement</h3>
+ * <h2>Placement</h2>
  *
  * Add as <strong>REQUIRED</strong> in the realm's Direct Grant flow. Unlike the browser-flow {@link
  * LoginTokenVerifier}, this authenticator never reads the OIDC {@code login_hint} client note (the
