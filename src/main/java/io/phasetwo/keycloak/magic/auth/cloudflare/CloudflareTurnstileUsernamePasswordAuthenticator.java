@@ -7,10 +7,14 @@ import static io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile.isTurnsti
 import io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
+import lombok.val;
 import lombok.extern.jbosslog.JBossLog;
+
+import org.keycloak.WebAuthnConstants;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.authentication.authenticators.browser.UsernamePasswordForm;
+import org.keycloak.authentication.authenticators.browser.WebAuthnConditionalUIAuthenticator;
 import org.keycloak.forms.login.LoginFormsProvider;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.KeycloakSession;
@@ -21,14 +25,6 @@ public class CloudflareTurnstileUsernamePasswordAuthenticator extends UsernamePa
     implements Authenticator {
 
   public static final String CF_VERIFY_EMAIL_ON_FAIL = "verify_email_on_captcha_fail";
-
-  public CloudflareTurnstileUsernamePasswordAuthenticator(KeycloakSession session) {
-    super(session);
-  }
-
-  public CloudflareTurnstileUsernamePasswordAuthenticator() {
-    super();
-  }
 
   @Override
   public void authenticate(AuthenticationFlowContext context) {
@@ -60,8 +56,12 @@ public class CloudflareTurnstileUsernamePasswordAuthenticator extends UsernamePa
 
     MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
     boolean isPasskeySubmission =
-        formData.containsKey(org.keycloak.WebAuthnConstants.AUTHENTICATOR_DATA)
-            || formData.containsKey(org.keycloak.WebAuthnConstants.ERROR);
+        webauthnAuth != null && webauthnAuth.isPasskeysEnabled()
+            && (formData.containsKey(WebAuthnConstants.AUTHENTICATOR_DATA) || formData.containsKey(WebAuthnConstants.ERROR));
+
+    if (isPasskeySubmission) {
+      return;
+    }
 
     if (captchaRequired && !isPasskeySubmission) {
       String captcha = formData.getFirst(CloudflareTurnstile.CF_TURNSTILE_RESPONSE);
@@ -79,8 +79,8 @@ public class CloudflareTurnstileUsernamePasswordAuthenticator extends UsernamePa
 
     super.action(context);
 
-    if (isPasskeySubmission) {
-      return;
+    if (captchaRequired && !validRecaptcha) {
+      context.getAuthenticationSession().setAuthNote(TURNSTILE_FAILED, "true");
     }
 
     boolean flowSucceeded =
