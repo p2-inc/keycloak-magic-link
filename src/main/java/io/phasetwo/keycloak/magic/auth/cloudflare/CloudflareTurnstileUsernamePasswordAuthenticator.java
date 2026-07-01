@@ -56,8 +56,7 @@ public class CloudflareTurnstileUsernamePasswordAuthenticator extends UsernamePa
 
     MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
     boolean isPasskeySubmission =
-        webauthnAuth != null && webauthnAuth.isPasskeysEnabled()
-            && (formData.containsKey(WebAuthnConstants.AUTHENTICATOR_DATA) || formData.containsKey(WebAuthnConstants.ERROR));
+        webauthnAuth != null && webauthnAuth.isPasskeysEnabled();
 
     if (isPasskeySubmission) {
       return;
@@ -78,10 +77,6 @@ public class CloudflareTurnstileUsernamePasswordAuthenticator extends UsernamePa
     String executionIdBefore = context.getExecution().getId();
 
     super.action(context);
-
-    if (captchaRequired && !validRecaptcha) {
-      context.getAuthenticationSession().setAuthNote(TURNSTILE_FAILED, "true");
-    }
 
     boolean flowSucceeded =
         (context.getUser() != null) || (!executionIdBefore.equals(context.getExecution().getId()));
