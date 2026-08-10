@@ -88,10 +88,12 @@ class LoginTokenApiTest extends AbstractMagicLinkTest {
   }
 
   @Test
-  void createLoginToken_missingClientId_returnsBadRequest() {
+  void createLoginToken_missingClientId_createsUnboundToken() {
     Testcontainers.exposeHostPorts(container.getHttpPort());
     importRealm("/realms/login-token-api-test-setup.json");
 
+    // client_id is optional: omitting it mints an unbound ("universal") token. Such tokens are
+    // only redeemable by executions with "Client ID must match" switched OFF (default is ON).
     given()
         .baseUri(getAuthUrl())
         .auth()
@@ -100,7 +102,8 @@ class LoginTokenApiTest extends AbstractMagicLinkTest {
         .body(Map.of("email", TEST_EMAIL))
         .post(LOGIN_TOKEN_PATH)
         .then()
-        .statusCode(400);
+        .statusCode(200)
+        .body("login_hint", not(emptyOrNullString()));
   }
 
   @Test
