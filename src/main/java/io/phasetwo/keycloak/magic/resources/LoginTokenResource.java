@@ -1,7 +1,14 @@
 package io.phasetwo.keycloak.magic.resources;
 
 import static io.phasetwo.keycloak.magic.MagicLink.MAGIC_LINK;
-import static io.phasetwo.keycloak.magic.auth.token.LoginToken.*;
+import static io.phasetwo.keycloak.magic.auth.token.LoginToken.KEY_CLIENT_ID;
+import static io.phasetwo.keycloak.magic.auth.token.LoginToken.KEY_CONFIRM_USER_SWITCH;
+import static io.phasetwo.keycloak.magic.auth.token.LoginToken.KEY_EXPIRY;
+import static io.phasetwo.keycloak.magic.auth.token.LoginToken.KEY_LOA;
+import static io.phasetwo.keycloak.magic.auth.token.LoginToken.KEY_REMEMBER_ME;
+import static io.phasetwo.keycloak.magic.auth.token.LoginToken.KEY_REUSABLE;
+import static io.phasetwo.keycloak.magic.auth.token.LoginToken.KEY_SEV;
+import static io.phasetwo.keycloak.magic.auth.token.LoginToken.KEY_USER_ID;
 
 import io.phasetwo.keycloak.magic.MagicLink;
 import io.phasetwo.keycloak.magic.auth.LoginTokenVerifier;
@@ -64,17 +71,19 @@ public class LoginTokenResource extends AbstractAdminResource {
       throw new BadRequestException("Login tokens are not allowed for the master realm");
     }
 
-    if (req.getClientId() == null || req.getClientId().isBlank()) {
-      throw new BadRequestException("client_id is required");
-    }
-
     if (req.getUserId() == null && req.getEmail() == null && req.getUsername() == null) {
       throw new BadRequestException("user_id, email, or username is required");
     }
 
-    ClientModel client = session.clients().getClientByClientId(realm, req.getClientId());
-    if (client == null) {
-      throw new NotFoundException("Client not found: " + req.getClientId());
+    // client_id is optional: when present, the token is bound to that client and the binding is
+    // always enforced on redemption. When absent, an unbound ("universal") token is created that
+    // is only accepted by executions configured with "Client ID must match" = OFF.
+    boolean clientBound = req.getClientId() != null && !req.getClientId().isBlank();
+    if (clientBound) {
+      ClientModel client = session.clients().getClientByClientId(realm, req.getClientId());
+      if (client == null) {
+        throw new NotFoundException("Client not found: " + req.getClientId());
+      }
     }
 
     // user_id takes precedence, then username, then email.
@@ -115,7 +124,9 @@ public class LoginTokenResource extends AbstractAdminResource {
 
     Map<String, String> notes = new HashMap<>();
     notes.put(KEY_USER_ID, user.getId());
-    notes.put(KEY_CLIENT_ID, req.getClientId());
+    if (clientBound) {
+      notes.put(KEY_CLIENT_ID, req.getClientId());
+    }
     notes.put(KEY_EXPIRY, String.valueOf(absoluteExpiry));
     if (req.getForceSessionLoa() != null) {
       notes.put(KEY_LOA, String.valueOf(req.getForceSessionLoa()));
@@ -134,13 +145,16 @@ public class LoginTokenResource extends AbstractAdminResource {
     }
 
     SingleUseObjectProvider singleUse = session.getProvider(SingleUseObjectProvider.class);
-    singleUse.put(LoginTokenVerifier.DATA_KEY_PREFIX + tokenId,
-        (long) req.getExpirationSeconds(), notes);
+    singleUse.put(
+        LoginTokenVerifier.DATA_KEY_PREFIX + tokenId, (long) req.getExpirationSeconds(), notes);
 
     log.debugf(
         "[LT] token stored for user=%s client=%s expiry=%d loa=%s reusable=%s",
-        user.getId(), req.getClientId(), absoluteExpiry,
-        req.getForceSessionLoa(), req.getReusable());
+        user.getId(),
+        req.getClientId(),
+        absoluteExpiry,
+        req.getForceSessionLoa(),
+        req.getReusable());
 
     LoginTokenResponse resp = new LoginTokenResponse();
     resp.setLoginHint(LoginTokenVerifier.RESUME_PREFIX + tokenId);

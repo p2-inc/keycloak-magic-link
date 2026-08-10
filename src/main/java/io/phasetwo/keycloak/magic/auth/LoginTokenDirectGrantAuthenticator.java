@@ -129,7 +129,7 @@ public class LoginTokenDirectGrantAuthenticator extends AbstractDirectGrantAuthe
 
   @Override
   public boolean isConfigurable() {
-    return false;
+    return true;
   }
 
   @Override
@@ -147,6 +147,6 @@ public class LoginTokenDirectGrantAuthenticator extends AbstractDirectGrantAuthe
 
   @Override
   public List<ProviderConfigProperty> getConfigProperties() {
-    return List.of();
+    return List.of(LoginTokenHelper.requireClientBindingConfigProperty());
   }
 }

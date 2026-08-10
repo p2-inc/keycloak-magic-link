@@ -27,8 +27,11 @@ public class LoginTokenRequest {
   private String username;
 
   /**
-   * Client ID validated when the login token is redeemed. The browser flow verifier rejects
-   * redemption attempts from any other client.
+   * Optional client ID the token is bound to. When set, redemption from any other client is
+   * rejected — this binding is always enforced, regardless of authenticator configuration. When
+   * omitted, an unbound ("universal") token is created that can be redeemed at any client, but
+   * only by authenticator executions configured with "Client ID must match" = OFF. Unbound tokens
+   * should use a short {@code expiration_seconds} and {@code reusable=false}.
    */
   @JsonProperty("client_id")
   private String clientId;

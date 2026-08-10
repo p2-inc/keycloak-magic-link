@@ -296,7 +296,7 @@ Requires `manage-users` role (same as `/magic-link`).
 | `user_id` | Y* | | Keycloak user ID. Takes precedence over `email` and `username` when provided. `force_create` is ignored. |
 | `email` | Y* | | Email address of the user. Mutually exclusive with `username`. |
 | `username` | Y* | | Username of the user. When provided, `force_create` is ignored. |
-| `client_id` | Y | | Client ID validated when the login token is redeemed. The verifier rejects redemption attempts from any other client. |
+| `client_id` | N | | Client ID the token is bound to. When set, redemption from any other client is rejected — this is always enforced. When omitted, an unbound ("universal") token is created that is only accepted by authenticator executions configured with **Client ID must match** = OFF (see [Client binding](#client-binding--universal-tokens)). |
 | `expiration_seconds` | N | 300 (5 min) | Token validity in seconds. |
 | `loa` | N | | Force the session to this LOA level, overriding the flow's Condition configuration. |
 | `remember_me` | N | false | Set the remember-me flag on the session. |
@@ -306,6 +306,35 @@ Requires `manage-users` role (same as `/magic-link`).
 | `confirm_user_switch` | N | false | Controls behaviour when a different user is already logged in on the device. When `false` (default), the existing session is silently logged out and the login token is processed automatically. When `true`, a confirmation screen is shown asking the user to approve the logout before continuing. |
 
 *One of `user_id`, `email`, or `username` is required. `user_id` takes precedence if multiple are provided.
+
+### Client binding / universal tokens
+
+By default, every Login Token is **bound to one client**: the `client_id` stored at generation time must match the client of the session in which the token is redeemed. This limits the blast radius of a leaked token — it can only be redeemed through the bound client, whose redirect-URI allowlist and PKCE configuration control where the authorization code can flow.
+
+For use cases where the target client is not known at generation time — e.g. **QR-code login**, where a user generates a token in account management and any of several apps may scan it — the binding can be relaxed:
+
+1. Omit `client_id` in the `POST /login-token` request. This creates an **unbound ("universal") token**.
+2. Set the **Client ID must match** option to `OFF` on the authenticator execution(s) that should accept unbound tokens (available on `Login Token (with login_hint)`, `Login Token`, and `Login Token Direct Grant`).
+
+The option semantics are:
+
+| Token has `client_id` | **Client ID must match** = ON (default) | **Client ID must match** = OFF |
+| --- | --- | --- |
+| Yes, matches session client | ✅ accepted | ✅ accepted |
+| Yes, different client | ❌ rejected | ❌ **still rejected** |
+| No (universal token) | ❌ rejected | ✅ accepted |
+
+A `client_id` that **is** present on a token is always enforced — the toggle only controls whether tokens *without* a binding are accepted. This means bound and unbound tokens can safely coexist in the same realm: creating a bound token is a guarantee that it cannot be redeemed elsewhere, regardless of how the flows are configured.
+
+**Security recommendations for unbound tokens:**
+
+- Use a **short `expiration_seconds`** (30–120 s). Unbound tokens are meant to be displayed live (e.g. as a QR code), not sent over long-lived channels like email.
+- Set **`reusable: false`**. A universal token is password-equivalent for *every* client in the realm during its lifetime; single-use minimizes the window.
+- Be aware that with **Client ID must match** = OFF, the *least strictly configured* client in the realm defines the security level for a stolen token — review clients with permissive redirect URIs (wildcards, `localhost`) and clients with Direct Access Grants enabled.
+- Do not enable unbound tokens in realms that allow **anonymous dynamic client registration** — an attacker could register a client with an arbitrary redirect URI and redeem stolen tokens there.
+- Keep the default (ON) on executions that do not need universal tokens; enable OFF only on the specific flow that serves the QR-login use case.
+
+When the token is transported over email or other uncontrolled channels, or when the target app is known in advance, keep using bound tokens — the binding prevents cross-app replay (e.g. a token issued for a customer app being redeemed against an internal admin portal in the same realm) and gives audit logs a verifiable issued-for/redeemed-at client pair.
 
 > **Important: place the Login Token Verifier before the Cookie authenticator in your flow.**
 > Keycloak evaluates ALTERNATIVE executions in order and stops at the first success. If Cookie

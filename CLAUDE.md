@@ -17,8 +17,8 @@ mvn test -Dtest=MagicLinkApiTest
 # Run a single test method
 mvn test -Dtest=MagicLinkApiTest#createMagicLinkWithExplicitLoa_acrClaimMatchesRequestedLoa
 
-# Format code (Google Java style)
-mvn fmt:format
+# Format code (Google Java style via Spotless; ratcheted to files changed vs. origin/main)
+mvn spotless:apply
 
 # Build without running tests
 mvn clean package -DskipTests
@@ -66,7 +66,8 @@ This is a **Keycloak SPI extension** — a JAR deployed into a Keycloak server's
 - `EmailOtpAuthenticator` — Standalone 6-digit OTP via email.
 - `LoginTokenVerifier` / `LoginTokenVerifierFactory` (provider ID: `login-token-verifier`, display name: **"Login Token (with login_hint)"**) — Reads `login_hint=lt:{uuid}` from the OIDC auth request and verifies the token. Passes through silently (`context.attempted()`) when `login_hint` is absent or has a different prefix.
 - `LoginTokenFormAuthenticator` / `LoginTokenFormAuthenticatorFactory` (provider ID: `login-token-form`, display name: **"Login Token"**) — Shows a form for manual token entry. Accepts tokens with or without the `lt:` prefix. Shows a form error on invalid/expired tokens rather than falling through silently.
-- `LoginTokenHelper` — Package-private class with shared constants (`RESUME_PREFIX`, `DATA_KEY_PREFIX`, `USED_KEY_PREFIX`, auth-session note names) and shared static methods (`clearLoginHint`, `displayName`, `resolveLoaLevel`, `completeAuth`) used by both Login Token authenticators.
+- `LoginTokenDirectGrantAuthenticator` (provider ID: `direct-grant-login-token`, display name: **"Login Token Direct Grant"**) — Redeems a Login Token in a Direct Grant (ROPC) flow via the `login_token` form parameter; no browser interaction. Returns standard OAuth2 error responses (`invalid_grant`) on failure.
+- `LoginTokenHelper` — Package-private class with shared constants (`RESUME_PREFIX`, `DATA_KEY_PREFIX`, `USED_KEY_PREFIX`, auth-session note names) and shared static methods (`clearLoginHint`, `displayName`, `resolveLoaLevel`, `completeAuth`, `lookupAndValidate`, `verifyDirectGrant`) used by all Login Token authenticators.
 
 **REST Resource path** (`src/main/java/.../resources/`):
 - `MagicLinkResource` — `POST realms/{realm}/magic-link`. Requires `manage-users` role. Accepts `MagicLinkRequest`, resolves the `ext-magic-form` execution by `flow_id` to populate `executionId` on the token. Registered via `MagicLinkResourceProviderFactory` (provider ID: `magic-link`).
@@ -98,7 +99,7 @@ Factories use `@AutoService` to generate `META-INF/services/` entries at compile
 
 ### Code Style
 
-Code is formatted with `fmt-maven-plugin` (Google Java style). Run `mvn fmt:format` before committing. Logging uses `@JBossLog` (Lombok) which generates a `log` field backed by JBoss Logging.
+Code is formatted with the Spotless Maven plugin (Google Java style, wildcard imports forbidden, ratcheted to files changed vs. `origin/main`). Run `mvn spotless:apply` before committing. Logging uses `@JBossLog` (Lombok) which generates a `log` field backed by JBoss Logging.
 
 ---
 
@@ -115,20 +116,21 @@ The original `MagicLinkActionTokenHandler` authenticates the user *directly* (by
 Keycloak silently truncates any OIDC parameter longer than 255 characters (`AuthzEndpointRequestParser`). A signed JWT is typically 500–700 characters and would be dropped. Login Token therefore uses a **UUID reference in `login_hint`**:
 
 1. `POST /login-token` generates a UUID, stores the credential data in `SingleUseObjectProvider` (Infinispan) under key `lt:data:{uuid}` with the requested TTL, and returns `{ "login_hint": "lt:{uuid}" }`. The caller constructs the full OIDC auth URL — owning PKCE, `redirect_uri`, `state`, `nonce`, etc.
-2. `LoginTokenVerifier` reads `login_hint`, strips the `lt:` prefix, looks up the data map by UUID, validates expiry and client, enforces single-use if required, then calls `context.success()`.
+2. `LoginTokenVerifier` reads `login_hint`, strips the `lt:` prefix, looks up the data map by UUID, validates expiry and client binding, enforces single-use if required, then calls `context.success()`.
 
 This is the same security model as v1 action tokens: security comes from the UUID's 128-bit entropy plus Infinispan TTL and atomic single-use tracking — not from a cryptographic signature.
 
 ### New components
 
 **`LoginToken`** (`auth/token/LoginToken.java`) — Plain data class (no JWT, no `DefaultActionToken`). Used internally to carry the credential fields:
-- `userId`, `clientId`, `expiry` (Unix epoch seconds)
+- `userId`, `expiry` (Unix epoch seconds)
+- `clientId` (optional; absent = unbound "universal" token)
 - `forceSessionLoa` (Integer, optional)
 - `rememberMe`, `reusable`, `setEmailVerified` (Boolean, optional)
 
 Also defines the `KEY_*` constants used as keys in the `SingleUseObjectProvider` notes map.
 
-**`LoginTokenResource`** (`resources/LoginTokenResource.java`) — `POST realms/{realm}/login-token`. Requires `manage-users` role. Stores credential data in `SingleUseObjectProvider` and returns `{ "login_hint": "lt:{uuid}" }`. The caller is responsible for building the full OIDC auth URL with PKCE, `redirect_uri`, `state`, `nonce`, etc. Registered via `LoginTokenResourceProviderFactory` (provider ID: `login-token`).
+**`LoginTokenResource`** (`resources/LoginTokenResource.java`) — `POST realms/{realm}/login-token`. Requires `manage-users` role. `client_id` is optional: when present, it must reference an existing client and the token is bound to it; when absent, an unbound "universal" token is minted. Stores credential data in `SingleUseObjectProvider` and returns `{ "login_hint": "lt:{uuid}" }`. The caller is responsible for building the full OIDC auth URL with PKCE, `redirect_uri`, `state`, `nonce`, etc. Registered via `LoginTokenResourceProviderFactory` (provider ID: `login-token`).
 
 **`LoginTokenHelper`** (`auth/LoginTokenHelper.java`) — Package-private helper. Holds all shared constants (`RESUME_PREFIX = "lt:"`, `DATA_KEY_PREFIX = "lt:data:"`, `USED_KEY_PREFIX = "lt:used:"`, auth-session note names) and all stateless utility methods shared by both Login Token authenticators:
 
@@ -143,6 +145,9 @@ Also defines the `KEY_*` constants used as keys in the `SingleUseObjectProvider`
 | `clearLoginHint(ctx)` | Removes `login_hint` client note and attempted-username auth note. |
 | `resolveLoaLevel(ctx, notes)` | Reads LOA from token notes, falls back to sibling conditional, defaults to 1. |
 | `displayName(user)` | Returns email if set, otherwise username. |
+| `lookupAndValidate(ctx, tokenId)` | Shared resolution for browser + direct-grant paths: Infinispan lookup → expiry → client binding → user. Returns a `ResolvedToken` (OK / INVALID / USER_DISABLED); never touches the flow context. |
+| `isClientBindingRequired(ctx)` | Reads the `ext-login-token-require-client-binding` execution config; defaults to `true` when unset. |
+| `verifyDirectGrant(ctx, tokenId)` | Non-interactive pipeline for the Direct Grant authenticator: `lookupAndValidate` → single-use → `context.success()`. Returns `null` on success or a `DG_*` error code. |
 
 **`LoginTokenVerifier`** (`auth/LoginTokenVerifier.java`, provider ID: `login-token-verifier`, UI display name: **"Login Token (with login_hint)"**) — Browser-flow authenticator. Place as **ALTERNATIVE** before Cookie. When `login_hint` does not start with `lt:`, calls `context.attempted()` and passes through silently.
 
@@ -150,7 +155,7 @@ On a matching `login_hint`, it:
 1. Strips `lt:` prefix to get the tokenId (UUID).
 2. Calls `singleUse.get("lt:data:{tokenId}")` to fetch the notes map.
 3. Validates expiry against stored `expiry` timestamp.
-4. Validates stored `clientId` matches the client that started the flow.
+4. Validates the client binding: a stored `clientId` must match the client that started the flow (always enforced); a token without `clientId` is only accepted when the execution's "Client ID must match" config (`ext-login-token-require-client-binding`) is `false`.
 5. For single-use (default): calls `singleUse.putIfAbsent("lt:used:{tokenId}", ttl)` — returns false if already used → `context.failure(INVALID_CREDENTIALS)`.
 6. Resolves user by stored `userId`.
 7. Optionally sets `user.setEmailVerified(true)` if `sev=true`.
@@ -169,6 +174,8 @@ On a matching `login_hint`, it:
 **No action-token endpoint.** The login token URL is a standard OIDC auth URL, not a `login-actions/action-token` URL. Magic Link v1 is completely untouched.
 
 **Caller owns all OIDC parameters.** `redirect_uri`, `scope`, `state`, `nonce`, `code_challenge`, `acr_values`, `prompt=login`, etc. are the caller's responsibility. The endpoint returns only the `login_hint` value; the caller constructs the full OIDC auth URL. This ensures the entity generating the PKCE `code_verifier` is always the same entity that handles the authorization code callback — required for both same-device and cross-device (email) flows.
+
+**Client binding is optional but sticky.** `client_id` on `POST /login-token` is optional. When present, the binding is *always* enforced on redemption — no authenticator configuration can bypass it. When absent, the token is unbound ("universal", e.g. for QR-code login where the redeeming app is not known at generation time) and is only accepted by executions whose "Client ID must match" toggle (`ext-login-token-require-client-binding`, exposed by all three Login Token authenticator factories, default `true`) is set to `false`. Recommended for unbound tokens: short `expiration_seconds`, `reusable=false`. See README "Client binding / universal tokens" for the threat model.
 
 **`reusable` default is `true`** (reusable), matching the v1 default.
 

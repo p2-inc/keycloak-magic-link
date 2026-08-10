@@ -23,10 +23,12 @@ import org.keycloak.authentication.authenticators.util.AcrStore;
 import org.keycloak.authentication.authenticators.util.LoAUtil;
 import org.keycloak.events.Details;
 import org.keycloak.models.AuthenticationExecutionModel;
+import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.Constants;
 import org.keycloak.models.SingleUseObjectProvider;
 import org.keycloak.models.UserModel;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
+import org.keycloak.provider.ProviderConfigProperty;
 import org.keycloak.services.managers.AuthenticationManager;
 
 /**
@@ -55,6 +57,17 @@ class LoginTokenHelper {
   static final String RESUME_PREFIX = "lt:";
   static final String DATA_KEY_PREFIX = "lt:data:";
   static final String USED_KEY_PREFIX = "lt:used:";
+
+  /**
+   * Execution config key for the "Client ID must match" toggle shared by all Login Token
+   * authenticators. Default (unset or {@code "true"}): only tokens carrying a {@code clientId} are
+   * accepted, and it must equal the client of the current session. When {@code "false"}, tokens
+   * created <em>without</em> a {@code client_id} ("universal" tokens, e.g. for QR-code login) are
+   * accepted as well — but a client binding that <em>is</em> present on the token is still
+   * enforced; a mismatch is always rejected.
+   */
+  static final String REQUIRE_CLIENT_BINDING_CONFIG_PROPERTY =
+      "ext-login-token-require-client-binding";
 
   // Direct-grant verification result codes (see verifyDirectGrant)
   /** Token missing, expired, client-mismatched, or already redeemed. */
@@ -118,9 +131,13 @@ class LoginTokenHelper {
 
   /**
    * Shared token resolution used by both the browser ({@link #handleTokenId}) and direct-grant
-   * ({@link #verifyDirectGrant}) flows: Infinispan lookup → expiry → client → user resolution. Does
-   * not perform the cookie user-switch check or the single-use reservation, and never touches the
-   * flow context — each caller decides how to signal the outcome.
+   * ({@link #verifyDirectGrant}) flows: Infinispan lookup → expiry → client binding → user
+   * resolution. Does not perform the cookie user-switch check or the single-use reservation, and
+   * never touches the flow context — each caller decides how to signal the outcome.
+   *
+   * <p>Client binding: a {@code clientId} stored on the token must always match the session's
+   * client. A token <em>without</em> a stored {@code clientId} is only accepted when the
+   * execution's {@link #REQUIRE_CLIENT_BINDING_CONFIG_PROPERTY} config is set to {@code false}.
    *
    * <p>A present-but-non-numeric {@code expiry} note is treated as {@link LookupStatus#INVALID}
    * rather than propagating a {@link NumberFormatException}.
@@ -151,10 +168,23 @@ class LoginTokenHelper {
     }
 
     String storedClientId = notes.get(KEY_CLIENT_ID);
-    String sessionClientId = context.getAuthenticationSession().getClient().getClientId();
-    if (storedClientId != null && !storedClientId.equals(sessionClientId)) {
-      log.warnf("[LT] client mismatch: stored='%s', flow='%s'", storedClientId, sessionClientId);
-      return ResolvedToken.invalid();
+    if (storedClientId == null) {
+      // Unbound ("universal") token: only accepted when this execution explicitly opted out of
+      // client binding via the "Client ID must match" config toggle.
+      if (isClientBindingRequired(context)) {
+        log.warnf(
+            "[LT] unbound token rejected for tokenId='%s' (execution requires client binding)",
+            tokenId);
+        return ResolvedToken.invalid();
+      }
+    } else {
+      // A client binding present on the token is ALWAYS enforced, regardless of the
+      // "Client ID must match" toggle — the token creator explicitly requested it.
+      String sessionClientId = context.getAuthenticationSession().getClient().getClientId();
+      if (!storedClientId.equals(sessionClientId)) {
+        log.warnf("[LT] client mismatch: stored='%s', flow='%s'", storedClientId, sessionClientId);
+        return ResolvedToken.invalid();
+      }
     }
 
     String userId = notes.get(KEY_USER_ID);
@@ -165,6 +195,41 @@ class LoginTokenHelper {
     }
 
     return ResolvedToken.ok(notes, expiryStr, user);
+  }
+
+  /**
+   * Reads the "Client ID must match" toggle from the execution's authenticator config. Defaults to
+   * {@code true} (strict) when no config is attached to the execution or the property is unset —
+   * accepting unbound tokens is an explicit per-execution opt-in.
+   */
+  static boolean isClientBindingRequired(AuthenticationFlowContext context) {
+    AuthenticatorConfigModel config = context.getAuthenticatorConfig();
+    if (config == null || config.getConfig() == null) {
+      return true;
+    }
+    String value = config.getConfig().get(REQUIRE_CLIENT_BINDING_CONFIG_PROPERTY);
+    if (value == null) {
+      return true;
+    }
+    return Boolean.parseBoolean(value);
+  }
+
+  /**
+   * Builds the "Client ID must match" {@link ProviderConfigProperty} shown in the admin console
+   * for all three Login Token authenticator factories.
+   */
+  static ProviderConfigProperty requireClientBindingConfigProperty() {
+    ProviderConfigProperty prop = new ProviderConfigProperty();
+    prop.setType(ProviderConfigProperty.BOOLEAN_TYPE);
+    prop.setName(REQUIRE_CLIENT_BINDING_CONFIG_PROPERTY);
+    prop.setLabel("Client ID must match");
+    prop.setHelpText(
+        "When ON (default), a login token must carry a client_id and it must match the client of"
+            + " the current session. When OFF, tokens created without a client_id (universal"
+            + " tokens, e.g. for QR-code login) are accepted as well. A client_id that is present"
+            + " on the token is always enforced, even when this option is OFF.");
+    prop.setDefaultValue("true");
+    return prop;
   }
 
   // -------------------------------------------------------------------------

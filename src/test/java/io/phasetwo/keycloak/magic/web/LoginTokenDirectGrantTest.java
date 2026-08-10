@@ -39,9 +39,17 @@ public class LoginTokenDirectGrantTest extends AbstractMagicLinkTest {
    * Mints a Login Token via the admin API and returns the {@code login_hint} ({@code lt:{uuid}}).
    */
   private String createLoginToken(boolean reusable) throws Exception {
+    return createLoginToken(TEST_CLIENT, reusable);
+  }
+
+  /**
+   * Mints a Login Token bound to the given client ({@code null} = unbound "universal" token) and
+   * returns the {@code login_hint} ({@code lt:{uuid}}).
+   */
+  private String createLoginToken(String clientId, boolean reusable) throws Exception {
     LoginTokenRequest request = new LoginTokenRequest();
     request.setEmail(TEST_EMAIL);
-    request.setClientId(TEST_CLIENT);
+    request.setClientId(clientId);
     request.setReusable(reusable);
 
     return given()
@@ -135,5 +143,81 @@ public class LoginTokenDirectGrantTest extends AbstractMagicLinkTest {
 
     // Second redemption of the same single-use token is rejected.
     redeem(loginHint).then().statusCode(401).body("error", equalTo("invalid_grant"));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Client binding
+  // ---------------------------------------------------------------------------
+
+  @Test
+  public void tokenBoundToOtherClientIsRejected() throws Exception {
+    importRealm("/realms/direct-grant-login-token-test-setup.json");
+
+    // Token bound to dg-other-client, redeemed by dg-test-client → client mismatch.
+    String loginHint = createLoginToken("dg-other-client", true);
+
+    redeem(loginHint).then().statusCode(401).body("error", equalTo("invalid_grant"));
+  }
+
+  @Test
+  public void unboundTokenIsRejectedByDefault() throws Exception {
+    importRealm("/realms/direct-grant-login-token-test-setup.json");
+
+    // Minting without client_id succeeds, but the default-strict execution rejects redemption.
+    String loginHint = createLoginToken(null, true);
+    assertThat(loginHint, not(emptyOrNullString()));
+
+    redeem(loginHint).then().statusCode(401).body("error", equalTo("invalid_grant"));
+  }
+
+  @Test
+  public void unboundTokenIsAcceptedWhenClientBindingOptional() throws Exception {
+    importRealm("/realms/direct-grant-login-token-unbound-test-setup.json");
+
+    String loginHint = createLoginToken(null, true);
+
+    String accessToken =
+        redeem(loginHint)
+            .then()
+            .statusCode(200)
+            .body("access_token", not(emptyOrNullString()))
+            .extract()
+            .path("access_token");
+
+    JsonPath claims = decodeJwtPayload(accessToken);
+    assertThat(claims.getList("amr", String.class), hasItem("login_token"));
+    assertThat(claims.getString("acr"), equalTo("1"));
+  }
+
+  @Test
+  public void boundTokenIsStillEnforcedWhenClientBindingOptional() throws Exception {
+    importRealm("/realms/direct-grant-login-token-unbound-test-setup.json");
+
+    // A binding present on the token is enforced even when the execution allows unbound tokens.
+    String mismatched = createLoginToken("dg-other-client", true);
+    redeem(mismatched).then().statusCode(401).body("error", equalTo("invalid_grant"));
+
+    // A correctly bound token keeps working with the permissive execution config.
+    String matching = createLoginToken(TEST_CLIENT, true);
+    redeem(matching).then().statusCode(200).body("access_token", not(emptyOrNullString()));
+  }
+
+  @Test
+  public void unknownClientIdIsRejectedOnCreation() throws Exception {
+    importRealm("/realms/direct-grant-login-token-test-setup.json");
+
+    LoginTokenRequest request = new LoginTokenRequest();
+    request.setEmail(TEST_EMAIL);
+    request.setClientId("does-not-exist");
+
+    given()
+        .baseUri(getAuthUrl())
+        .auth()
+        .oauth2(keycloak.tokenManager().getAccessTokenString())
+        .contentType("application/json")
+        .body(Helpers.toJsonString(request))
+        .post(LOGIN_TOKEN_PATH)
+        .then()
+        .statusCode(404);
   }
 }
