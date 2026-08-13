@@ -446,6 +446,12 @@ class LoginTokenHelper {
       UserModel user) {
 
     if (!reserveSingleUse(context, tokenId, notes, expiryStr)) {
+      // Drop the spent hint before failing, exactly as the not-found/expired path and the
+      // success path below already do. Without this the flow falls through to the username
+      // form with the token still set as login_hint, and Keycloak prefills the username
+      // field with "lt:<uuid>" — which is what a user sees whenever they open a claim link
+      // a second time.
+      clearLoginHint(context);
       context.failure(AuthenticationFlowError.INVALID_CREDENTIALS);
       return;
     }
