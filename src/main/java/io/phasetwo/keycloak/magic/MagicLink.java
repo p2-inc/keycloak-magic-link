@@ -367,7 +367,7 @@ public final class MagicLink {
           session.getProvider(EmailTemplateProvider.class);
       String realmName = getRealmName(realm);
       String clientName = getClientName(client);
-      List<Object> subjAttr = ImmutableList.of(realmName, clientName);
+      List<Object> subjAttr = ImmutableList.of(realmName, clientName, code);
       Map<String, Object> bodyAttr = Maps.newHashMap();
       bodyAttr.put("code", code);
       emailTemplateProvider
