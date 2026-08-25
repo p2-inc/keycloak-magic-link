@@ -6,8 +6,8 @@ import static org.keycloak.models.utils.KeycloakModelUtils.findUserByNameOrEmail
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
-import io.phasetwo.keycloak.magic.auth.magic.MagicLinkAuthenticatorFactory;
 import io.phasetwo.keycloak.magic.auth.magic.MagicLinkActionToken;
+import io.phasetwo.keycloak.magic.auth.magic.MagicLinkAuthenticatorFactory;
 import io.phasetwo.keycloak.magic.auth.magic.continuation.MagicLinkContinuationActionToken;
 import jakarta.mail.internet.AddressException;
 import jakarta.mail.internet.InternetAddress;
@@ -165,7 +165,9 @@ public final class MagicLink {
     String responseMode = authSession.getClientNote(OIDCLoginProtocol.RESPONSE_MODE_PARAM);
     log.debugf(
         "Attempting MagicLinkAuthenticator for %s, %s, %s", user.getEmail(), clientId, redirectUri);
-    log.debugf("MagicLinkAuthenticator extra vars %s %s %s %b %s", scope, state, nonce, rememberMe, responseMode);
+    log.debugf(
+        "MagicLinkAuthenticator extra vars %s %s %s %b %s",
+        scope, state, nonce, rememberMe, responseMode);
     return createActionToken(
         user,
         clientId,
@@ -243,18 +245,7 @@ public final class MagicLink {
   public static MagicLinkActionToken createActionToken(
       UserModel user, String clientId, String redirectUri, OptionalInt validity) {
     return createActionToken(
-            user,
-            clientId,
-            redirectUri,
-            validity,
-            null,
-            null,
-            null,
-            null,
-            null,
-            false,
-            true,
-            null);
+        user, clientId, redirectUri, validity, null, null, null, null, null, false, true, null);
   }
 
   public static String linkFromActionToken(
