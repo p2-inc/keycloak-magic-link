@@ -59,6 +59,8 @@ public final class MagicLink {
 
   public static final String CREATE_NONEXISTENT_USER_CONFIG_PROPERTY =
       "ext-magic-create-nonexistent-user";
+  public static final String EMAIL_OTP_SUBJECT_WITH_CODE_CONFIG_PROPERTY =
+      "ext-magic-email-otp-subject-with-code";
 
   public static Consumer<UserModel> registerEvent(
       final EventBuilder event, String authenticatorName) {
@@ -356,6 +358,11 @@ public final class MagicLink {
   }
 
   public static boolean sendOtpEmail(KeycloakSession session, UserModel user, String code) {
+    return sendOtpEmail(session, user, code, false);
+  }
+
+  public static boolean sendOtpEmail(
+      KeycloakSession session, UserModel user, String code, Boolean subjectWithCode) {
     RealmModel realm = session.getContext().getRealm();
     ClientModel client = session.getContext().getClient();
     try {
@@ -366,12 +373,13 @@ public final class MagicLink {
       List<Object> subjAttr = ImmutableList.of(realmName, clientName, code);
       Map<String, Object> bodyAttr = Maps.newHashMap();
       bodyAttr.put("code", code);
+      String subjectFormatKey = subjectWithCode ? "otpSubjectWithCode" : "otpSubject";
       emailTemplateProvider
           .setRealm(realm)
           .setUser(user)
           .setAttribute("realmName", realmName)
           .setAttribute("clientName", clientName)
-          .send("otpSubject", subjAttr, "otp-email.ftl", bodyAttr);
+          .send(subjectFormatKey, subjAttr, "otp-email.ftl", bodyAttr);
       return true;
     } catch (EmailException e) {
       log.error("Failed to send otp mail", e);
