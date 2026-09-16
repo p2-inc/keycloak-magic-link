@@ -56,7 +56,7 @@ public final class ActivationOrResetEmailAuthenticator implements Authenticator 
 
     int lifespan = config.getTokenLifespan(context.getRealm());
     String link = ActivationEmail.buildLink(context, user, config.emailActions(user), lifespan);
-    ActivationEmail.sendAsync(context, user, link, lifespan);
+    ActivationEmail.send(context, user, link, lifespan);
 
     context
         .getEvent()

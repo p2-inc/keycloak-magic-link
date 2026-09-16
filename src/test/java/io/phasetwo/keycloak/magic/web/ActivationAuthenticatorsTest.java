@@ -105,7 +105,7 @@ public class ActivationAuthenticatorsTest extends AbstractMagicLinkWithMailhogTe
     assertTrue(html.contains(CONFIRMATION_TEXT), "unknown email must get the same screen");
     assertFalse(html.contains("name=\"password\""));
 
-    Thread.sleep(2000); // allow any (wrongly) queued async send to land
+    Thread.sleep(2000); // settle time before asserting that nothing was sent
     assertEquals(0, mailCount(UNKNOWN_EMAIL), "no email may be sent for unknown addresses");
   }
 

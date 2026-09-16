@@ -130,7 +130,7 @@ public final class ActivationGateAuthenticator extends UsernamePasswordForm {
     int lifespan = config.getTokenLifespan(context.getRealm());
     List<String> actions = config.emailActions(user);
     String link = ActivationEmail.buildLink(context, user, actions, lifespan);
-    ActivationEmail.sendAsync(context, user, link, lifespan);
+    ActivationEmail.send(context, user, link, lifespan);
     context.getAuthenticationSession().setAuthNote(EMAIL_SENT_AT_NOTE, Integer.toString(now));
 
     context
