@@ -21,7 +21,23 @@ public class EmailOtpSentInEmailTest extends AbstractMagicLinkWithMailhogTest {
   @DisplayName("Basic tests for the Email OTP authenticator")
   public List<DynamicContainer> testEmailOtpAuthentication()
       throws IOException, InterruptedException, TimeoutException {
-    final var testRealm = setupTestKeycloakInstance();
+    setupTestKeycloakInstance("/realms/email-otp-basic-setup.json");
+    return runCypressTests(
+        "cypress/e2e/email-otp.cy.ts", Map.of("MAILHOG_URL", "http://mailhog:8025"));
+  }
+
+  @TestFactory
+  @DisplayName("Email OTP authenticator with brute force protection enabled")
+  public List<DynamicContainer> testEmailOtpWithBruteForceProtection()
+      throws IOException, InterruptedException, TimeoutException {
+    setupTestKeycloakInstance("/realms/email-otp-brute-force-setup.json");
+    return runCypressTests(
+        "cypress/e2e/email-otp-brute-force.cy.ts", Map.of("MAILHOG_URL", "http://mailhog:8025"));
+  }
+
+  private RealmRepresentation setupTestKeycloakInstance(String realmJsonPath) {
+    Testcontainers.exposeHostPorts(container.getHttpPort());
+    RealmRepresentation testRealm = importRealm(realmJsonPath);
     assignEachUserAccountManagementRoles(testRealm);
     final var client =
         keycloak
@@ -32,13 +48,6 @@ public class EmailOtpSentInEmailTest extends AbstractMagicLinkWithMailhogTest {
             .getFirst();
     client.setName("Account Console");
     keycloak.realms().realm(testRealm.getRealm()).clients().get(client.getId()).update(client);
-    return runCypressTests(
-        "cypress/e2e/email-otp.cy.ts", Map.of("MAILHOG_URL", "http://mailhog:8025"));
-  }
-
-  private RealmRepresentation setupTestKeycloakInstance() {
-    Testcontainers.exposeHostPorts(container.getHttpPort());
-    RealmRepresentation testRealm = importRealm("/realms/email-otp-basic-setup.json");
     return testRealm;
   }
 }
