@@ -11,6 +11,7 @@ import org.keycloak.authentication.AuthenticatorFactory;
 import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
+import org.keycloak.models.credential.OTPCredentialModel;
 import org.keycloak.provider.ProviderConfigProperty;
 
 @JBossLog
@@ -37,7 +38,10 @@ public class EmailOtpAuthenticatorFactory implements AuthenticatorFactory {
 
   @Override
   public String getReferenceCategory() {
-    return "alternate-auth";
+    // Must be one of DefaultBruteForceProtector.ALLOWED_AUTHENTICATION_CATEGORIES
+    // ("password", "otp", "recovery-authn-codes"), otherwise failedLogin() discards the
+    // attempt and brute force counters never increase for a wrong OTP code.
+    return OTPCredentialModel.TYPE;
   }
 
   @Override

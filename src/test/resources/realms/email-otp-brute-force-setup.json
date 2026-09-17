@@ -11,7 +11,7 @@
   "waitIncrementSeconds": 900,
   "quickLoginCheckMilliSeconds": 250,
   "maxDeltaTimeSeconds": 3600,
-  "failureFactor": 20,
+  "failureFactor": 3,
   "maxSecondaryAuthFailures": 0,
   "clients": [
     {
