@@ -1,0 +1,64 @@
+version: '3.8'
+volumes:
+  caddy_data:
+    driver: local
+  cockroach_data:
+    driver: local
+
+services:
+  cockroach:
+    image: cockroachdb/cockroach:latest
+    volumes:
+      - cockroach_data:/cockroach/cockroach-data
+    command: start-single-node --insecure
+    ports:
+      - 26257:26257
+  keycloak:
+    image: quay.io/phasetwo/phasetwo-keycloak:26.6.2
+    entrypoint: [ "/opt/keycloak/bin/kc.sh", "start", "--spi-email-template-provider=freemarker-plus-mustache", "--spi-email-template-freemarker-plus-mustache-enabled=true" ]
+    environment:
+      KC_DB: cockroach
+      PROXY_ADDRESS_FORWARDING: 'true'
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_DB_PASSWORD: ''
+      KC_DB_SCHEMA: public
+      KC_DB_URL_DATABASE: defaultdb
+      KC_DB_URL_HOST: cockroach
+      KC_DB_URL_PORT: 26257
+      KC_DB_URL_PROPERTIES: '?sslmode=disable&useCockroachMetadata=true'
+      KC_DB_USERNAME: root
+      KC_FEATURES: persistent-user-sessions,workflows:v1
+      KC_HEALTH_ENABLED: true
+      KC_HOSTNAME_STRICT: 'false'
+      KC_HTTP_ENABLED: 'true'
+      KC_HTTP_MANAGEMENT_PORT: 9000
+      KC_ISPN_DB_VENDOR: cockroachdb
+      KC_LOG_LEVEL: "INFO,io.phasetwo:DEBUG"
+      KC_METRICS_ENABLED: true
+      KC_PROXY_HEADERS: 'xforwarded'
+      KC_TRANSACTION_JTA_ENABLED: 'false'
+      KC_TRANSACTION_XA_ENABLED: 'false'
+      JAVA_OPTS: -agentlib:jdwp=transport=dt_socket,address=*:8787,server=y,suspend=n -Xms64m -Xmx512m -XX:MetaspaceSize=96M -XX:MaxMetaspaceSize=256m -Djava.net.preferIPv4Stack=true
+    ports:
+      - 9000:9000
+      - 8080:8080
+      - 8443:8443
+      - 8787:8787
+    depends_on:
+      - cockroach
+    volumes:
+      - ./target/keycloak-magic-link-0.77-SNAPSHOT.jar:/opt/keycloak/providers/io.phasetwo.keycloak-keycloak-magic-link-0.70.jar
+    restart: always
+  caddy:
+    image: caddy:2.4.6-alpine
+    restart: unless-stopped
+    command: caddy reverse-proxy --from https://localhost:443 --to http://keycloak:8080
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - caddy_data:/data
+
+    depends_on:
+      - keycloak
