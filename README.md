@@ -403,6 +403,48 @@ Browser Flow
 There is a simple authenticator to email a 6-digit OTP to the users email address. This implementation sends the email using a theme-resources template, which you can override. It is recommended to use this in an Authentication flow following the _Username form_. An example flow looks like this:
 ![Install Email OTP Authenticator in Browser Flow](docs/assets/email-otp-authenticator.png)
 
+## Account Activation
+
+Two authenticators route users by account status, for realms where some accounts still need activation before password login makes sense — typically self-registered users awaiting email verification, and migrated users created without a password who set their first password through an emailed link.
+
+An account is treated as **pending activation** when any enabled criterion matches (all configurable per execution):
+
+- the user's email address is not verified (`Pending when email unverified`, default on),
+- the user has no password credential (`Pending when no password`, default on),
+- the user has one of the configured required actions outstanding (`Pending required actions`, comma-separated aliases, default empty).
+
+Both authenticators send the same activation email: a standard Keycloak execute-actions token link that opens the user's outstanding required actions directly in whatever browser it is clicked in, then returns the user to the application. By default (`Activation email actions` = `derive`) the link performs the user's own outstanding actions, plus `VERIFY_EMAIL` if their email is unverified and `UPDATE_PASSWORD` if they have no password — so one configuration covers both self-registered and migrated accounts without any custom status attribute. Set it to `explicit` to send a fixed list instead. The email subject and body use the `activationEmail*` message keys and the `activation-email.ftl` theme-resources template, all overridable from a login/email theme.
+
+### Activation Gate (`ext-auth-activation-gate`)
+
+Email-first browser-flow authenticator. Renders the email-only login form (or consumes an attempted username set by a previous authenticator), then branches:
+
+- **Activated account** — sets the user on the flow and succeeds, so the next execution (typically _Password Form_) prompts for the credential. MFA executions later in the flow run as usual.
+- **Pending account** — sends the activation email and shows a confirmation screen (`view-activation-sent.ftl`) with a Resend button. Resends are throttled by the `Resend cooldown` execution setting (default 30 s per authentication session).
+- **Unknown, disabled, or email-less account** — shows the *same* confirmation screen without sending anything. There is deliberately no "email not registered" message and no option to enable one: the response must not disclose whether an account exists.
+
+Example flow:
+
+```
+Browser Flow
+├── Cookie                      [ALTERNATIVE]
+└── Forms sub-flow              [ALTERNATIVE]
+    ├── Activation Gate         [REQUIRED]
+    ├── Password Form           [REQUIRED]
+    └── Conditional OTP …       [CONDITIONAL]
+```
+
+### Send Activation or Reset Email (`ext-auth-activation-reset-email`)
+
+Drop-in replacement for the built-in _Send Reset Email_ execution in the _Reset Credentials_ flow. Activated accounts get the stock behavior unchanged (a standard password-reset email — the built-in implementation is delegated to, including its `force-login` setting). Pending accounts get the activation email instead, so a not-yet-activated user who clicks "Forgot password?" is routed to activation rather than a reset that cannot help them. Every branch shows Keycloak's generic "you should receive an email shortly" message, and unknown users keep the stock (non-disclosing) behavior.
+
+```
+Reset Credentials Flow
+├── Choose User                     [REQUIRED]
+├── Send Activation or Reset Email  [REQUIRED]   ← replaces Send Reset Email
+└── Reset Password                  [REQUIRED]
+```
+
 ## Cloudflare Turnstile CAPTCHA
 
 There are three [Cloudflare Turnstile](https://www.cloudflare.com/application-services/products/turnstile/) integrations available, each suited for a different flow type. All three share the same configuration — you will need a Cloudflare account with a Turnstile widget set up to obtain a **Site Key**, **Secret**, and **Action** value.
