@@ -21,13 +21,13 @@
           </div>
 
           <div class="${properties.kcInputWrapperClass!}">
-            <input id="otp" name="otp" autocomplete="off" type="text" class="${properties.kcInputClass!}" autofocus aria-invalid="<#if messagesPerField.existsError('totp')>true</#if>"/>
+            <input id="otp" name="otp" autocomplete="off" type="text" class="${properties.kcInputClass!}" autofocus inputmode="numeric" aria-invalid="<#if messagesPerField.existsError('totp')>true</#if>"/>
             <#if messagesPerField.existsError('totp')>
               <span id="input-error-otp-code" class="${properties.kcInputErrorMessageClass!}" aria-live="polite">${kcSanitize(messagesPerField.get('totp'))?no_esc}</span>
             </#if>
           </div>
         </div>
-	
+
         <div class="${properties.kcFormGroupClass!}">
           <div id="kc-form-options" class="${properties.kcFormOptionsClass!}">
             <div class="${properties.kcFormOptionsWrapperClass!}">

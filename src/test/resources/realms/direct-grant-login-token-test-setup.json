@@ -1,0 +1,111 @@
+{
+  "realm": "test-realm-dg",
+  "displayName": "Login Token Direct Grant Test Realm",
+  "enabled": true,
+  "clientScopes": [
+    {
+      "name": "acr",
+      "description": "OpenID Connect scope for add acr (authentication context class reference) to the token",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "acr loa level",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-acr-mapper",
+          "consentRequired": false,
+          "config": {
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "amr",
+      "description": "Adding the Authentication Method Reference \"amr\" claim to the token",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "amr",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-amr-mapper",
+          "consentRequired": false,
+          "config": {
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "dg-test-client",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["http://localhost/*", "http://host.testcontainers.internal:*"],
+      "webOrigins": ["+"],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "amr",
+        "profile",
+        "roles",
+        "basic",
+        "email"
+      ]
+    }
+  ],
+  "authenticationFlows": [
+    {
+      "alias": "direct-grant-login-token-flow",
+      "description": "Direct grant flow that authenticates via a Login Token reference.",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticatorConfig": "dg-login-token-ref",
+          "authenticator": "direct-grant-login-token",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        }
+      ]
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "alias": "dg-login-token-ref",
+      "config": {
+        "default.reference.value": "login_token",
+        "default.reference.maxAge": "7776000"
+      }
+    }
+  ],
+  "directGrantFlow": "direct-grant-login-token-flow",
+  "users": [
+    {
+      "username": "testuser@phasetwo.io",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "testuser@phasetwo.io",
+      "firstName": "Test",
+      "lastName": "User"
+    }
+  ]
+}

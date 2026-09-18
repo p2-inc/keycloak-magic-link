@@ -71,14 +71,15 @@ public class EmailOtpAuthenticator implements Authenticator {
 
     UserModel user = context.getUser();
     if (user == null) {
-      user = MagicLink.getOrCreate(
-        context.getSession(),
-        context.getRealm(),
-        email,
-        isForceCreate(context, false),
-        false,
-        false,
-        MagicLink.registerEvent(event, EMAIL_OTP));
+      user =
+          MagicLink.getOrCreate(
+              context.getSession(),
+              context.getRealm(),
+              email,
+              isForceCreate(context, false),
+              false,
+              false,
+              MagicLink.registerEvent(event, EMAIL_OTP));
 
       if (user == null) {
         log.infof("User with email %s not found.", email);
@@ -100,12 +101,16 @@ public class EmailOtpAuthenticator implements Authenticator {
     log.debug("EmailOtpAuthenticator.action");
 
     UserModel user = context.getUser();
-    String bruteForceError = AuthenticatorUtils.getDisabledByBruteForceEventError(context, user);
-    if (bruteForceError != null) {
-      context.getEvent().user(user);
-      context.getEvent().error(bruteForceError);
-      challenge(context, new FormMessage(disabledByBruteForceError(bruteForceError)), false);
-      return;
+    // user may be null when the flow forwards unknown usernames here to avoid user enumeration.
+    // getDisabledByBruteForceEventError() dereferences the user, so only check it when we have one.
+    if (user != null) {
+      String bruteForceError = AuthenticatorUtils.getDisabledByBruteForceEventError(context, user);
+      if (bruteForceError != null) {
+        context.getEvent().user(user);
+        context.getEvent().error(bruteForceError);
+        challenge(context, new FormMessage(disabledByBruteForceError(bruteForceError)), false);
+        return;
+      }
     }
 
     MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
