@@ -20,7 +20,7 @@ public class CloudflareTurnstileUsernamePasswordAuthenticatorFactory
 
   @Override
   public Authenticator create(KeycloakSession session) {
-    return new CloudflareTurnstileUsernamePasswordAuthenticator();
+    return new CloudflareTurnstileUsernamePasswordAuthenticator(session);
   }
 
   @Override

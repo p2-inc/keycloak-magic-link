@@ -1,20 +1,24 @@
 package io.phasetwo.keycloak.magic.auth.cloudflare;
 
-import static io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile.*;
+import static io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile.TURNSTILE_FAILED;
+import static io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile.getClientIpAddress;
+import static io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile.isTurnstileCaptchaConfigured;
 
 import io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
+import lombok.val;
 import lombok.extern.jbosslog.JBossLog;
+
+import org.keycloak.WebAuthnConstants;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.authentication.authenticators.browser.UsernamePasswordForm;
+import org.keycloak.authentication.authenticators.browser.WebAuthnConditionalUIAuthenticator;
 import org.keycloak.forms.login.LoginFormsProvider;
 import org.keycloak.models.AuthenticatorConfigModel;
+import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.UserModel;
-import org.keycloak.models.credential.PasswordCredentialModel;
-import org.keycloak.models.utils.FormMessage;
-import org.keycloak.sessions.AuthenticationSessionModel;
 
 @JBossLog
 public class CloudflareTurnstileUsernamePasswordAuthenticator extends UsernamePasswordForm
@@ -49,8 +53,16 @@ public class CloudflareTurnstileUsernamePasswordAuthenticator extends UsernamePa
     AuthenticatorConfigModel authenticatorConfig = context.getAuthenticatorConfig();
     boolean captchaRequired = isTurnstileCaptchaConfigured(authenticatorConfig);
     boolean validRecaptcha = false;
-    if (captchaRequired) {
-      MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
+
+    MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
+    boolean isPasskeySubmission =
+        webauthnAuth != null && webauthnAuth.isPasskeysEnabled();
+
+    if (isPasskeySubmission) {
+      return;
+    }
+
+    if (captchaRequired && !isPasskeySubmission) {
       String captcha = formData.getFirst(CloudflareTurnstile.CF_TURNSTILE_RESPONSE);
       log.trace("Got captcha: " + captcha);
       String turnstileResponse = formData.getFirst(CloudflareTurnstile.CF_TURNSTILE_RESPONSE);
@@ -86,25 +98,11 @@ public class CloudflareTurnstileUsernamePasswordAuthenticator extends UsernamePa
 
   @Override
   protected Response challenge(AuthenticationFlowContext context, String error, String field) {
-    LoginFormsProvider form = context.form().setExecution(context.getExecution().getId());
-    AuthenticationSessionModel authenticationSession = context.getAuthenticationSession();
-    if (Boolean.parseBoolean(authenticationSession.getAuthNote("USERNAME_HIDDEN"))) {
-      field = "password";
-    }
-
-    if (error != null) {
-      if (field != null) {
-        form.addError(new FormMessage(field, error));
-      } else {
-        form.setError(error);
-      }
-    }
     AuthenticatorConfigModel authenticatorConfig = context.getAuthenticatorConfig();
     boolean captchaRequired = isTurnstileCaptchaConfigured(authenticatorConfig);
     if (captchaRequired) {
       enableCloudflareTurnstile(context);
     }
-
-    return this.createLoginForm(form);
+    return super.challenge(context, error, field);
   }
 }
