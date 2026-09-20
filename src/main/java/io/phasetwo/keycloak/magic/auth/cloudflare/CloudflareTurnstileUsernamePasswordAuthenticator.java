@@ -26,6 +26,10 @@ public class CloudflareTurnstileUsernamePasswordAuthenticator extends UsernamePa
 
   public static final String CF_VERIFY_EMAIL_ON_FAIL = "verify_email_on_captcha_fail";
 
+  public CloudflareTurnstileUsernamePasswordAuthenticator(KeycloakSession session) {
+    super(session);
+  }
+
   @Override
   public void authenticate(AuthenticationFlowContext context) {
     AuthenticatorConfigModel authenticatorConfig = context.getAuthenticatorConfig();
