@@ -357,10 +357,6 @@ public final class MagicLink {
     return false;
   }
 
-  public static boolean sendOtpEmail(KeycloakSession session, UserModel user, String code) {
-    return sendOtpEmail(session, user, code, false);
-  }
-
   public static boolean sendOtpEmail(
       KeycloakSession session, UserModel user, String code, Boolean subjectWithCode) {
     RealmModel realm = session.getContext().getRealm();
