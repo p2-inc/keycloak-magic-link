@@ -88,7 +88,8 @@ public final class MagicLink {
     return getOrCreate(session, realm, email, forceCreate, updateProfile, updatePassword, null);
   }
 
-  public static UserModel findUser(KeycloakSession session, RealmModel realm, String emailOrUsername) {
+  public static UserModel findUser(
+      KeycloakSession session, RealmModel realm, String emailOrUsername) {
     // username or email is required, if not provided or empty, exit early and return null
     if (trimToNull(emailOrUsername) == null) {
       return null;
