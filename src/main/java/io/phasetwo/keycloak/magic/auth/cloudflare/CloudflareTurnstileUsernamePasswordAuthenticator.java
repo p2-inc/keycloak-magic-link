@@ -6,15 +6,11 @@ import static io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile.isTurnsti
 
 import io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile;
 import jakarta.ws.rs.core.MultivaluedMap;
-import jakarta.ws.rs.core.Response;
-import lombok.val;
 import lombok.extern.jbosslog.JBossLog;
-
 import org.keycloak.WebAuthnConstants;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.authentication.authenticators.browser.UsernamePasswordForm;
-import org.keycloak.authentication.authenticators.browser.WebAuthnConditionalUIAuthenticator;
 import org.keycloak.forms.login.LoginFormsProvider;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.KeycloakSession;
@@ -25,6 +21,10 @@ public class CloudflareTurnstileUsernamePasswordAuthenticator extends UsernamePa
     implements Authenticator {
 
   public static final String CF_VERIFY_EMAIL_ON_FAIL = "verify_email_on_captcha_fail";
+
+  public CloudflareTurnstileUsernamePasswordAuthenticator(KeycloakSession session) {
+    super(session);
+  }
 
   @Override
   public void authenticate(AuthenticationFlowContext context) {
@@ -52,36 +52,46 @@ public class CloudflareTurnstileUsernamePasswordAuthenticator extends UsernamePa
   public void action(AuthenticationFlowContext context) {
     AuthenticatorConfigModel authenticatorConfig = context.getAuthenticatorConfig();
     boolean captchaRequired = isTurnstileCaptchaConfigured(authenticatorConfig);
-    boolean validRecaptcha = false;
 
     MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
-    boolean isPasskeySubmission =
-        webauthnAuth != null && webauthnAuth.isPasskeysEnabled();
+    boolean passkeySubmission = isPasskeySubmission(formData);
 
-    if (isPasskeySubmission) {
-      return;
-    }
-
-    if (captchaRequired && !isPasskeySubmission) {
-      String captcha = formData.getFirst(CloudflareTurnstile.CF_TURNSTILE_RESPONSE);
-      log.trace("Got captcha: " + captcha);
-      String turnstileResponse = formData.getFirst(CloudflareTurnstile.CF_TURNSTILE_RESPONSE);
-      String ipAddress = getClientIpAddress(context);
-      CloudflareTurnstile.Config turnstileConfig =
-          CloudflareTurnstile.readConfig(authenticatorConfig.getConfig());
-
-      validRecaptcha =
-          CloudflareTurnstile.validate(
-              turnstileConfig, turnstileResponse, ipAddress, context.getSession());
-    }
     String executionIdBefore = context.getExecution().getId();
+
+    // super.action() re-renders the form through several paths — a bad password goes through
+    // challenge(context, error, field), while a failed passkey goes straight to the error callback
+    // baked into UsernamePasswordForm's WebAuthnConditionalUIAuthenticator. Seeding the shared
+    // LoginFormsProvider up front covers all of them.
+    if (captchaRequired) {
+      enableCloudflareTurnstile(context);
+    }
 
     super.action(context);
 
+    // A passkey submission carries no Turnstile token; super.action() has already handed it to the
+    // WebAuthn authenticator, so there is nothing left to verify.
+    if (passkeySubmission || !captchaRequired) {
+      return;
+    }
+
+    // Only spend a Turnstile verification once the credentials themselves have passed.
     boolean flowSucceeded =
         (context.getUser() != null) || (!executionIdBefore.equals(context.getExecution().getId()));
+    if (!flowSucceeded) {
+      return;
+    }
 
-    if (captchaRequired && !validRecaptcha && flowSucceeded) {
+    String turnstileResponse = formData.getFirst(CloudflareTurnstile.CF_TURNSTILE_RESPONSE);
+    log.trace("Got captcha: " + turnstileResponse);
+    String ipAddress = getClientIpAddress(context);
+    CloudflareTurnstile.Config turnstileConfig =
+        CloudflareTurnstile.readConfig(authenticatorConfig.getConfig());
+
+    boolean validRecaptcha =
+        CloudflareTurnstile.validate(
+            turnstileConfig, turnstileResponse, ipAddress, context.getSession());
+
+    if (!validRecaptcha) {
       var user = context.getUser();
       context.getAuthenticationSession().setAuthNote(TURNSTILE_FAILED, "true");
 
@@ -96,13 +106,15 @@ public class CloudflareTurnstileUsernamePasswordAuthenticator extends UsernamePa
     }
   }
 
-  @Override
-  protected Response challenge(AuthenticationFlowContext context, String error, String field) {
-    AuthenticatorConfigModel authenticatorConfig = context.getAuthenticatorConfig();
-    boolean captchaRequired = isTurnstileCaptchaConfigured(authenticatorConfig);
-    if (captchaRequired) {
-      enableCloudflareTurnstile(context);
-    }
-    return super.challenge(context, error, field);
+  /**
+   * Mirrors the passkey branch of {@link UsernamePasswordForm#action(AuthenticationFlowContext)}: a
+   * WebAuthn form post carries authenticator data (or an error) instead of a password, so no
+   * Turnstile token is expected on it.
+   */
+  private boolean isPasskeySubmission(MultivaluedMap<String, String> formData) {
+    return webauthnAuth != null
+        && webauthnAuth.isPasskeysEnabled()
+        && (formData.containsKey(WebAuthnConstants.AUTHENTICATOR_DATA)
+            || formData.containsKey(WebAuthnConstants.ERROR));
   }
 }
