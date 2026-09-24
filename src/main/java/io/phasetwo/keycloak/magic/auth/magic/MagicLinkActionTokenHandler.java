@@ -109,7 +109,14 @@ public final class MagicLinkActionTokenHandler
           OIDCLoginProtocol.RESPONSE_MODE_PARAM, OIDCResponseMode.FRAGMENT.value());
     }
 
-    user.setEmailVerified(true);
+    if (!user.isEmailVerified()) {
+      user.setEmailVerified(true);
+      tokenContext.getEvent().clone()
+        .event(EventType.VERIFY_EMAIL)
+        .user(user)
+        .detail(Details.EMAIL, user.getEmail())
+        .success();
+    }
 
     authSession.setUserSessionNote(LOGIN_METHOD, MagicLinkActionTokenHandlerFactory.PROVIDER_ID);
 
