@@ -205,7 +205,7 @@ Parameters:
 | `code_challenge` | N | | OIDC `code_challenge` variable (for PKCE). |
 | `remember_me` | N | false | If the user is treated as if they had checked "Remember Me" on login. Requires that it is enabled in the Realm. |
 | `reusable` | N | true | If the token can be reused multiple times during its validity |
-| `response_mode` | N | query | Determines how the authorization response is returned to the client: in the URL query string (query) or in the URL fragment (fragment). |
+| `response_mode` | N | query | Determines how the authorization response is returned to the client: in the URL query string (query) or in the URL fragment (fragment). SPAs should usually pass `fragment` together with a `state`; see [Using magic links with a single-page app](#using-magic-links-with-a-single-page-app-keycloak-js-oidc-client-ts-). |
 
 Sample request (replace your access token):
 
@@ -226,6 +226,56 @@ Sample response:
   "sent": false
 }
 ```
+
+#### Using magic links with a single-page app (keycloak-js, oidc-client-ts, …)
+
+A magic link is an *unsolicited* authorization response: the SPA never started this login, so it has
+no matching `state`, `nonce` or PKCE verifier stored. By default the callback is sent in **query**
+mode with **no `state`**:
+
+```
+https://app.example.com/?session_state=…&iss=…&code=…
+```
+
+keycloak-js defaults to `responseMode: 'fragment'` and only reads the fragment, so it ignores that
+URL and starts a new login with the whole URL, `code` included, as `redirect_uri`. Since Keycloak
+26.6.5 / 26.4.14 ([CVE-2026-9689](https://github.com/keycloak/keycloak/issues/49430)) a
+`redirect_uri` containing `code`, `state`, `iss` or `session_state` is rejected with
+`Invalid parameter: redirect_uri`.
+
+To make the callback something the SPA recognises, pass the **same response mode your client uses**
+(`fragment` for keycloak-js by default) **plus a `state`**. Both are needed: `state` alone still
+lands in the query string, where a fragment-mode client never looks.
+
+```json
+{
+  "email": "foo@foo.com",
+  "client_id": "my-spa",
+  "redirect_uri": "https://app.example.com/",
+  "response_mode": "fragment",
+  "state": "<random value>"
+}
+```
+
+The callback then arrives as `https://app.example.com/#state=…&session_state=…&iss=…&code=…`.
+keycloak-js strips those parameters from the URL. It rejects the callback because it didn't issue
+that `state`, and starts a normal login from the clean URL. Opening the magic link already created
+an SSO session, so Keycloak returns a new code at once and the user is signed in without a prompt.
+keycloak-js only treats the URL as a callback when it carries both `code` and `state` in the part
+it parses. Without `state` it leaves the parameters in place and reuses them in the next
+`redirect_uri`. That happens to pass today in fragment mode, because the CVE-2026-9689 check only
+inspects the query string, but don't rely on it.
+
+| Magic-link request | SPA `responseMode` | Result on Keycloak ≥ 26.6.5 |
+| --- | --- | --- |
+| neither `state` nor `response_mode` | `fragment` (default) | `Invalid parameter: redirect_uri` |
+| `state` (query mode) | `fragment` (default) | `Invalid parameter: redirect_uri` |
+| `state` + `response_mode: "fragment"` | `fragment` (default) | signed in |
+| `state` + `response_mode: "query"` | `query` | signed in |
+
+If you can't change how links are created, strip the stale OIDC parameters (`code`, `state`,
+`session_state`, `iss`, `error`, …) from the URL before initialising the OIDC client, as the
+Keycloak consoles do ([keycloak#52462](https://github.com/keycloak/keycloak/pull/52462)).
 
 ---
 
