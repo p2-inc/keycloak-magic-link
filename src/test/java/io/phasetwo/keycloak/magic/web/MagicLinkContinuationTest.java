@@ -21,15 +21,21 @@ public class MagicLinkContinuationTest extends AbstractMagicLinkWithMailhogTest 
   public List<DynamicContainer> testWaitingPage()
       throws IOException, InterruptedException, TimeoutException {
     Testcontainers.exposeHostPorts(container.getHttpPort());
-    var realm = Helpers.loadJson(
-        getClass().getResourceAsStream("/realms/magic-link-basic-setup.json"),
-        RealmRepresentation.class);
-    realm.getAuthenticationFlows().forEach(flow ->
-        flow.getAuthenticationExecutions().forEach(execution -> {
-          if ("ext-magic-form".equals(execution.getAuthenticator())) {
-            execution.setAuthenticator("magic-link-continuation-form");
-          }
-        }));
+    var realm =
+        Helpers.loadJson(
+            getClass().getResourceAsStream("/realms/magic-link-basic-setup.json"),
+            RealmRepresentation.class);
+    realm
+        .getAuthenticationFlows()
+        .forEach(
+            flow ->
+                flow.getAuthenticationExecutions()
+                    .forEach(
+                        execution -> {
+                          if ("ext-magic-form".equals(execution.getAuthenticator())) {
+                            execution.setAuthenticator("magic-link-continuation-form");
+                          }
+                        }));
     // Deliberately different from the email: the waiting page must not reveal it.
     realm.getUsers().getFirst().setUsername("existing-user");
     importRealm(realm, keycloak);
