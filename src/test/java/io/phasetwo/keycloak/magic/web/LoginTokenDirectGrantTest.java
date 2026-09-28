@@ -136,4 +136,21 @@ public class LoginTokenDirectGrantTest extends AbstractMagicLinkTest {
     // Second redemption of the same single-use token is rejected.
     redeem(loginHint).then().statusCode(401).body("error", equalTo("invalid_grant"));
   }
+
+  @Test
+  public void singleUseTokenCannotBeRedeemedTwiceInvalidToken() throws Exception {
+    importRealm("/realms/direct-grant-login-token-test-setup.json");
+
+    String loginHint = createLoginToken(false);
+
+    // First redemption succeeds.
+    redeem(loginHint).then().statusCode(200).body("access_token", not(emptyOrNullString()));
+
+    // Second redemption of the same single-use token is rejected.
+    redeem(loginHint)
+        .then()
+        .statusCode(401)
+        .body("error", equalTo("invalid_grant"))
+        .body("error_description", equalTo("Invalid or expired login token"));
+  }
 }
