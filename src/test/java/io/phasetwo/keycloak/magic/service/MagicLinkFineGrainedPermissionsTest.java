@@ -82,7 +82,7 @@ public class MagicLinkFineGrainedPermissionsTest extends AbstractMagicLinkTest {
         scopePermission.setScopes(Set.of("manage"));
         scopePermission.setResources(Set.of(managedUser.getId()));
         scopePermission.setPolicies(Set.of(delegatedAdminPolicyId));
-        scopePermission.setDecisionStrategy(DecisionStrategy.AFFIRMATIVE);
+        scopePermission.setDecisionStrategy(DecisionStrategy.UNANIMOUS);
 
         try (Response createScopePermission = authorization.permissions().scope().create(scopePermission)) {
             assertThat(createScopePermission.getStatus(), CoreMatchers.is(Response.Status.CREATED.getStatusCode()));
