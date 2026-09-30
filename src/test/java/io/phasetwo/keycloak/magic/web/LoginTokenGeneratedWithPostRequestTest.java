@@ -78,4 +78,36 @@ public class LoginTokenGeneratedWithPostRequestTest extends AbstractMagicLinkTes
                 Map.of("GENERATED_MAGIC_LINK_V2", dockerLink)
         );
     }
+
+    /**
+     * An unknown {@code lt:} hint is cleared and forwarded as {@code loginTokenInvalid}, so the
+     * username form is shown with an empty username field.
+     */
+    @TestFactory
+    public List<DynamicContainer> testInvalidLoginHintShowsLoginForm()
+            throws IOException, InterruptedException, TimeoutException {
+        Testcontainers.exposeHostPorts(container.getHttpPort());
+        importRealm("/realms/login-token-invalid-hint-test-setup.json");
+
+        String redirectUri = "http://host.testcontainers.internal:"
+                + container.getHttpPort() + "/callback";
+
+        // Cypress runs in Docker: use host.testcontainers.internal to reach Keycloak.
+        String dockerBase = getAuthUrl().replace(
+                "http://localhost:" + container.getHttpPort(),
+                "http://host.testcontainers.internal:" + container.getHttpPort());
+        String dockerLink = dockerBase + "/realms/" + TEST_REALM + "/protocol/openid-connect/auth"
+                + "?client_id=" + TEST_CLIENT
+                + "&response_type=code"
+                + "&login_hint=lt:00000000-0000-0000-0000-000000000000"
+                + "&prompt=login"
+                + "&scope=openid"
+                + "&redirect_uri=" + redirectUri;
+        log.info("Invalid login hint link (docker-reachable): " + dockerLink);
+
+        return runCypressTests(
+                "cypress/e2e/invalid-login-hint.cy.ts",
+                Map.of("INVALID_LOGIN_HINT_LINK", dockerLink)
+        );
+    }
 }
