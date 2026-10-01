@@ -1,11 +1,17 @@
 package io.phasetwo.keycloak.magic.service;
 
+import static io.restassured.RestAssured.given;
+import static org.hamcrest.MatcherAssert.assertThat;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import dasniko.testcontainers.keycloak.KeycloakContainer;
 import io.phasetwo.keycloak.magic.Helpers;
 import io.restassured.response.Response;
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 import lombok.extern.jbosslog.JBossLog;
 import org.hamcrest.CoreMatchers;
 import org.jboss.resteasy.client.jaxrs.ResteasyClient;
@@ -19,181 +25,178 @@ import org.junit.jupiter.api.BeforeEach;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.representations.idm.RealmRepresentation;
-import org.keycloak.representations.idm.UserRepresentation;
 import org.testcontainers.Testcontainers;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
 import org.testcontainers.images.PullPolicy;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.TimeUnit;
-
-import static io.restassured.RestAssured.given;
-import static org.hamcrest.MatcherAssert.assertThat;
-
 @JBossLog
 public abstract class AbstractMagicLinkTest {
 
-    public static final String KEYCLOAK_IMAGE =
-            String.format(
-                    "quay.io/phasetwo/keycloak-crdb:%s", System.getProperty("keycloak-version", "26.8.0"));
-    public static final String REALM = "master";
+  public static final String KEYCLOAK_IMAGE =
+      String.format(
+          "quay.io/phasetwo/keycloak-crdb:%s", System.getProperty("keycloak-version", "26.8.0"));
+  public static final String REALM = "master";
 
-    public static final Network network = Network.newNetwork();
-    public static final String ADMIN_CLI = "admin-cli";
+  public static final Network network = Network.newNetwork();
+  public static final String ADMIN_CLI = "admin-cli";
 
-    static final String[] deps = {};
+  static final String[] deps = {};
 
-    static List<File> getDeps() {
-        List<File> dependencies = new ArrayList<>();
-        for (String dep : deps) {
-            dependencies.addAll(getDep(dep));
-        }
-        return dependencies;
+  static List<File> getDeps() {
+    List<File> dependencies = new ArrayList<>();
+    for (String dep : deps) {
+      dependencies.addAll(getDep(dep));
     }
+    return dependencies;
+  }
 
-    static List<File> getDep(String pkg) {
-        return Maven.resolver()
-                .loadPomFromFile("./pom.xml")
-                .resolve(pkg)
-                .withoutTransitivity()
-                .asList(File.class);
-    }
+  static List<File> getDep(String pkg) {
+    return Maven.resolver()
+        .loadPomFromFile("./pom.xml")
+        .resolve(pkg)
+        .withoutTransitivity()
+        .asList(File.class);
+  }
 
-    public static Keycloak keycloak;
-    public static ResteasyClient resteasyClient;
+  public static Keycloak keycloak;
+  public static ResteasyClient resteasyClient;
 
-    public static final KeycloakContainer container = initKeycloakContainer();
-    public static final GenericContainer<?> mailHog = new GenericContainer<>("mailhog/mailhog:v1.0.1")
+  public static final KeycloakContainer container = initKeycloakContainer();
+  public static final GenericContainer<?> mailHog =
+      new GenericContainer<>("mailhog/mailhog:v1.0.1")
+          .withNetwork(network)
+          .withNetworkAliases("mailhog")
+          .withExposedPorts(1025, 8025);
+
+  private static KeycloakContainer initKeycloakContainer() {
+    KeycloakContainer keycloakContainer =
+        new KeycloakContainer(KEYCLOAK_IMAGE)
+            .withImagePullPolicy(PullPolicy.alwaysPull())
+            .withContextPath("/auth")
+            .withReuse(true)
+            .withProviderClassesFrom("target/classes")
+            .withExposedPorts(8787, 9000, 8080)
+            .withProviderLibsFrom(getDeps())
             .withNetwork(network)
-            .withNetworkAliases("mailhog")
-            .withExposedPorts(1025, 8025);
+            .withAccessToHost(true);
 
-    private static KeycloakContainer initKeycloakContainer() {
-        KeycloakContainer keycloakContainer = new KeycloakContainer(KEYCLOAK_IMAGE)
-                .withImagePullPolicy(PullPolicy.alwaysPull())
-                .withContextPath("/auth")
-                .withReuse(true)
-                .withProviderClassesFrom("target/classes")
-                .withExposedPorts(8787, 9000, 8080)
-                .withProviderLibsFrom(getDeps())
-                .withNetwork(network)
-                .withAccessToHost(true);
+    return keycloakContainer
+        .withEnv(
+            "JAVA_OPTS",
+            "-agentlib:jdwp=transport=dt_socket,address=*:8787,server=y,suspend=n -XX:MetaspaceSize=96M -XX:MaxMetaspaceSize=256m")
+        .withLogConsumer(
+            outputFrame -> {
+              String msg = outputFrame.getUtf8String();
+              if (msg.contains("MLv2") || msg.contains("ERROR") || msg.contains("WARN")) {
+                System.out.print("[KC] " + msg);
+              }
+            });
+  }
 
-        return keycloakContainer
-                .withEnv("JAVA_OPTS", "-agentlib:jdwp=transport=dt_socket,address=*:8787,server=y,suspend=n -XX:MetaspaceSize=96M -XX:MaxMetaspaceSize=256m")
-                .withLogConsumer(outputFrame -> {
-                    String msg = outputFrame.getUtf8String();
-                    if (msg.contains("MLv2") || msg.contains("ERROR") || msg.contains("WARN")) {
-                        System.out.print("[KC] " + msg);
-                    }
-                });
+  protected static final int WEBHOOK_SERVER_PORT = 8083;
+
+  @AfterAll
+  public static void tearDown() throws IOException {
+    String containerId = container.getContainerId();
+    container.getDockerClient().stopContainerCmd(containerId).exec();
+
+    container.stop();
+    mailHog.stop();
+    network.close();
+  }
+
+  @BeforeAll
+  public static void beforeAll() {
+    mailHog.start();
+    container.start();
+
+    Testcontainers.exposeHostPorts(WEBHOOK_SERVER_PORT);
+    resteasyClient =
+        new ResteasyClientBuilderImpl()
+            .disableTrustManager()
+            .readTimeout(60, TimeUnit.SECONDS)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .build();
+    keycloak =
+        getKeycloak(REALM, ADMIN_CLI, container.getAdminUsername(), container.getAdminPassword());
+  }
+
+  public static Keycloak getKeycloak(String realm, String clientId, String user, String pass) {
+    return Keycloak.getInstance(getAuthUrl(), realm, user, pass, clientId);
+  }
+
+  public static String getAuthUrl() {
+    return container.getAuthServerUrl();
+  }
+
+  protected Response postRequest(Keycloak keycloak, Object body, String realm)
+      throws JsonProcessingException {
+    return Helpers.postRequest(container.getAuthServerUrl(), keycloak, body, realm);
+  }
+
+  private RealmRepresentation setupTestKeycloakInstance() {
+    Testcontainers.exposeHostPorts(container.getHttpPort());
+    RealmRepresentation testRealm = importRealm("/realms/magic-link-basic-setup.json");
+    return testRealm;
+  }
+
+  protected final RealmRepresentation importRealm(String jsonRepresentationPath) {
+    return importRealm(jsonRepresentationPath, null);
+  }
+
+  protected final RealmRepresentation importRealm(
+      String jsonRepresentationPath, @Nullable String realmOverride) {
+    RealmRepresentation realm =
+        Helpers.loadJson(
+            getClass().getResourceAsStream(jsonRepresentationPath), RealmRepresentation.class);
+    if (realmOverride != null) {
+      realm.setRealm(realmOverride);
     }
+    importRealm(realm, keycloak);
+    knownRealms.add(realm.getRealm());
+    log.info("realm imported successfully:" + realm.getRealm());
+    return realm;
+  }
 
-    protected static final int WEBHOOK_SERVER_PORT = 8083;
+  protected void importRealm(RealmRepresentation representation, Keycloak keycloak) {
+    var response =
+        given()
+            .baseUri(container.getAuthServerUrl())
+            .basePath("admin/realms/")
+            .contentType("application/json")
+            .auth()
+            .oauth2(keycloak.tokenManager().getAccessTokenString())
+            .and()
+            .body(representation)
+            .when()
+            .post()
+            .then()
+            .extract()
+            .response();
+    assertThat(
+        response.getStatusCode(),
+        CoreMatchers.is(jakarta.ws.rs.core.Response.Status.CREATED.getStatusCode()));
+  }
 
-    @AfterAll
-    public static void tearDown() throws IOException {
-        String containerId = container.getContainerId();
-        container.getDockerClient().stopContainerCmd(containerId).exec();
+  private List<String> knownRealms;
 
-        container.stop();
-        mailHog.stop();
-        network.close();
-    }
+  @BeforeEach
+  public void setup() {
+    knownRealms = new ArrayList<>();
+  }
 
-    @BeforeAll
-    public static void beforeAll() {
-        mailHog.start();
-        container.start();
+  @AfterEach
+  public void cleanupKeycloakInstance() {
+    List.copyOf(knownRealms)
+        .forEach(
+            realmName -> {
+              findRealmByName(realmName).remove();
+              knownRealms.remove(realmName);
+            });
+  }
 
-        Testcontainers.exposeHostPorts(WEBHOOK_SERVER_PORT);
-        resteasyClient =
-                new ResteasyClientBuilderImpl()
-                        .disableTrustManager()
-                        .readTimeout(60, TimeUnit.SECONDS)
-                        .connectTimeout(10, TimeUnit.SECONDS)
-                        .build();
-        keycloak =
-                getKeycloak(REALM, ADMIN_CLI, container.getAdminUsername(), container.getAdminPassword());
-    }
-
-    public static Keycloak getKeycloak(String realm, String clientId, String user, String pass) {
-        return Keycloak.getInstance(getAuthUrl(), realm, user, pass, clientId);
-    }
-
-    public static String getAuthUrl() {
-        return container.getAuthServerUrl();
-    }
-
-    protected Response postRequest(Keycloak keycloak, Object body, String realm)
-            throws JsonProcessingException {
-        return Helpers.postRequest(container.getAuthServerUrl(), keycloak, body, realm);
-    }
-
-    private RealmRepresentation setupTestKeycloakInstance() {
-        Testcontainers.exposeHostPorts(container.getHttpPort());
-        RealmRepresentation testRealm = importRealm("/realms/magic-link-basic-setup.json");
-        return testRealm;
-    }
-
-    protected final RealmRepresentation importRealm(String jsonRepresentationPath) {
-        return importRealm(jsonRepresentationPath, null);
-    }
-
-    protected final RealmRepresentation importRealm(String jsonRepresentationPath, @Nullable String realmOverride) {
-        RealmRepresentation realm =
-                Helpers.loadJson(getClass().getResourceAsStream(jsonRepresentationPath),
-                        RealmRepresentation.class);
-        if (realmOverride != null) {
-            realm.setRealm(realmOverride);
-        }
-        importRealm(realm, keycloak);
-        knownRealms.add(realm.getRealm());
-        log.info("realm imported successfully:" + realm.getRealm());
-        return realm;
-    }
-
-    protected void importRealm(RealmRepresentation representation, Keycloak keycloak) {
-        var response =
-                given()
-                        .baseUri(container.getAuthServerUrl())
-                        .basePath("admin/realms/")
-                        .contentType("application/json")
-                        .auth()
-                        .oauth2(keycloak.tokenManager().getAccessTokenString())
-                        .and()
-                        .body(representation)
-                        .when()
-                        .post()
-                        .then()
-                        .extract()
-                        .response();
-        assertThat(response.getStatusCode(), CoreMatchers.is(jakarta.ws.rs.core.Response.Status.CREATED.getStatusCode()));
-    }
-
-    private List<String> knownRealms;
-
-    @BeforeEach
-    public void setup() {
-        knownRealms = new ArrayList<>();
-    }
-
-    @AfterEach
-    public void cleanupKeycloakInstance() {
-        List.copyOf(knownRealms)
-                .forEach(realmName -> {
-                    findRealmByName(realmName).remove();
-                    knownRealms.remove(realmName);
-                });
-    }
-
-    private static RealmResource findRealmByName(String realm) {
-        return keycloak
-                .realms()
-                .realm(realm);
-    }
+  private static RealmResource findRealmByName(String realm) {
+    return keycloak.realms().realm(realm);
+  }
 }
