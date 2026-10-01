@@ -232,6 +232,29 @@ class LoginTokenApiTest extends AbstractMagicLinkTest {
             + ")");
   }
 
+  /**
+   * An unknown {@code lt:} hint is not a credential. The verifier clears it, forwards {@code
+   * loginTokenInvalid}, and calls {@code attempted()} so the username form is shown with an empty
+   * username field.
+   */
+  @Test
+  void invalidLoginHint_showsLoginFormWithMessageAndEmptyUsername() throws Exception {
+    Testcontainers.exposeHostPorts(container.getHttpPort());
+    importRealm("/realms/login-token-invalid-hint-test-setup.json");
+
+    String loginHint = "lt:00000000-0000-0000-0000-000000000000";
+    String link = buildOidcUrl(loginHint, Map.of("redirect_uri", REDIRECT_URI));
+    String html = followUntilPage(link);
+
+    assertTrue(html.contains("name=\"username\""), "username form must be shown");
+    assertTrue(
+        html.contains("Invalid or expired login token. Please try again."),
+        "forwarded loginTokenInvalid message must be shown");
+    assertFalse(
+        html.contains("value=\"" + loginHint + "\""),
+        "username field must not be prefilled with the invalid login hint");
+  }
+
   @Test
   void loginTokenReusable_canBeRedeemedMultipleTimes() throws Exception {
     Testcontainers.exposeHostPorts(container.getHttpPort());
@@ -407,6 +430,45 @@ class LoginTokenApiTest extends AbstractMagicLinkTest {
     String idToken = tokenResponse.jsonPath().getString("id_token");
     assertNotNull(idToken, "id_token must be present (scope=openid was requested)");
     return decodeJwtPayload(idToken);
+  }
+
+  /**
+   * Follows Keycloak redirects from an authorization URL until the first HTML page. Cookies are
+   * kept so the auth session survives the redirect onto the login form.
+   */
+  private String followUntilPage(String startUrl) throws Exception {
+    var cookieManager = new java.net.CookieManager(null, java.net.CookiePolicy.ACCEPT_ALL);
+    var httpClient =
+        java.net.http.HttpClient.newBuilder()
+            .cookieHandler(cookieManager)
+            .followRedirects(java.net.http.HttpClient.Redirect.NEVER)
+            .build();
+
+    String nextUrl = startUrl;
+    var debug = new StringBuilder("Redirect chain:\n");
+    for (int attempt = 0; attempt < 10; attempt++) {
+      var response =
+          httpClient.send(
+              java.net.http.HttpRequest.newBuilder().uri(URI.create(nextUrl)).GET().build(),
+              java.net.http.HttpResponse.BodyHandlers.ofString());
+      int status = response.statusCode();
+      String location = response.headers().firstValue("Location").orElse(null);
+      debug.append(
+          String.format("  [%d] GET %s → %d  Location: %s%n", attempt, nextUrl, status, location));
+      if (status >= 300 && status < 400) {
+        if (location == null) {
+          break;
+        }
+        nextUrl = location;
+        continue;
+      }
+      if (status == 200) {
+        return response.body();
+      }
+      debug.append("  Response body: ").append(response.body()).append("\n");
+      break;
+    }
+    throw new AssertionError("Login page not reached.\n" + debug);
   }
 
   /**
