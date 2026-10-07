@@ -4,6 +4,7 @@ import static io.phasetwo.keycloak.magic.MagicLink.CREATE_NONEXISTENT_USER_CONFI
 import static io.phasetwo.keycloak.magic.MagicLink.EMAIL_OTP;
 import static io.phasetwo.keycloak.magic.MagicLink.EMAIL_OTP_SUBJECT_WITH_CODE_CONFIG_PROPERTY;
 import static io.phasetwo.keycloak.magic.auth.util.Authenticators.is;
+import static org.keycloak.authentication.authenticators.browser.AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME;
 
 import com.google.common.collect.ImmutableList;
 import io.phasetwo.keycloak.magic.MagicLink;
@@ -30,9 +31,15 @@ public class EmailOtpAuthenticator implements Authenticator {
 
   public static final String USER_AUTH_NOTE_OTP_CODE = "user-auth-note-otp-code";
   public static final String FORM_PARAM_OTP_CODE = "otp";
+  private static final String OTP_USER = "email-otp-user";
+  private static final String OTP_EMAIL = "email-otp-email";
 
   @Override
   public void authenticate(AuthenticationFlowContext context) {
+    if (MagicLink.getAttemptedUsername(context) == null) {
+      context.challenge(context.form().createLoginUsername());
+      return;
+    }
     challenge(context, null, false);
   }
 
@@ -62,10 +69,20 @@ public class EmailOtpAuthenticator implements Authenticator {
   }
 
   private void sendOtp(AuthenticationFlowContext context, String email) {
-    if (context.getAuthenticationSession().getAuthNote(USER_AUTH_NOTE_OTP_CODE) != null) {
-      log.debugf("Skipping sending OTP email to %s because auth note isn't empty", email);
+    var authSession = context.getAuthenticationSession();
+    UserModel currentUser = context.getUser();
+    if (currentUser != null
+        && currentUser.getId().equals(authSession.getAuthNote(OTP_USER))
+        && email != null
+        && email.equals(authSession.getAuthNote(OTP_EMAIL))
+        && authSession.getAuthNote(USER_AUTH_NOTE_OTP_CODE) != null) {
       return;
     }
+    // A method switch can change the user without clearing authenticator notes.
+    // Never reuse a code issued for another identity or email address.
+    authSession.removeAuthNote(USER_AUTH_NOTE_OTP_CODE);
+    authSession.removeAuthNote(OTP_USER);
+    authSession.removeAuthNote(OTP_EMAIL);
 
     String code = SecretGenerator.getInstance().randomString(6, SecretGenerator.DIGITS);
     EventBuilder event = context.newEvent();
@@ -86,16 +103,21 @@ public class EmailOtpAuthenticator implements Authenticator {
         log.infof("User with email %s not found.", email);
         return;
       }
-
-      context.setUser(user);
     }
 
+    if (!user.isEnabled()
+        || AuthenticatorUtils.getDisabledByBruteForceEventError(context, user) != null) {
+      return;
+    }
+
+    context.setUser(user);
     boolean sent =
         MagicLink.sendOtpEmail(
             context.getSession(), user, code, isEmailSubjectWithCode(context, false));
     if (sent) {
-      log.debugf("Sent OTP code %s to email %s", code, context.getUser().getEmail());
-      context.getAuthenticationSession().setAuthNote(USER_AUTH_NOTE_OTP_CODE, code);
+      authSession.setAuthNote(USER_AUTH_NOTE_OTP_CODE, code);
+      authSession.setAuthNote(OTP_USER, user.getId());
+      authSession.setAuthNote(OTP_EMAIL, user.getEmail());
     }
   }
 
@@ -103,7 +125,30 @@ public class EmailOtpAuthenticator implements Authenticator {
   public void action(AuthenticationFlowContext context) {
     log.debug("EmailOtpAuthenticator.action");
 
+    MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
+    // Only accept an address before the code step; never let a code submission switch users.
+    if (MagicLink.getAttemptedUsername(context) == null) {
+      String email = MagicLink.trimToNull(formData.getFirst("username"));
+      if (email == null || email.length() > 254 || !MagicLink.isValidEmail(email)) {
+        context.challenge(
+            context
+                .form()
+                .setFormData(formData)
+                .setError(Messages.INVALID_EMAIL)
+                .createLoginUsername());
+        return;
+      }
+      context.getAuthenticationSession().setAuthNote(ATTEMPTED_USERNAME, email);
+      challenge(context, null, false);
+      return;
+    }
+
     UserModel user = context.getUser();
+    if (user != null && !user.isEnabled()) {
+      context.getAuthenticationSession().removeAuthNote(USER_AUTH_NOTE_OTP_CODE);
+      challenge(context, new FormMessage(Messages.INVALID_ACCESS_CODE), false);
+      return;
+    }
     // user may be null when the flow forwards unknown usernames here to avoid user enumeration.
     // getDisabledByBruteForceEventError() dereferences the user, so only check it when we have one.
     if (user != null) {
@@ -116,7 +161,6 @@ public class EmailOtpAuthenticator implements Authenticator {
       }
     }
 
-    MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
     if (formData.containsKey("resend")) {
       context.getAuthenticationSession().removeAuthNote(USER_AUTH_NOTE_OTP_CODE);
       challenge(context, null, false);
@@ -124,9 +168,12 @@ public class EmailOtpAuthenticator implements Authenticator {
     }
 
     String code = formData.getFirst(FORM_PARAM_OTP_CODE);
-    log.debugf("Got %s for OTP code in form", code);
     try {
       if (code != null
+          && user != null
+          && user.getId().equals(context.getAuthenticationSession().getAuthNote(OTP_USER))
+          && user.getEmail() != null
+          && user.getEmail().equals(context.getAuthenticationSession().getAuthNote(OTP_EMAIL))
           && code.equals(context.getAuthenticationSession().getAuthNote(USER_AUTH_NOTE_OTP_CODE))) {
         context.getAuthenticationSession().removeAuthNote(USER_AUTH_NOTE_OTP_CODE);
         context.getAuthenticationSession().getAuthenticatedUser().setEmailVerified(true);
