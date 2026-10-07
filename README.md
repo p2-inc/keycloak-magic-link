@@ -450,7 +450,20 @@ Browser Flow
 
 ## Email OTP
 
-There is a simple authenticator to email a 6-digit OTP to the users email address. This implementation sends the email using a theme-resources template, which you can override. It is recommended to use this in an Authentication flow following the _Username form_. An example flow looks like this:
+The **Email OTP** authenticator emails a six-digit code using a theme-resources template, which you can override.
+
+For standalone email login, add **Email OTP** directly to the browser flow, without a preceding **Username Form**. It collects the email address when no user/address has been identified. Use **Required** for an email-only flow, or **Alternative** alongside other login methods inside a suitable subflow.
+
+- With **Force create user** off, unknown addresses reach the code form without receiving email or creating an account.
+- With **Force create user** on, an unknown address creates an unverified account before the code is sent. Successful code verification marks its email verified; abandoned attempts leave unverified accounts.
+- Disabled or brute-force-blocked users cannot start an email-code login.
+- Codes are bound to the user and email address they were issued for.
+
+Existing flows following **Username Form** remain supported for existing users, but that form rejects unknown users before Email OTP can handle them. Do not use it before Email OTP when registration or a uniform initial response for unknown addresses is needed. This does not guarantee timing resistance or identical responses for all account/lockout states.
+
+Code expiry still relies on the authentication session; this change does not add resend throttling or cross-session issuance limits. Configure realm brute-force protection and assess email-abuse controls before deployment.
+
+The existing identified-user flow looks like this:
 ![Install Email OTP Authenticator in Browser Flow](docs/assets/email-otp-authenticator.png)
 
 ## Account Activation
