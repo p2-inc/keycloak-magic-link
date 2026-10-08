@@ -94,4 +94,35 @@ class MagicLinkContinuationAuthenticatorTest {
     assertEquals("https://capture.example.com/magic-login?key=signed-token", link);
     assertFalse(standardLinkBuilt.get());
   }
+
+  @Test
+  void emptyExternalMagicLinkUrlUsesStandardLink() {
+    AtomicBoolean tokenSerialized = new AtomicBoolean(false);
+
+    String link =
+        MagicLinkContinuationAuthenticator.buildMagicLink(
+            "",
+            () -> {
+              tokenSerialized.set(true);
+              return "signed-token";
+            },
+            () -> "https://keycloak.example.com/default");
+
+    assertEquals("https://keycloak.example.com/default", link);
+    assertFalse(tokenSerialized.get());
+  }
+
+  @Test
+  void externalMagicLinkUrlHandlesExistingQueryString() {
+    String link =
+        MagicLinkContinuationAuthenticator.buildMagicLink(
+            "https://capture.example.com/magic-login?foo=bar",
+            () -> "signed-token",
+            () -> "https://keycloak.example.com/default");
+
+    assertTrue(link.startsWith("https://capture.example.com/magic-login?"));
+
+    assertTrue(link.contains("foo=bar"));
+    assertTrue(link.contains("key=signed-token"));
+  }
 }
