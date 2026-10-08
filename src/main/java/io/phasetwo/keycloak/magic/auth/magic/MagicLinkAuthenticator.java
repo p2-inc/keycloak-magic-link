@@ -80,7 +80,8 @@ public final class MagicLinkAuthenticator extends UsernamePasswordForm {
             context.getSession(),
             context.getRealm(),
             email,
-            config.isForceCreate(),
+            // create users only for valid email addresses, not for any input in the form
+            config.isForceCreate() && MagicLink.isValidEmail(email),
             config.isUpdateProfile(),
             config.isUpdatePassword(),
             MagicLink.registerEvent(event, MAGIC_LINK));
