@@ -1,6 +1,28 @@
-> :rocket: **Try it for free** in the new Phase Two [keycloak managed service](https://phasetwo.io/?utm_source=github&utm_medium=readme&utm_campaign=keycloak-magic-link). See the [announcement and demo video](https://phasetwo.io/blog/self-service/) for more information.
-
 # keycloak-magic-link
+
+<!-- phasetwo:banner:start - managed by p2-inc/shared-github-actions, edit there -->
+[![build](https://img.shields.io/github/actions/workflow/status/p2-inc/keycloak-magic-link/ci.yml?branch=main&label=build)](https://github.com/p2-inc/keycloak-magic-link/actions/workflows/ci.yml) [![Maven Central](https://img.shields.io/maven-central/v/io.phasetwo.keycloak/keycloak-magic-link?label=maven%20central)](https://central.sonatype.com/artifact/io.phasetwo.keycloak/keycloak-magic-link) [![license](https://img.shields.io/badge/license-ELv2-blue)](COPYING) [![docs](https://img.shields.io/badge/docs-phasetwo.io-blue)](https://phasetwo.io/docs/introduction)
+
+📚 [Documentation](https://phasetwo.io/docs/introduction) • 🚀 [Hosted Keycloak](https://phasetwo.io/?utm_source=github&utm_medium=readme&utm_campaign=keycloak-magic-link) • 🤖 [Keycloak Skills](https://github.com/p2-inc/keycloak-skills) • 💬 [Support](mailto:support@phasetwo.io)
+
+> [!TIP]
+> **Run this without running Keycloak.** Phase Two hosts Keycloak with this extension and the rest of ours built in. [Start a Starter cluster with a 30-day free trial →](https://phasetwo.io/?utm_source=github&utm_medium=readme&utm_campaign=keycloak-magic-link)
+>
+> **Using a coding agent?** Add the Phase Two Keycloak skills to Claude Code, Cursor or Codex so your agent can set up passwordless login, SSO, organizations and clusters for you. The plugin connects our hosted MCP server automatically:
+>
+> ```sh
+> claude plugin marketplace add p2-inc/keycloak-skills
+> claude plugin install phasetwo@keycloak-skills
+> ```
+>
+> Or connect just the MCP server:
+>
+> ```sh
+> claude mcp add --transport http keycloak https://mcp.phasetwo.io/mcp
+> ```
+>
+> [Read the launch post](https://phasetwo.io/blog/keycloak-skills-mcp-launch) to see what the skills can do.
+<!-- phasetwo:banner:end -->
 
 Magic link implementation. Inspired by the [experiment](https://github.com/stianst/keycloak-experimental/tree/main/magic-link) by [@stianst](https://github.com/stianst).
 It comes in two types: magic link and magic link continuation;
