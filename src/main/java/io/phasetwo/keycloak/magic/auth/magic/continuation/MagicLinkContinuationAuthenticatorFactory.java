@@ -20,6 +20,8 @@ public class MagicLinkContinuationAuthenticatorFactory implements AuthenticatorF
 
   public static final String PROVIDER_ID = "magic-link-continuation-form";
 
+  public static final String EXTERNAL_MAGIC_LINK_URL = "external-magic-link-url";
+
   private static final AuthenticationExecutionModel.Requirement[] REQUIREMENT_CHOICES = {
     AuthenticationExecutionModel.Requirement.REQUIRED,
     AuthenticationExecutionModel.Requirement.ALTERNATIVE,
@@ -85,8 +87,16 @@ public class MagicLinkContinuationAuthenticatorFactory implements AuthenticatorF
     timeout.setHelpText(
         "Magic link authenticator expiration time in minutes. Default expiration period 10 minutes.");
     timeout.setDefaultValue("10");
+    ProviderConfigProperty externalMagicLinkUrl = new ProviderConfigProperty();
+    externalMagicLinkUrl.setType(ProviderConfigProperty.STRING_TYPE);
+    externalMagicLinkUrl.setName(EXTERNAL_MAGIC_LINK_URL);
+    externalMagicLinkUrl.setLabel("External Magic Link URL");
+    externalMagicLinkUrl.setHelpText(
+        "Optional HTTPS URL used in the emailed continuation link. "
+            + "The signed action token is appended as the 'key' query parameter. "
+            + "Leave blank to use the standard Keycloak action-token URL.");
 
-    return List.of(createUser, timeout);
+    return List.of(createUser, timeout, externalMagicLinkUrl);
   }
 
   @Override

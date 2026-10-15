@@ -16,8 +16,10 @@ import static org.keycloak.services.validation.Validation.FIELD_USERNAME;
 import io.phasetwo.keycloak.magic.MagicLink;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.UriBuilder;
 import java.time.ZonedDateTime;
 import java.util.Map;
+import java.util.function.Supplier;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.AuthenticationFlowError;
@@ -202,11 +204,40 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
     MagicLinkContinuationActionToken token =
         MagicLink.createExpandedActionToken(
             user, clientId, validityInSecs, context.getAuthenticationSession());
-    String link = MagicLink.linkFromActionToken(context.getSession(), context.getRealm(), token);
+    String externalMagicLinkUrl = null;
+
+    if (context.getAuthenticatorConfig() != null) {
+      externalMagicLinkUrl =
+          context
+              .getAuthenticatorConfig()
+              .getConfig()
+              .get(MagicLinkContinuationAuthenticatorFactory.EXTERNAL_MAGIC_LINK_URL);
+    }
+
+    String link =
+        buildMagicLink(
+            externalMagicLinkUrl,
+            () -> token.serialize(context.getSession(), context.getRealm(), context.getUriInfo()),
+            () -> MagicLink.linkFromActionToken(context.getSession(), context.getRealm(), token));
     boolean sent = MagicLink.sendMagicLinkContinuationEmail(context.getSession(), user, link);
     log.debugf("sent email to %s? %b. Link? %s", user.getEmail(), sent, link);
 
     challengePending(context, email);
+  }
+
+  static String buildMagicLink(
+      String externalMagicLinkUrl,
+      Supplier<String> serializedTokenSupplier,
+      Supplier<String> standardLinkSupplier) {
+
+    if (externalMagicLinkUrl == null || externalMagicLinkUrl.isBlank()) {
+      return standardLinkSupplier.get();
+    }
+
+    return UriBuilder.fromUri(externalMagicLinkUrl.trim())
+        .queryParam("key", serializedTokenSupplier.get())
+        .build()
+        .toString();
   }
 
   private void challengePending(AuthenticationFlowContext context, String email) {
