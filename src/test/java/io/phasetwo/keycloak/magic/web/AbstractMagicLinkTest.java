@@ -249,7 +249,8 @@ public abstract class AbstractMagicLinkTest {
     Path screenshotDirectory = Path.of("target", "cypress-output", "screenshots");
     Files.createDirectories(screenshotDirectory);
     try (CypressContainer cypressContainer =
-        new CypressContainer()
+        // pinned to the cypress version in src/test/e2e/package.json; 16.x removed Cypress.env()
+        new CypressContainer("cypress/included:15.10.0")
             .withBaseUrl(
                 "http://host.testcontainers.internal:" + container.getHttpPort() + "/auth/")
             .withEnv(environmentVars)
