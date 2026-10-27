@@ -4,8 +4,8 @@
  * WireMock is configured by Java to return { success:true, action:"login" } for the
  * Cloudflare siteverify endpoint before this spec runs.
  *
- * The login.ftl always renders a fallback hidden cf-turnstile-response input so the form
- * submits a token regardless of whether the Cloudflare CDN widget loads in headless mode.
+ * The login.ftl always renders a fallback hidden cf-turnstile-response input. The spec fills it
+ * with a dummy token, since a blank token is rejected before siteverify is called.
  */
 
 const realmBase = `${Cypress.config('baseUrl')}realms/turnstile-realm`;
@@ -27,6 +27,9 @@ describe('Turnstile Username Password — CAPTCHA passes', () => {
     cy.visit(loginUrl);
     cy.get('#username').type('test@phasetwo.io');
     cy.get('#password').type('test123');
+    // The Cloudflare widget does not load in the test browser, so post a token by hand; WireMock
+    // decides whether siteverify accepts it.
+    cy.get('input[name="cf-turnstile-response"]').invoke('val', 'test-token');
     cy.get('#kc-login').click();
 
     cy.url().should('contain', '/turnstile-realm/');

@@ -1,8 +1,10 @@
 package io.phasetwo.keycloak.magic.auth.cloudflare;
 
 import static io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile.TURNSTILE_FAILED;
+import static io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile.failNotConfigured;
 import static io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile.getClientIpAddress;
 import static io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile.isTurnstileCaptchaConfigured;
+import static io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile.isTurnstileCaptchaPartiallyConfigured;
 
 import io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile;
 import jakarta.ws.rs.core.MultivaluedMap;
@@ -29,6 +31,11 @@ public class CloudflareTurnstileUsernamePasswordAuthenticator extends UsernamePa
   @Override
   public void authenticate(AuthenticationFlowContext context) {
     AuthenticatorConfigModel authenticatorConfig = context.getAuthenticatorConfig();
+    // An empty config turns Turnstile off for this step; a half-finished one fails closed.
+    if (isTurnstileCaptchaPartiallyConfigured(authenticatorConfig)) {
+      failNotConfigured(context);
+      return;
+    }
     boolean captchaRequired = isTurnstileCaptchaConfigured(authenticatorConfig);
 
     if (captchaRequired) {
@@ -51,6 +58,10 @@ public class CloudflareTurnstileUsernamePasswordAuthenticator extends UsernamePa
   @Override
   public void action(AuthenticationFlowContext context) {
     AuthenticatorConfigModel authenticatorConfig = context.getAuthenticatorConfig();
+    if (isTurnstileCaptchaPartiallyConfigured(authenticatorConfig)) {
+      failNotConfigured(context);
+      return;
+    }
     boolean captchaRequired = isTurnstileCaptchaConfigured(authenticatorConfig);
 
     MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
