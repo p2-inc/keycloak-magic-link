@@ -3,6 +3,7 @@ package io.phasetwo.keycloak.magic.auth.util;
 import com.google.common.collect.ImmutableList;
 import io.phasetwo.keycloak.magic.auth.cloudflare.TurnstileAssessmentRequest;
 import io.phasetwo.keycloak.magic.auth.cloudflare.TurnstileResponse;
+import jakarta.ws.rs.core.Response;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +16,7 @@ import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.util.EntityUtils;
 import org.keycloak.authentication.AuthenticationFlowContext;
+import org.keycloak.authentication.AuthenticationFlowError;
 import org.keycloak.authentication.ValidationContext;
 import org.keycloak.connections.httpclient.HttpClientProvider;
 import org.keycloak.models.AuthenticatorConfigModel;
@@ -135,16 +137,57 @@ public class CloudflareTurnstile {
     return request;
   }
 
+  private static final List<String> REQUIRED_CONFIG_KEYS =
+      List.of(CF_SITE_KEY, CF_SITE_SECRET, CF_ACTION);
+
+  /** Returns the required config keys that are missing or blank; all of them when config is null. */
+  public static List<String> getMissingConfigKeys(AuthenticatorConfigModel authenticatorConfig) {
+    if (authenticatorConfig == null || authenticatorConfig.getConfig() == null) {
+      return REQUIRED_CONFIG_KEYS;
+    }
+    Map<String, String> config = authenticatorConfig.getConfig();
+    return REQUIRED_CONFIG_KEYS.stream().filter(k -> StringUtil.isBlank(config.get(k))).toList();
+  }
+
   public static boolean isTurnstileCaptchaConfigured(AuthenticatorConfigModel authenticatorConfig) {
     if (authenticatorConfig == null) {
       log.debug("Authentication model config is null");
       return false;
     }
+    return getMissingConfigKeys(authenticatorConfig).isEmpty();
+  }
 
+  /**
+   * True when a site key or secret has been entered but the config is still incomplete. Used by
+   * steps where an empty config means "Turnstile off" to tell an unfinished setup apart from one
+   * that was never started.
+   */
+  public static boolean isTurnstileCaptchaPartiallyConfigured(
+      AuthenticatorConfigModel authenticatorConfig) {
+    if (authenticatorConfig == null
+        || authenticatorConfig.getConfig() == null
+        || isTurnstileCaptchaConfigured(authenticatorConfig)) {
+      return false;
+    }
     Map<String, String> config = authenticatorConfig.getConfig();
-    return !StringUtil.isNullOrEmpty(config.get(CF_SITE_KEY))
-        && !StringUtil.isNullOrEmpty(config.get(CF_SITE_KEY))
-        && !StringUtil.isNullOrEmpty(config.get(CF_ACTION));
+    return !StringUtil.isBlank(config.get(CF_SITE_KEY))
+        || !StringUtil.isBlank(config.get(CF_SITE_SECRET));
+  }
+
+  /**
+   * Fails the current execution closed because its Turnstile config is incomplete, so a
+   * misconfigured step blocks login until the setup is finished instead of letting users through.
+   */
+  public static void failNotConfigured(AuthenticationFlowContext context) {
+    log.warnf(
+        "Cloudflare Turnstile is not configured for execution %s; missing or blank: %s",
+        context.getExecution().getId(), getMissingConfigKeys(context.getAuthenticatorConfig()));
+    Response errorPage =
+        context
+            .form()
+            .setError(MSG_CAPTCHA_NOT_CONFIGURED)
+            .createErrorPage(Response.Status.INTERNAL_SERVER_ERROR);
+    context.failure(AuthenticationFlowError.INTERNAL_ERROR, errorPage);
   }
 
   public static boolean validate(
@@ -152,6 +195,11 @@ public class CloudflareTurnstile {
       String turnstileResponse,
       String remoteAddr,
       KeycloakSession session) {
+
+    if (StringUtil.isBlank(turnstileResponse)) {
+      log.debug("No Turnstile token was submitted");
+      return false;
+    }
 
     try {
       HttpPost request = buildAssessmentRequest(remoteAddr, turnstileResponse, config);

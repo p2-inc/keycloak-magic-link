@@ -1,10 +1,11 @@
 package io.phasetwo.keycloak.magic.auth.cloudflare;
 
-import static io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile.*;
+import static io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile.getClientIpAddress;
+import static io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile.getMissingConfigKeys;
+import static io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile.isTurnstileCaptchaConfigured;
 
 import io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile;
 import jakarta.ws.rs.core.MultivaluedMap;
-import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.FormAction;
@@ -12,10 +13,12 @@ import org.keycloak.authentication.FormContext;
 import org.keycloak.authentication.ValidationContext;
 import org.keycloak.events.Errors;
 import org.keycloak.forms.login.LoginFormsProvider;
-import org.keycloak.models.*;
+import org.keycloak.models.AuthenticatorConfigModel;
+import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.RealmModel;
+import org.keycloak.models.UserModel;
 import org.keycloak.models.utils.FormMessage;
 import org.keycloak.services.messages.Messages;
-import org.keycloak.services.validation.Validation;
 
 @JBossLog
 public class CloudflareTurnstileFormAction implements FormAction {
@@ -29,14 +32,8 @@ public class CloudflareTurnstileFormAction implements FormAction {
       return;
     }
 
-    if (context.getUser() != null) {
-      log.debugf("User exists");
-      return;
-    }
-
-    // Get configuration
-    CloudflareTurnstile.Config turnstileConfig =
-        CloudflareTurnstile.readConfig(context.getAuthenticatorConfig().getConfig());
+    // Always render the widget: validate() requires a token on every submission.
+    CloudflareTurnstile.Config turnstileConfig = CloudflareTurnstile.readConfig(config.getConfig());
 
     form.setAttribute("turnstileRequired", true);
     form.setAttribute("turnstileSiteKey", turnstileConfig.getSiteKey());
@@ -50,28 +47,33 @@ public class CloudflareTurnstileFormAction implements FormAction {
     MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
     AuthenticatorConfigModel config = context.getAuthenticatorConfig();
 
-    if (config == null) {
-      log.warn("No authenticator configuration found for Turnstile Form Action");
+    // Fail closed: registration stays blocked until the Turnstile setup is finished.
+    if (!isTurnstileCaptchaConfigured(config)) {
+      log.warnf(
+          "Cloudflare Turnstile is not configured for registration; missing or blank: %s",
+          getMissingConfigKeys(config));
+      fail(context, formData, CloudflareTurnstile.MSG_CAPTCHA_NOT_CONFIGURED);
       return;
     }
 
-    // Verify Turnstile token
+    // CloudflareTurnstile.validate() rejects a blank token before calling siteverify.
     String turnstileResponse = formData.getFirst(CloudflareTurnstile.CF_TURNSTILE_RESPONSE);
-    String ipAddress = getClientIpAddress(context);
     CloudflareTurnstile.Config turnstileConfig = CloudflareTurnstile.readConfig(config.getConfig());
-    var valid =
-        CloudflareTurnstile.validate(
-            turnstileConfig, turnstileResponse, ipAddress, context.getSession());
-
-    if (!Validation.isBlank(turnstileResponse) && valid) {
+    if (CloudflareTurnstile.validate(
+        turnstileConfig, turnstileResponse, getClientIpAddress(context), context.getSession())) {
       context.success();
       return;
     }
 
-    List<FormMessage> errors = new ArrayList<>();
-    errors.add(new FormMessage(null, Messages.RECAPTCHA_FAILED));
+    fail(context, formData, Messages.RECAPTCHA_FAILED);
+  }
+
+  private void fail(
+      ValidationContext context, MultivaluedMap<String, String> formData, String message) {
+    formData.remove(CloudflareTurnstile.CF_TURNSTILE_RESPONSE);
     context.error(Errors.INVALID_REGISTRATION);
-    context.validationError(formData, errors);
+    context.validationError(
+        formData, List.of(new FormMessage(CloudflareTurnstile.CF_TURNSTILE_RESPONSE, message)));
     context.excludeOtherErrors();
   }
 
