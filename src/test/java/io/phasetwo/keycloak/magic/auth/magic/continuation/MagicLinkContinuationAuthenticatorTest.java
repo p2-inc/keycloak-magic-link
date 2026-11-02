@@ -125,4 +125,65 @@ class MagicLinkContinuationAuthenticatorTest {
     assertTrue(link.contains("foo=bar"));
     assertTrue(link.contains("key=signed-token"));
   }
+
+  @Test
+  void httpExternalMagicLinkUrlFallsBackToStandardLink() {
+    AtomicBoolean tokenSerialized = new AtomicBoolean(false);
+
+    String link =
+        MagicLinkContinuationAuthenticator.buildMagicLink(
+            "http://capture.example.com/magic-login",
+            () -> {
+              tokenSerialized.set(true);
+              return "signed-token";
+            },
+            () -> "https://keycloak.example.com/default");
+
+    assertEquals("https://keycloak.example.com/default", link);
+    assertFalse(tokenSerialized.get());
+  }
+
+  @Test
+  void malformedExternalMagicLinkUrlFallsBackToStandardLink() {
+    String link =
+        MagicLinkContinuationAuthenticator.buildMagicLink(
+            "https://invalid host/magic-login",
+            () -> "signed-token",
+            () -> "https://keycloak.example.com/default");
+
+    assertEquals("https://keycloak.example.com/default", link);
+  }
+
+  @Test
+  void externalMagicLinkUrlWithoutHostFallsBackToStandardLink() {
+    String link =
+        MagicLinkContinuationAuthenticator.buildMagicLink(
+            "https:///magic-login",
+            () -> "signed-token",
+            () -> "https://keycloak.example.com/default");
+
+    assertEquals("https://keycloak.example.com/default", link);
+  }
+
+  @Test
+  void externalMagicLinkUrlWithFragmentFallsBackToStandardLink() {
+    String link =
+        MagicLinkContinuationAuthenticator.buildMagicLink(
+            "https://capture.example.com/magic-login#fragment",
+            () -> "signed-token",
+            () -> "https://keycloak.example.com/default");
+
+    assertEquals("https://keycloak.example.com/default", link);
+  }
+
+  @Test
+  void externalMagicLinkUrlWithUserInfoFallsBackToStandardLink() {
+    String link =
+        MagicLinkContinuationAuthenticator.buildMagicLink(
+            "https://user:password@capture.example.com/magic-login",
+            () -> "signed-token",
+            () -> "https://keycloak.example.com/default");
+
+    assertEquals("https://keycloak.example.com/default", link);
+  }
 }

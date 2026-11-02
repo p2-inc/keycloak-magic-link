@@ -17,6 +17,8 @@ import io.phasetwo.keycloak.magic.MagicLink;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriBuilder;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.time.ZonedDateTime;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -221,7 +223,7 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
             () -> token.serialize(context.getSession(), context.getRealm(), context.getUriInfo()),
             () -> MagicLink.linkFromActionToken(context.getSession(), context.getRealm(), token));
     boolean sent = MagicLink.sendMagicLinkContinuationEmail(context.getSession(), user, link);
-    log.debugf("sent email to %s? %b. Link? %s", user.getEmail(), sent, link);
+    log.debugf("sent email to %s? %b", user.getEmail(), sent);
 
     challengePending(context, email);
   }
@@ -231,11 +233,36 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
       Supplier<String> serializedTokenSupplier,
       Supplier<String> standardLinkSupplier) {
 
+    // Preserve existing behavior when no external URL is configured.
     if (externalMagicLinkUrl == null || externalMagicLinkUrl.isBlank()) {
       return standardLinkSupplier.get();
     }
 
-    return UriBuilder.fromUri(externalMagicLinkUrl.trim())
+    URI uri;
+
+    try {
+      uri = new URI(externalMagicLinkUrl.trim());
+    } catch (URISyntaxException e) {
+      log.warn("Invalid external magic link URL configuration; using standard Keycloak URL");
+      return standardLinkSupplier.get();
+    }
+
+    // Require an absolute HTTPS URL with a valid host.
+    // Reject userinfo and fragments to avoid unexpected token exposure.
+    if (!"https".equalsIgnoreCase(uri.getScheme())
+        || uri.getHost() == null
+        || uri.getHost().isBlank()
+        || uri.getRawUserInfo() != null
+        || uri.getRawFragment() != null) {
+
+      log.warn(
+          "External magic link URL must be an absolute HTTPS URL "
+              + "without userinfo or fragment; using standard Keycloak URL");
+
+      return standardLinkSupplier.get();
+    }
+
+    return UriBuilder.fromUri(uri)
         .queryParam("key", serializedTokenSupplier.get())
         .build()
         .toString();
