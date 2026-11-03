@@ -275,7 +275,9 @@ The external domain is an explicit trust decision made by the Keycloak administr
 
 The `external-magic-link-url` option applies only to the **Magic Link continuation** authenticator (`magic-link-continuation-form`).
 
-It does not modify the behavior of the standard Magic Link authenticator (`ext-magic-form`).### Customization
+It does not modify the behavior of the standard Magic Link authenticator (`ext-magic-form`).
+
+### Customization
 
 `MagicLinkContinuationAuthenticator` is `final` and does **not** participate in the `MagicLinkCustomizationSpi`. Its cross-device polling flow is self-contained: email sending and user validation are fixed to the built-in behaviour. To change that behaviour, implement a new `Authenticator` (extending `UsernamePasswordForm`) and register it with its own `AuthenticatorFactory` — not by subclassing any continuation class.
 
