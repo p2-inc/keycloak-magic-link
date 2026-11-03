@@ -16,8 +16,12 @@ import static org.keycloak.services.validation.Validation.FIELD_USERNAME;
 import io.phasetwo.keycloak.magic.MagicLink;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.UriBuilder;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.time.ZonedDateTime;
 import java.util.Map;
+import java.util.function.Supplier;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.AuthenticationFlowError;
@@ -203,11 +207,65 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
     MagicLinkContinuationActionToken token =
         MagicLink.createExpandedActionToken(
             user, clientId, validityInSecs, context.getAuthenticationSession());
-    String link = MagicLink.linkFromActionToken(context.getSession(), context.getRealm(), token);
+    String externalMagicLinkUrl = null;
+
+    if (context.getAuthenticatorConfig() != null) {
+      externalMagicLinkUrl =
+          context
+              .getAuthenticatorConfig()
+              .getConfig()
+              .get(MagicLinkContinuationAuthenticatorFactory.EXTERNAL_MAGIC_LINK_URL);
+    }
+
+    String link =
+        buildMagicLink(
+            externalMagicLinkUrl,
+            () -> token.serialize(context.getSession(), context.getRealm(), context.getUriInfo()),
+            () -> MagicLink.linkFromActionToken(context.getSession(), context.getRealm(), token));
     boolean sent = MagicLink.sendMagicLinkContinuationEmail(context.getSession(), user, link);
-    log.debugf("sent email to %s? %b. Link? %s", user.getEmail(), sent, link);
+    log.debugf("sent email to %s? %b", user.getEmail(), sent);
 
     challengePending(context, email);
+  }
+
+  static String buildMagicLink(
+      String externalMagicLinkUrl,
+      Supplier<String> serializedTokenSupplier,
+      Supplier<String> standardLinkSupplier) {
+
+    // Preserve existing behavior when no external URL is configured.
+    if (externalMagicLinkUrl == null || externalMagicLinkUrl.isBlank()) {
+      return standardLinkSupplier.get();
+    }
+
+    URI uri;
+
+    try {
+      uri = new URI(externalMagicLinkUrl.trim());
+    } catch (URISyntaxException e) {
+      log.warn("Invalid external magic link URL configuration; using standard Keycloak URL");
+      return standardLinkSupplier.get();
+    }
+
+    // Require an absolute HTTPS URL with a valid host.
+    // Reject userinfo and fragments to avoid unexpected token exposure.
+    if (!"https".equalsIgnoreCase(uri.getScheme())
+        || uri.getHost() == null
+        || uri.getHost().isBlank()
+        || uri.getRawUserInfo() != null
+        || uri.getRawFragment() != null) {
+
+      log.warn(
+          "External magic link URL must be an absolute HTTPS URL "
+              + "without userinfo or fragment; using standard Keycloak URL");
+
+      return standardLinkSupplier.get();
+    }
+
+    return UriBuilder.fromUri(uri)
+        .queryParam("key", serializedTokenSupplier.get())
+        .build()
+        .toString();
   }
 
   private void challengePending(AuthenticationFlowContext context, String email) {

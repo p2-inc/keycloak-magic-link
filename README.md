@@ -190,6 +190,93 @@ When the period is exceeded the authentication flow will reset.
 
 ![Magic Link continuation expired](docs/assets/magic-link-continuation-expiration.png)
 
+### External Magic Link URL (Native Applications)
+
+The Magic Link continuation authenticator supports an optional external URL for delivering continuation links to native applications through mechanisms such as Apple Universal Links and Android App Links.
+
+By default, continuation emails contain a URL pointing directly to Keycloak's action-token endpoint.
+
+When an external URL is configured, the emailed link instead points to the specified HTTPS URL, allowing a native application to receive the signed continuation token and forward it to Keycloak.
+
+#### Configuration
+
+In the Keycloak Admin Console:
+
+1. Select the desired realm.
+2. Navigate to **Authentication → Flows**.
+3. Open the authentication flow containing **Magic Link continuation**.
+4. Configure the **Magic Link continuation** authenticator.
+5. Set **External Magic Link URL** to the application's HTTPS URL.
+
+For example:
+
+```text
+https://app.example.com/magic-login
+```
+
+The underlying configuration property is:
+
+```text
+external-magic-link-url
+```
+
+With this setting, Keycloak generates continuation links in the following format:
+
+```text
+https://app.example.com/magic-login?key=<signed-action-token>
+```
+
+If the configuration is blank or absent, the standard Keycloak continuation link is generated, preserving existing behavior.
+
+The external URL must use HTTPS and have a valid hostname. URLs with embedded credentials or fragments are rejected. Invalid configurations produce a warning and fall back to the standard Keycloak URL.
+
+#### Native Application Integration
+
+Applications receiving an external continuation link must:
+
+1. Register the configured HTTPS URL with the operating system using Universal Links or App Links.
+2. Extract the `key` query parameter from the incoming URL.
+3. Pass the signed token, without modification, to Keycloak's action-token endpoint.
+4. Allow Keycloak to process the token and confirm the waiting authentication session.
+
+The Keycloak redemption URL has the following format:
+
+```text
+https://keycloak.example.com/realms/<realm>/login-actions/action-token?key=<signed-action-token>
+```
+
+The native application must preserve the complete signed token.
+
+For the tested Magic Link continuation flow, the `client_id` query parameter is not required. Keycloak's continuation action-token handler can retrieve the client associated with the token from its signed claims.
+
+The original authentication session must still exist and must not have expired when the token is redeemed.
+
+When redemption succeeds, Keycloak marks the original authentication session as confirmed. The initiating browser's polling mechanism detects the confirmation and resumes authentication.
+
+This feature changes only the URL used to deliver the continuation token. It does not change the token's contents, signature verification, or authentication-session confirmation behavior.
+
+#### Security Considerations
+
+The signed continuation token is a bearer credential. Anyone who obtains a valid, unexpired token may be able to confirm the associated authentication session.
+
+Administrators should configure external URLs only on trusted HTTPS domains controlled by the application operator.
+
+The receiving application and its infrastructure should:
+
+- Avoid recording token-bearing URLs in web server, reverse proxy, application, or diagnostic logs.
+- Avoid exposing tokens to analytics services, third-party scripts, or external resources through referrer information.
+- Avoid retaining tokens in persistent application storage or browser history.
+- Handle incoming tokens promptly and securely.
+- Ensure that the external URL is associated with the intended native application.
+
+The external domain is an explicit trust decision made by the Keycloak administrator.
+
+#### Scope
+
+The `external-magic-link-url` option applies only to the **Magic Link continuation** authenticator (`magic-link-continuation-form`).
+
+It does not modify the behavior of the standard Magic Link authenticator (`ext-magic-form`).
+
 ### Customization
 
 `MagicLinkContinuationAuthenticator` is `final` and does **not** participate in the `MagicLinkCustomizationSpi`. Its cross-device polling flow is self-contained: email sending and user validation are fixed to the built-in behaviour. To change that behaviour, implement a new `Authenticator` (extending `UsernamePasswordForm`) and register it with its own `AuthenticatorFactory` — not by subclassing any continuation class.
