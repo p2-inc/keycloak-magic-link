@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.representations.idm.ClientRepresentation;
+import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 
 /** HTTP integration tests against real Keycloak and MailHog, without a custom theme. */
@@ -173,6 +174,47 @@ public class EmailOtpStandaloneTest extends AbstractMagicLinkWithMailhogTest {
     assertCodeForm(browser);
     browser.submit("kc-otp-login-form", Map.of("otp", latestCode()));
     assertLoggedIn(browser);
+  }
+
+  @Test
+  public void passwordThenEmailOtpSkipsEmailEntry() {
+    var rep = realm.toRepresentation();
+    rep.setLoginWithEmailAllowed(false);
+    rep.setEditUsernameAllowed(true);
+    realm.update(rep);
+    var user = user();
+    user.setUsername("otp-user");
+    realm.users().get(user.getId()).update(user);
+    var password = new CredentialRepresentation();
+    password.setType(CredentialRepresentation.PASSWORD);
+    password.setValue("test-password");
+    password.setTemporary(false);
+    realm.users().get(user.getId()).resetPassword(password);
+
+    realm
+        .flows()
+        .addExecution("Email OTP forms", Map.of("provider", "auth-username-password-form"));
+    var execution =
+        realm.flows().getExecutions("Email OTP forms").stream()
+            .filter(e -> "auth-username-password-form".equals(e.getProviderId()))
+            .findFirst()
+            .orElseThrow();
+    execution.setRequirement("REQUIRED");
+    realm.flows().updateExecutions("Email OTP forms", execution);
+    realm.flows().raisePriority(execution.getId());
+
+    var browser = start();
+    assertTrue(browser.html().contains("id=\"password\""));
+    assertEquals(0, mailCount());
+    browser.submit("kc-form-login", Map.of("username", "otp-user", "password", "wrong"));
+    assertEquals(0, mailCount());
+    browser.submit("kc-form-login", Map.of("username", "otp-user", "password", "test-password"));
+    assertCodeForm(browser);
+    assertFalse(browser.html().contains("id=\"kc-form-login\""));
+    assertEquals(1, mailCount());
+    browser.submit("kc-otp-login-form", Map.of("otp", latestCode()));
+    assertLoggedIn(browser);
+    assertTrue(user().isEmailVerified());
   }
 
   @Test

@@ -471,6 +471,8 @@ The **Email OTP** authenticator emails a six-digit code using a theme-resources 
 
 For standalone email login, add **Email OTP** directly to the browser flow, without a preceding **Username Form**. It collects the email address when no user/address has been identified. Use **Required** for an email-only flow, or **Alternative** alongside other login methods inside a suitable subflow.
 
+The email-entry step reuses `login-username.ftl`, whose stock label follows the realm's login settings (including "Username" when login with email is disabled). This step requires an email address regardless of that label; use an appropriate login theme label for standalone email login. After a Username Password Form, the identified user's email is used directly without another email-entry step.
+
 - With **Force create user** off, unknown addresses reach the code form without receiving email or creating an account.
 - With **Force create user** on, an unknown address creates an unverified account before the code is sent. Successful code verification marks its email verified; abandoned attempts leave unverified accounts.
 - Disabled or brute-force-blocked users cannot start an email-code login.
