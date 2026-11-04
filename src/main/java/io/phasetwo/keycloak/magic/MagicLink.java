@@ -511,6 +511,9 @@ public final class MagicLink {
   }
 
   public static boolean isValidEmail(String email) {
+    if (email == null) {
+      return false;
+    }
     try {
       InternetAddress a = new InternetAddress(email);
       a.validate();

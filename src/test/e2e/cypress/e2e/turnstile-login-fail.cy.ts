@@ -20,6 +20,9 @@ describe('Turnstile Username Password — CAPTCHA fails', () => {
     cy.visit(loginUrl);
     cy.get('#username').type('test@phasetwo.io');
     cy.get('#password').type('test123');
+    // The Cloudflare widget does not load in the test browser, so post a token by hand; WireMock
+    // decides whether siteverify accepts it.
+    cy.get('input[name="cf-turnstile-response"]').invoke('val', 'test-token');
     cy.get('#kc-login').click();
 
     // Keycloak adds VERIFY_EMAIL and redirects to the required-action step

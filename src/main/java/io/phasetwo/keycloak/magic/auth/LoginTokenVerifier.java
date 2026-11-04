@@ -1,8 +1,8 @@
 package io.phasetwo.keycloak.magic.auth;
 
-import static io.phasetwo.keycloak.magic.auth.LoginTokenHelper.*;
+import static io.phasetwo.keycloak.magic.auth.LoginTokenHelper.NOTE_PENDING_TOKEN;
+import static io.phasetwo.keycloak.magic.auth.LoginTokenHelper.clearLoginHint;
 
-import jakarta.ws.rs.core.Response;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.Authenticator;
@@ -45,7 +45,8 @@ public class LoginTokenVerifier implements Authenticator {
    * Public delegates kept for backward compatibility — {@code LoginTokenResource} and any other
    * code outside the {@code auth} package references these constants.
    */
-  public static final String RESUME_PREFIX   = LoginTokenHelper.RESUME_PREFIX;
+  public static final String RESUME_PREFIX = LoginTokenHelper.RESUME_PREFIX;
+
   public static final String DATA_KEY_PREFIX = LoginTokenHelper.DATA_KEY_PREFIX;
 
   @Override
@@ -62,7 +63,11 @@ public class LoginTokenVerifier implements Authenticator {
     LoginTokenHelper.handleTokenId(
         context,
         tokenId,
-        () -> { clearLoginHint(context); context.attempted(); },
+        () -> {
+          clearLoginHint(context);
+          context.setForwardedInfoMessage("loginTokenInvalid");
+          context.attempted();
+        },
         tid -> {
           String hint =
               context.getAuthenticationSession().getClientNote(OIDCLoginProtocol.LOGIN_HINT_PARAM);

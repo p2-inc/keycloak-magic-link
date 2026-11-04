@@ -166,7 +166,8 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
             context.getSession(),
             context.getRealm(),
             email,
-            isForceCreate(context, false),
+            // create users only for valid email addresses, not for any input in the form
+            isForceCreate(context, false) && MagicLink.isValidEmail(email),
             false,
             false,
             MagicLink.registerEvent(event, MAGIC_LINK));
