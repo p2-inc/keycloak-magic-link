@@ -22,7 +22,7 @@ describe('Turnstile Standalone — CAPTCHA passes', () => {
     cy.get('#password').type('test123');
     cy.get('#kc-login').click();
 
-    .url().should('contain', '/turnstile-realm/');
-     cy.contains('Personal')
+    cy.url().should('contain', '/turnstile-realm/');
+    cy.contains('Personal')
   });
 });

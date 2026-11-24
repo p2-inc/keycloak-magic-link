@@ -1,0 +1,177 @@
+{
+  "realm": "email-otp-brute-force-realm",
+  "displayName": "Email OTP Brute Force Realm",
+  "enabled": true,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxTemporaryLockouts": 0,
+  "bruteForceStrategy": "MULTIPLE",
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 900,
+  "quickLoginCheckMilliSeconds": 250,
+  "maxDeltaTimeSeconds": 3600,
+  "failureFactor": 3,
+  "maxSecondaryAuthFailures": 0,
+  "clients": [
+    {
+      "clientId": "security-admin-console",
+      "name": "${client_security-admin-console}",
+      "rootUrl": "${authAdminUrl}",
+      "baseUrl": "/admin/email-otp-brute-force-realm/console/",
+      "surrogateAuthRequired": false,
+      "enabled": true,
+      "alwaysDisplayInConsole": false,
+      "clientAuthenticatorType": "client-secret",
+      "redirectUris": [
+        "/admin/email-otp-brute-force-realm/console/*",
+        "https://localhost/auth/admin/email-otp-brute-force-realm/console/"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "notBefore": 0,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "publicClient": true,
+      "frontchannelLogout": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "realm_client": "false",
+        "client.use.lightweight.access.token.enabled": "true",
+        "post.logout.redirect.uris": "+",
+        "pkce.code.challenge.method": "S256"
+      },
+      "authenticationFlowBindingOverrides": {},
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": 0,
+      "protocolMappers": [
+        {
+          "name": "locale",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "user.attribute": "locale",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "locale",
+            "jsonType.label": "String"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "basic",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "organization",
+        "offline_access",
+        "microprofile-jwt"
+      ],
+      "access": {
+        "view": true,
+        "configure": true,
+        "manage": true
+      }
+    }
+  ],
+  "smtpServer": {
+    "host": "mailhog",
+    "port": 1025,
+    "from": "noreply@phasetwo.io",
+    "password": "**********",
+    "user": "username",
+    "auth": "true"
+  },
+  "authenticationFlows": [
+    {
+      "id": "b1f4c8d2-3e7a-4c91-8b6d-2f5a9c0e7d13",
+      "alias": "email-otp-brute-force-flow",
+      "description": "email otp flow that forwards unknown users to the OTP authenticator",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-cookie",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 0,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "identity-provider-redirector",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 1,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticatorFlow": true,
+          "requirement": "ALTERNATIVE",
+          "priority": 2,
+          "flowAlias": "Email OTP brute force forms",
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "id": "c2a5d9e3-4f8b-4d02-9c7e-3a6b0d1f8e24",
+      "alias": "Email OTP brute force forms",
+      "description": "",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "reset-credentials-choose-user",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 0,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticatorConfig": "email-otp-brute-force-config",
+          "authenticator": "ext-email-otp",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 1,
+          "userSetupAllowed": false
+        }
+      ]
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "id": "d3b6e0f4-5a9c-4e13-8d8f-4b7c1e2a9f35",
+      "alias": "email-otp-brute-force-config",
+      "config": {
+        "ext-magic-create-nonexistent-user": "false"
+      }
+    }
+  ],
+  "browserFlow": "email-otp-brute-force-flow",
+  "users": [
+    {
+      "username": "testuser@phasetwo.io",
+      "enabled": true,
+      "emailVerified": false,
+      "email": "testuser@phasetwo.io",
+      "firstName": "R",
+      "lastName": "T"
+    }
+  ]
+}

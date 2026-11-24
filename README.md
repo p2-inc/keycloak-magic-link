@@ -1,6 +1,23 @@
-> :rocket: **Try it for free** in the new Phase Two [keycloak managed service](https://phasetwo.io/?utm_source=github&utm_medium=readme&utm_campaign=keycloak-magic-link). See the [announcement and demo video](https://phasetwo.io/blog/self-service/) for more information.
-
 # keycloak-magic-link
+
+<!-- phasetwo:banner:start - managed by p2-inc/shared-github-actions, edit there -->
+[![build](https://img.shields.io/github/actions/workflow/status/p2-inc/keycloak-magic-link/ci.yml?branch=main&label=build)](https://github.com/p2-inc/keycloak-magic-link/actions/workflows/ci.yml) [![Maven Central](https://img.shields.io/maven-central/v/io.phasetwo.keycloak/keycloak-magic-link?label=maven%20central)](https://central.sonatype.com/artifact/io.phasetwo.keycloak/keycloak-magic-link) [![license](https://img.shields.io/badge/license-ELv2-blue)](COPYING) [![docs](https://img.shields.io/badge/docs-phasetwo.io-blue)](https://phasetwo.io/docs/authentication/magic-links/)
+
+📚 [Documentation](https://phasetwo.io/docs/authentication/magic-links/) • 🚀 [Hosted Keycloak](https://dash.phasetwo.io/?utm_source=github&utm_medium=readme&utm_campaign=keycloak-magic-link) • 🤖 [Keycloak Skills](https://github.com/p2-inc/keycloak-skills) • 💬 [Support](mailto:support@phasetwo.io)
+
+> [!TIP]
+> **Run this in our cloud, no setup needed.** Phase Two hosts Keycloak with this extension and the rest of ours built in. [Try it free with your own cluster →](https://dash.phasetwo.io/?utm_source=github&utm_medium=readme&utm_campaign=keycloak-magic-link)
+>
+> **Using a coding agent?** Add the Phase Two Keycloak skills ([launch post](https://phasetwo.io/blog/keycloak-skills-mcp-launch)) to Claude Code, Cursor or Codex so your agent can set up passwordless login, SSO, organizations and clusters for you:
+>
+> ```sh
+> # Install the skills (connects to our hosted MCP server)
+> claude plugin marketplace add p2-inc/keycloak-skills
+> claude plugin install phasetwo@keycloak-skills
+> # Or connect to the MCP server directly
+> claude mcp add --transport http keycloak https://mcp.phasetwo.io/mcp
+> ```
+<!-- phasetwo:banner:end -->
 
 Magic link implementation. Inspired by the [experiment](https://github.com/stianst/keycloak-experimental/tree/main/magic-link) by [@stianst](https://github.com/stianst).
 It comes in two types: magic link and magic link continuation;
@@ -205,7 +222,7 @@ Parameters:
 | `code_challenge` | N | | OIDC `code_challenge` variable (for PKCE). |
 | `remember_me` | N | false | If the user is treated as if they had checked "Remember Me" on login. Requires that it is enabled in the Realm. |
 | `reusable` | N | true | If the token can be reused multiple times during its validity |
-| `response_mode` | N | query | Determines how the authorization response is returned to the client: in the URL query string (query) or in the URL fragment (fragment). |
+| `response_mode` | N | query | Determines how the authorization response is returned to the client: in the URL query string (query) or in the URL fragment (fragment). SPAs should usually pass `fragment` together with a `state`; see [Using magic links with a single-page app](#using-magic-links-with-a-single-page-app-keycloak-js-oidc-client-ts-). |
 
 Sample request (replace your access token):
 
@@ -226,6 +243,56 @@ Sample response:
   "sent": false
 }
 ```
+
+#### Using magic links with a single-page app (keycloak-js, oidc-client-ts, …)
+
+A magic link is an *unsolicited* authorization response: the SPA never started this login, so it has
+no matching `state`, `nonce` or PKCE verifier stored. By default the callback is sent in **query**
+mode with **no `state`**:
+
+```
+https://app.example.com/?session_state=…&iss=…&code=…
+```
+
+keycloak-js defaults to `responseMode: 'fragment'` and only reads the fragment, so it ignores that
+URL and starts a new login with the whole URL, `code` included, as `redirect_uri`. Since Keycloak
+26.6.5 / 26.4.14 ([CVE-2026-9689](https://github.com/keycloak/keycloak/issues/49430)) a
+`redirect_uri` containing `code`, `state`, `iss` or `session_state` is rejected with
+`Invalid parameter: redirect_uri`.
+
+To make the callback something the SPA recognises, pass the **same response mode your client uses**
+(`fragment` for keycloak-js by default) **plus a `state`**. Both are needed: `state` alone still
+lands in the query string, where a fragment-mode client never looks.
+
+```json
+{
+  "email": "foo@foo.com",
+  "client_id": "my-spa",
+  "redirect_uri": "https://app.example.com/",
+  "response_mode": "fragment",
+  "state": "<random value>"
+}
+```
+
+The callback then arrives as `https://app.example.com/#state=…&session_state=…&iss=…&code=…`.
+keycloak-js strips those parameters from the URL. It rejects the callback because it didn't issue
+that `state`, and starts a normal login from the clean URL. Opening the magic link already created
+an SSO session, so Keycloak returns a new code at once and the user is signed in without a prompt.
+keycloak-js only treats the URL as a callback when it carries both `code` and `state` in the part
+it parses. Without `state` it leaves the parameters in place and reuses them in the next
+`redirect_uri`. That happens to pass today in fragment mode, because the CVE-2026-9689 check only
+inspects the query string, but don't rely on it.
+
+| Magic-link request | SPA `responseMode` | Result on Keycloak ≥ 26.6.5 |
+| --- | --- | --- |
+| neither `state` nor `response_mode` | `fragment` (default) | `Invalid parameter: redirect_uri` |
+| `state` (query mode) | `fragment` (default) | `Invalid parameter: redirect_uri` |
+| `state` + `response_mode: "fragment"` | `fragment` (default) | signed in |
+| `state` + `response_mode: "query"` | `query` | signed in |
+
+If you can't change how links are created, strip the stale OIDC parameters (`code`, `state`,
+`session_state`, `iss`, `error`, …) from the URL before initialising the OIDC client, as the
+Keycloak consoles do ([keycloak#52462](https://github.com/keycloak/keycloak/pull/52462)).
 
 ---
 
@@ -431,6 +498,48 @@ Browser Flow
 
 There is a simple authenticator to email a 6-digit OTP to the users email address. This implementation sends the email using a theme-resources template, which you can override. It is recommended to use this in an Authentication flow following the _Username form_. An example flow looks like this:
 ![Install Email OTP Authenticator in Browser Flow](docs/assets/email-otp-authenticator.png)
+
+## Account Activation
+
+Two authenticators route users by account status, for realms where some accounts still need activation before password login makes sense — typically self-registered users awaiting email verification, and migrated users created without a password who set their first password through an emailed link.
+
+An account is treated as **pending activation** when any enabled criterion matches (all configurable per execution):
+
+- the user's email address is not verified (`Pending when email unverified`, default on),
+- the user has no password credential (`Pending when no password`, default on),
+- the user has one of the configured required actions outstanding (`Pending required actions`, comma-separated aliases, default empty).
+
+Both authenticators send the same activation email: a standard Keycloak execute-actions token link that opens the user's outstanding required actions directly in whatever browser it is clicked in, then returns the user to the application. By default (`Activation email actions` = `derive`) the link performs the user's own outstanding actions, plus `VERIFY_EMAIL` if their email is unverified and `UPDATE_PASSWORD` if they have no password — so one configuration covers both self-registered and migrated accounts without any custom status attribute. Set it to `explicit` to send a fixed list instead. The email subject and body use the `activationEmail*` message keys and the `activation-email.ftl` theme-resources template, all overridable from a login/email theme.
+
+### Activation Gate (`ext-auth-activation-gate`)
+
+Email-first browser-flow authenticator. Renders the email-only login form (or consumes an attempted username set by a previous authenticator), then branches:
+
+- **Activated account** — sets the user on the flow and succeeds, so the next execution (typically _Password Form_) prompts for the credential. MFA executions later in the flow run as usual.
+- **Pending account** — sends the activation email and shows a confirmation screen (`view-activation-sent.ftl`) with a Resend button. Resends are throttled by the `Resend cooldown` execution setting (default 30 s per authentication session).
+- **Unknown, disabled, or email-less account** — shows the *same* confirmation screen without sending anything. There is deliberately no "email not registered" message and no option to enable one: the response must not disclose whether an account exists.
+
+Example flow:
+
+```
+Browser Flow
+├── Cookie                      [ALTERNATIVE]
+└── Forms sub-flow              [ALTERNATIVE]
+    ├── Activation Gate         [REQUIRED]
+    ├── Password Form           [REQUIRED]
+    └── Conditional OTP …       [CONDITIONAL]
+```
+
+### Send Activation or Reset Email (`ext-auth-activation-reset-email`)
+
+Drop-in replacement for the built-in _Send Reset Email_ execution in the _Reset Credentials_ flow. Activated accounts get the stock behavior unchanged (a standard password-reset email — the built-in implementation is delegated to, including its `force-login` setting). Pending accounts get the activation email instead, so a not-yet-activated user who clicks "Forgot password?" is routed to activation rather than a reset that cannot help them. Every branch shows Keycloak's generic "you should receive an email shortly" message, and unknown users keep the stock (non-disclosing) behavior.
+
+```
+Reset Credentials Flow
+├── Choose User                     [REQUIRED]
+├── Send Activation or Reset Email  [REQUIRED]   ← replaces Send Reset Email
+└── Reset Password                  [REQUIRED]
+```
 
 ## Cloudflare Turnstile CAPTCHA
 

@@ -1,74 +1,75 @@
 package io.phasetwo.keycloak.magic.auth.cloudflare;
 
-import static io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile.*;
+import static io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile.failNotConfigured;
+import static io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile.isTurnstileCaptchaConfigured;
+import static io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile.validate;
 
 import io.phasetwo.keycloak.magic.auth.util.CloudflareTurnstile;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.AuthenticationFlowContext;
+import org.keycloak.authentication.AuthenticationFlowError;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.forms.login.LoginFormsProvider;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.utils.FormMessage;
-import org.keycloak.services.validation.Validation;
 
 @JBossLog
 public class CloudflareTurnstileAuthenticator implements Authenticator {
 
   @Override
   public void authenticate(AuthenticationFlowContext context) {
-    challenge(context);
-  }
-
-  private void challenge(AuthenticationFlowContext context) {
-
-    LoginFormsProvider form = context.form().setExecution(context.getExecution().getId());
     if (!isTurnstileCaptchaConfigured(context.getAuthenticatorConfig())) {
-      form.addError(new FormMessage(null, CloudflareTurnstile.MSG_CAPTCHA_NOT_CONFIGURED));
+      failNotConfigured(context);
       return;
     }
-
-    CloudflareTurnstile.Config config =
-        CloudflareTurnstile.readConfig(context.getAuthenticatorConfig().getConfig());
-
-    String lang = null;
-    if (context.getUser() != null) {
-      lang = context.getSession().getContext().resolveLocale(context.getUser()).toLanguageTag();
-    } else if (context.getRealm() != null && context.getRealm().getDefaultLocale() != null) {
-      lang = context.getRealm().getDefaultLocale();
-    } else {
-      lang = "en";
-    }
-    prepareForm(form, config, lang);
-
-    Response response = form.createForm("cf-captcha.ftl");
-    context.challenge(response);
+    context.challenge(createChallenge(context, null));
   }
 
   @Override
   public void action(AuthenticationFlowContext context) {
-    MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
-    String captcha = formData.getFirst(CloudflareTurnstile.CF_TURNSTILE_RESPONSE);
-    LoginFormsProvider form = context.form();
     if (!isTurnstileCaptchaConfigured(context.getAuthenticatorConfig())) {
-      form.addError(new FormMessage(CloudflareTurnstile.MSG_CAPTCHA_NOT_CONFIGURED));
+      failNotConfigured(context);
       return;
     }
 
     CloudflareTurnstile.Config config =
         CloudflareTurnstile.readConfig(context.getAuthenticatorConfig().getConfig());
+    MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
+    String captcha = formData.getFirst(CloudflareTurnstile.CF_TURNSTILE_RESPONSE);
 
-    if (Validation.isBlank(captcha)
-        || !validate(
-            config, captcha, context.getConnection().getRemoteAddr(), context.getSession())) {
-      formData.remove(CloudflareTurnstile.CF_TURNSTILE_RESPONSE);
-      form.addError(new FormMessage(CloudflareTurnstile.MSG_CAPTCHA_FAILED));
-    } else {
+    if (validate(config, captcha, context.getConnection().getRemoteAddr(), context.getSession())) {
       context.success();
+      return;
     }
+
+    log.debug("Turnstile token was missing or rejected; showing the challenge again");
+    context.failureChallenge(
+        AuthenticationFlowError.INVALID_CREDENTIALS,
+        createChallenge(context, CloudflareTurnstile.MSG_CAPTCHA_FAILED));
+  }
+
+  private Response createChallenge(AuthenticationFlowContext context, String error) {
+    CloudflareTurnstile.Config config =
+        CloudflareTurnstile.readConfig(context.getAuthenticatorConfig().getConfig());
+    LoginFormsProvider form = context.form().setExecution(context.getExecution().getId());
+    if (error != null) {
+      form.addError(new FormMessage(error));
+    }
+    prepareForm(form, config, resolveLanguage(context));
+    return form.createForm("cf-captcha.ftl");
+  }
+
+  private String resolveLanguage(AuthenticationFlowContext context) {
+    if (context.getUser() != null) {
+      return context.getSession().getContext().resolveLocale(context.getUser()).toLanguageTag();
+    } else if (context.getRealm() != null && context.getRealm().getDefaultLocale() != null) {
+      return context.getRealm().getDefaultLocale();
+    }
+    return "en";
   }
 
   private void prepareForm(

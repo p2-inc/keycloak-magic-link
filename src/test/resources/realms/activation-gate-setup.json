@@ -1,0 +1,174 @@
+{
+  "realm": "activation-test-realm",
+  "displayName": "Activation Test Realm",
+  "enabled": true,
+  "loginWithEmailAllowed": true,
+  "resetPasswordAllowed": true,
+  "clients": [
+    {
+      "clientId": "gate-test-client",
+      "name": "Gate Test Client",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["http://localhost/callback"],
+      "webOrigins": ["+"],
+      "protocol": "openid-connect"
+    }
+  ],
+  "smtpServer": {
+    "host": "mailhog",
+    "port": 1025,
+    "from": "noreply@phasetwo.io",
+    "password": "**********",
+    "user": "username",
+    "auth": "true"
+  },
+  "authenticationFlows": [
+    {
+      "id": "7b2f0af3-1f2d-4a3e-9c1e-4a5b6c7d8e9f",
+      "alias": "activation-gate-flow",
+      "description": "email-first browser flow with activation gate",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-cookie",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 0,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticatorFlow": true,
+          "requirement": "ALTERNATIVE",
+          "priority": 1,
+          "autheticatorFlow": true,
+          "flowAlias": "activation gate forms",
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "id": "8c3f1be4-2a3e-4b4f-8d2f-5b6c7d8e9f0a",
+      "alias": "activation gate forms",
+      "description": "",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticatorConfig": "activation-gate-config",
+          "authenticator": "ext-auth-activation-gate",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 0,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "auth-password-form",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 1,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "id": "9d4f2cf5-3b4f-4c5a-9e3a-6c7d8e9f0a1b",
+      "alias": "activation-reset-flow",
+      "description": "reset credentials flow with activation-or-reset email",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "reset-credentials-choose-user",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 0,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticatorConfig": "activation-reset-config",
+          "authenticator": "ext-auth-activation-reset-email",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 1,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "reset-password",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 2,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        }
+      ]
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "id": "1e5a3da6-4c5a-4d6b-8f4b-7d8e9f0a1b2c",
+      "alias": "activation-gate-config",
+      "config": {
+        "ext-activation-resend-cooldown": "300"
+      }
+    },
+    {
+      "id": "2f6b4eb7-5d6b-4e7c-9a5c-8e9f0a1b2c3d",
+      "alias": "activation-reset-config",
+      "config": {}
+    }
+  ],
+  "browserFlow": "activation-gate-flow",
+  "resetCredentialsFlow": "activation-reset-flow",
+  "users": [
+    {
+      "username": "activated@phasetwo.io",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "activated@phasetwo.io",
+      "firstName": "Activated",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "activated-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "pending-verify@phasetwo.io",
+      "enabled": true,
+      "emailVerified": false,
+      "email": "pending-verify@phasetwo.io",
+      "firstName": "PendingVerify",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "pending-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "pending-migrated@phasetwo.io",
+      "enabled": true,
+      "emailVerified": false,
+      "email": "pending-migrated@phasetwo.io",
+      "firstName": "PendingMigrated",
+      "lastName": "User"
+    }
+  ]
+}

@@ -166,7 +166,8 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
             context.getSession(),
             context.getRealm(),
             email,
-            isForceCreate(context, false),
+            // create users only for valid email addresses, not for any input in the form
+            isForceCreate(context, false) && MagicLink.isValidEmail(email),
             false,
             false,
             MagicLink.registerEvent(event, MAGIC_LINK));
@@ -184,7 +185,8 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
           .getAuthenticationSession()
           .setAuthNote(AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME, email);
       log.debugf("user attempted to login with username/email: %s", email);
-      context.forceChallenge(context.form().createForm("view-email.ftl"));
+      // Unknown users get the same pending session and UI, but no token or email.
+      challengePending(context, email);
       return;
     }
 
@@ -205,6 +207,11 @@ public class MagicLinkContinuationAuthenticator extends UsernamePasswordForm {
     boolean sent = MagicLink.sendMagicLinkContinuationEmail(context.getSession(), user, link);
     log.debugf("sent email to %s? %b. Link? %s", user.getEmail(), sent, link);
 
+    challengePending(context, email);
+  }
+
+  private void challengePending(AuthenticationFlowContext context, String email) {
+    int timeout = getTimeout(context, 10);
     context
         .getAuthenticationSession()
         .setAuthNote(AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME, email);

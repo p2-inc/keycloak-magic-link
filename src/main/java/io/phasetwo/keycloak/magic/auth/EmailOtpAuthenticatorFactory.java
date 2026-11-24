@@ -1,6 +1,7 @@
 package io.phasetwo.keycloak.magic.auth;
 
 import static io.phasetwo.keycloak.magic.MagicLink.CREATE_NONEXISTENT_USER_CONFIG_PROPERTY;
+import static io.phasetwo.keycloak.magic.MagicLink.EMAIL_OTP_SUBJECT_WITH_CODE_CONFIG_PROPERTY;
 
 import com.google.auto.service.AutoService;
 import java.util.List;
@@ -11,6 +12,7 @@ import org.keycloak.authentication.AuthenticatorFactory;
 import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
+import org.keycloak.models.credential.OTPCredentialModel;
 import org.keycloak.provider.ProviderConfigProperty;
 
 @JBossLog
@@ -37,7 +39,10 @@ public class EmailOtpAuthenticatorFactory implements AuthenticatorFactory {
 
   @Override
   public String getReferenceCategory() {
-    return "alternate-auth";
+    // Must be one of DefaultBruteForceProtector.ALLOWED_AUTHENTICATION_CATEGORIES
+    // ("password", "otp", "recovery-authn-codes"), otherwise failedLogin() discards the
+    // attempt and brute force counters never increase for a wrong OTP code.
+    return OTPCredentialModel.TYPE;
   }
 
   @Override
@@ -75,7 +80,13 @@ public class EmailOtpAuthenticatorFactory implements AuthenticatorFactory {
         "Creates a new user when an email is provided that does not match an existing user.");
     createUser.setDefaultValue(false);
 
-    return List.of(createUser);
+    ProviderConfigProperty subjectWithCode = new ProviderConfigProperty();
+    subjectWithCode.setType(ProviderConfigProperty.BOOLEAN_TYPE);
+    subjectWithCode.setName(EMAIL_OTP_SUBJECT_WITH_CODE_CONFIG_PROPERTY);
+    subjectWithCode.setLabel("Email subject with code");
+    subjectWithCode.setHelpText("Insert the OTP code into the email subject.");
+
+    return List.of(createUser, subjectWithCode);
   }
 
   @Override
