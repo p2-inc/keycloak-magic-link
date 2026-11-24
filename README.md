@@ -300,6 +300,8 @@ Keycloak consoles do ([keycloak#52462](https://github.com/keycloak/keycloak/pull
 
 Login Token is a drop-in parallel implementation that can be deployed alongside the existing Magic Link without any breaking changes or flow migration.
 
+> Security architecture, guarantees, threat model and known open issues are described in [SECURITY-DESIGN.md](SECURITY-DESIGN.md).
+
 ### Why Login Token?
 
 The original Magic Link authenticates the user *directly* via the action-token handler, bypassing the standard Keycloak browser flow entirely. This means:
@@ -422,8 +424,8 @@ A stateless token is replaced by a **legacy token** — the request never fails 
 - A **legacy** token is gone as well, because it lives in the same store. It fails closed.
 - A **stateless** token is still valid, and its uses can be claimed again. It fails open.
 
-> **Known limitation (open issue).** This is accepted for now and will be covered in a separate
-> security architecture and threat model document.
+> **Known limitation (open issue).** This is accepted for now; see open issue O1 in
+> [SECURITY-DESIGN.md](SECURITY-DESIGN.md#9-open-issues) for the options considered.
 
 A use-limited stateless token is therefore single use *as long as the cluster keeps running*. Rolling restarts and deployments, where nodes are replaced one at a time, are not affected. Where a hard guarantee is required, keep `expiration_seconds` short for use-limited stateless tokens or issue them in the legacy format (`"legacy": true`).
 

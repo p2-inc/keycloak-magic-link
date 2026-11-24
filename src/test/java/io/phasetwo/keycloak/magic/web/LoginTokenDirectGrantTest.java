@@ -634,6 +634,35 @@ public class LoginTokenDirectGrantTest extends AbstractMagicLinkTest {
   }
 
   // ---------------------------------------------------------------------------
+  // Malformed tokens
+  // ---------------------------------------------------------------------------
+
+  @Test
+  public void malformedTokenIdsAreRejectedCleanly() throws Exception {
+    importRealm("/realms/direct-grant-login-token-test-setup.json");
+
+    // None of these is a token the plugin issues. Each must be answered like any other invalid
+    // token — in particular ids ending in ".revoked", a key space Keycloak reserves in the
+    // single-use store and answers with an exception (formerly an HTTP 500).
+    for (String token :
+        List.of(
+            "lt:x.revoked",
+            "x.revoked",
+            "lt:00000000-0000-0000-0000-000000000000.revoked",
+            "lt:lt:00000000-0000-0000-0000-000000000000",
+            "lt:not-a-uuid",
+            "lt:v2.",
+            "lt:v2.x.revoked",
+            "lt:")) {
+      redeem(token)
+          .then()
+          .statusCode(401)
+          .body("error", equalTo("invalid_grant"))
+          .body("error_description", equalTo("Invalid or expired login token"));
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Request validation
   // ---------------------------------------------------------------------------
 

@@ -237,6 +237,16 @@ public final class StatelessLoginToken {
   }
 
   /**
+   * Returns {@code true} if the token id has the shape of a legacy token: a UUID. Anything else is
+   * not a token this plugin ever issued and must not be used as a key in the single-use store —
+   * Keycloak reserves parts of that key space (for example keys ending in {@code .revoked}) and
+   * answers lookups there with an exception.
+   */
+  public static boolean isLegacy(String tokenId) {
+    return tokenId != null && LEGACY_TOKEN_ID.matcher(tokenId).matches();
+  }
+
+  /**
    * Returns a value that identifies the token in log output without revealing the credential. Both
    * token kinds are bearer credentials, so neither is ever logged in full: a stateless token is
    * reduced to its salt (which is also its use-counting id), a legacy UUID to its first block, and
@@ -252,7 +262,7 @@ public final class StatelessLoginToken {
       if (body.length() > SALT_LOG_LENGTH && body.matches("[A-Za-z0-9_-]+=*")) {
         return "v2:" + body.substring(0, SALT_LOG_LENGTH);
       }
-    } else if (LEGACY_TOKEN_ID.matcher(tokenId).matches()) {
+    } else if (isLegacy(tokenId)) {
       return tokenId.substring(0, 8) + "…";
     }
     return "<malformed:" + tokenId.length() + ">";

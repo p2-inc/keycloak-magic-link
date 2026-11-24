@@ -180,6 +180,12 @@ class LoginTokenHelper {
       notes = payload.get().toNotes();
       useId = payload.get().getUseId();
     } else {
+      if (!StatelessLoginToken.isLegacy(tokenId)) {
+        // Not a token we ever issued. Reject it here rather than look it up: the input is
+        // attacker-controlled and would otherwise become a key in the single-use store.
+        log.warnf("[LT] malformed token id rejected for tokenId='%s'", logId);
+        return ResolvedToken.invalid();
+      }
       notes =
           context
               .getSession()

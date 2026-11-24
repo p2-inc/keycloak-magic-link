@@ -195,6 +195,18 @@ class StatelessLoginTokenTest {
   }
 
   @Test
+  void onlyAUuidIsALegacyTokenId() {
+    assertTrue(StatelessLoginToken.isLegacy(USER_ID));
+    assertFalse(StatelessLoginToken.isLegacy(USER_ID + ".revoked"));
+    assertFalse(StatelessLoginToken.isLegacy("x.revoked"));
+    assertFalse(StatelessLoginToken.isLegacy("lt:" + USER_ID));
+    assertFalse(StatelessLoginToken.isLegacy(" " + USER_ID));
+    assertFalse(StatelessLoginToken.isLegacy("v2.abc"));
+    assertFalse(StatelessLoginToken.isLegacy(""));
+    assertFalse(StatelessLoginToken.isLegacy(null));
+  }
+
+  @Test
   void unrepresentablePayloadIsRefused() {
     SecretKey key = newKey();
 
