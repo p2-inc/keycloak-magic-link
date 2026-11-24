@@ -111,14 +111,22 @@ Login Token implementation that coexists with Magic Link v1 without any breaking
 
 The original `MagicLinkActionTokenHandler` authenticates the user *directly* (bypasses the browser flow). This means `acr_values`, `ConditionalLoaAuthenticator`, and step-up authenticators cannot run. Login Token solves this by returning a **standard OIDC authorization URL** — the full browser flow runs, including step-up authenticators.
 
-### Credential transport: Infinispan + UUID reference
+### Credential transport: two token formats
 
-Keycloak silently truncates any OIDC parameter longer than 255 characters (`AuthzEndpointRequestParser`). A signed JWT is typically 500–700 characters and would be dropped. Login Token therefore uses a **UUID reference in `login_hint`**:
+Keycloak silently drops a `login_hint` longer than 255 characters (`AuthzEndpointRequestParser`). A signed JWT is typically 500–700 characters and would be dropped. Login Token therefore has two compact formats, told apart by the `login_hint` itself. Both go through the same pipeline in `LoginTokenHelper` — only credential resolution in `lookupAndValidate` differs.
+
+**Stateless format (`lt:v2.{base64url}`)** — `StatelessLoginToken` packs the credential into a binary payload and encrypts it with AES-GCM (`nonce[12] ‖ ciphertext ‖ tag[16]`, realm id as additional authenticated data). Nothing is stored at creation. The key comes from the realm key provider(s) **named `login-token`** (`aes-generated`, priority below 100), resolved by `LoginTokenKeys`: highest-priority active key encrypts, every enabled key decrypts (rotation). Issued when the request sets `stateless: true` or the SPI option `--spi-realm-restapi-extension--login-token--stateless=true` is set. If no key exists or the payload does not fit, `LoginTokenResource` falls back to a legacy token — issuing never fails because of the format. Never log a stateless token id; use `StatelessLoginToken.logId` (the nonce).
+
+**Legacy format (`lt:{uuid}`)** — a UUID reference to a credential kept in Infinispan. Still the default and must keep working, including notes written by plugin versions that predate `max_uses`:
 
 1. `POST /login-token` generates a UUID, stores the credential data in `SingleUseObjectProvider` (Infinispan) under key `lt:data:{uuid}` with the requested TTL, and returns `{ "login_hint": "lt:{uuid}" }`. The caller constructs the full OIDC auth URL — owning PKCE, `redirect_uri`, `state`, `nonce`, etc.
-2. `LoginTokenVerifier` reads `login_hint`, strips the `lt:` prefix, looks up the data map by UUID, validates expiry and client binding, enforces single-use if required, then calls `context.success()`.
+2. `LoginTokenVerifier` reads `login_hint`, strips the `lt:` prefix, looks up the data map by UUID, validates expiry and client binding, enforces the use limit, then calls `context.success()`.
 
-This is the same security model as v1 action tokens: security comes from the UUID's 128-bit entropy plus Infinispan TTL and atomic single-use tracking — not from a cryptographic signature.
+Security of the legacy format comes from the UUID's 128-bit entropy plus the Infinispan TTL; security of the stateless format from the AES-GCM key. Both use the same atomic use tracking.
+
+**Why both exist:** the legacy format holds every issued token in the unbounded, in-memory `actionTokens` cache (two copies per entry) until it expires, so memory grows with tokens issued × lifetime — untenable for campaigns issuing millions of week-long tokens. See README "Token formats: stateless and legacy".
+
+**Use limit (`max_uses`):** `0` = unlimited (default), `1` = single use, up to `StatelessLoginToken.MAX_USES_LIMIT` (10). The legacy request field `reusable` maps to unlimited (`true`) / single use (`false`). `LoginTokenHelper.reserveUse` claims one slot per redemption with `putIfAbsent` — `lt:used:{useId}` for the first, `lt:used:{useId}:{n}` for the n-th — because `putIfAbsent` is the only atomic primitive `SingleUseObjectProvider` offers. `useId` is the UUID of a legacy token and the nonce of a stateless one. The first slot keeps the pre-`max_uses` key so old and new nodes agree during a rolling upgrade. Notes without `maxUses` (old versions) fall back to the `reusable` note.
 
 ### New components
 
@@ -127,10 +135,11 @@ This is the same security model as v1 action tokens: security comes from the UUI
 - `clientId` (optional; absent = unbound "universal" token)
 - `forceSessionLoa` (Integer, optional)
 - `rememberMe`, `reusable`, `setEmailVerified` (Boolean, optional)
+- note key `maxUses` (use limit; supersedes `reusable`)
 
 Also defines the `KEY_*` constants used as keys in the `SingleUseObjectProvider` notes map.
 
-**`LoginTokenResource`** (`resources/LoginTokenResource.java`) — `POST realms/{realm}/login-token`. Requires `manage-users` role. `client_id` is optional: when present, it must reference an existing client and the token is bound to it; when absent, an unbound "universal" token is minted. Stores credential data in `SingleUseObjectProvider` and returns `{ "login_hint": "lt:{uuid}" }`. The caller is responsible for building the full OIDC auth URL with PKCE, `redirect_uri`, `state`, `nonce`, etc. Registered via `LoginTokenResourceProviderFactory` (provider ID: `login-token`).
+**`LoginTokenResource`** (`resources/LoginTokenResource.java`) — `POST realms/{realm}/login-token`. Requires `manage-users` role. `client_id` is optional: when present, it must reference an existing client and the token is bound to it; when absent, an unbound "universal" token is minted. Returns `{ "login_hint": "lt:v2.…" }` for a stateless token or stores the credential in `SingleUseObjectProvider` and returns `{ "login_hint": "lt:{uuid}" }` for a legacy one. Rejects `max_uses` outside 0–10 and non-positive `expiration_seconds` with 400. The caller is responsible for building the full OIDC auth URL with PKCE, `redirect_uri`, `state`, `nonce`, etc. Registered via `LoginTokenResourceProviderFactory` (provider ID: `login-token`).
 
 **`LoginTokenHelper`** (`auth/LoginTokenHelper.java`) — Package-private helper. Holds all shared constants (`RESUME_PREFIX = "lt:"`, `DATA_KEY_PREFIX = "lt:data:"`, `USED_KEY_PREFIX = "lt:used:"`, auth-session note names) and all stateless utility methods shared by both Login Token authenticators:
 
@@ -152,11 +161,11 @@ Also defines the `KEY_*` constants used as keys in the `SingleUseObjectProvider`
 **`LoginTokenVerifier`** (`auth/LoginTokenVerifier.java`, provider ID: `login-token-verifier`, UI display name: **"Login Token (with login_hint)"**) — Browser-flow authenticator. Place as **ALTERNATIVE** before Cookie. When `login_hint` does not start with `lt:`, calls `context.attempted()` and passes through silently.
 
 On a matching `login_hint`, it:
-1. Strips `lt:` prefix to get the tokenId (UUID).
-2. Calls `singleUse.get("lt:data:{tokenId}")` to fetch the notes map.
-3. Validates expiry against stored `expiry` timestamp.
+1. Strips `lt:` prefix to get the tokenId (a UUID, or `v2.…` for a stateless token).
+2. Resolves the notes map: `singleUse.get("lt:data:{tokenId}")` for a legacy token, `StatelessLoginToken.open(...)` for a stateless one.
+3. Validates expiry against the `expiry` timestamp in the notes.
 4. Validates the client binding: a stored `clientId` must match the client that started the flow (always enforced); a token without `clientId` is only accepted when the execution's "Client ID must match" config (`ext-login-token-require-client-binding`) is `false`.
-5. For single-use (default): calls `singleUse.putIfAbsent("lt:used:{tokenId}", ttl)` — returns false if already used → `context.failure(INVALID_CREDENTIALS)`.
+5. For use-limited tokens (`max_uses` ≥ 1): claims a slot via `reserveUse` — no free slot → `context.failure(INVALID_CREDENTIALS)`. Unlimited tokens (the default) store nothing.
 6. Resolves user by stored `userId`.
 7. Optionally sets `user.setEmailVerified(true)` if `sev=true`.
 8. Sets LOA via `AcrStore.setLevelAuthenticated()` — priority: stored `loa` > sibling `Condition – Level of Authentication`.
@@ -167,15 +176,15 @@ On a matching `login_hint`, it:
 
 ### Key design decisions
 
-**UUID in `login_hint`, not JWT.** Keycloak's 255-char limit on OIDC parameters makes a full JWT impractical (HS512 JWTs are typically 600+ chars and would be silently dropped). The UUID approach stays well within the limit and matches the security model of v1 action tokens.
+**Compact token in `login_hint`, not JWT.** Keycloak's 255-char limit on `login_hint` makes a full JWT impractical (HS512 JWTs are typically 600+ chars and would be silently dropped). The legacy UUID reference is 39 characters, a stateless token 75–105.
 
-**Token lifetime is configurable.** The TTL passed to `SingleUseObjectProvider.put()` is exactly `expiration_seconds` (default 300 s). Infinispan automatically expires the entry. The authenticator also cross-checks the stored `expiry` timestamp as a belt-and-suspenders guard.
+**Token lifetime is configurable.** `expiration_seconds` (default 300 s). For a legacy token it is the TTL passed to `SingleUseObjectProvider.put()`, and the stored `expiry` timestamp is cross-checked as a belt-and-suspenders guard. For a stateless token the encrypted `expiry` is the only enforcement. Use markers live for the token's remaining lifetime.
 
 **No action-token endpoint.** The login token URL is a standard OIDC auth URL, not a `login-actions/action-token` URL. Magic Link v1 is completely untouched.
 
 **Caller owns all OIDC parameters.** `redirect_uri`, `scope`, `state`, `nonce`, `code_challenge`, `acr_values`, `prompt=login`, etc. are the caller's responsibility. The endpoint returns only the `login_hint` value; the caller constructs the full OIDC auth URL. This ensures the entity generating the PKCE `code_verifier` is always the same entity that handles the authorization code callback — required for both same-device and cross-device (email) flows.
 
-**Client binding is optional but sticky.** `client_id` on `POST /login-token` is optional. When present, the binding is *always* enforced on redemption — no authenticator configuration can bypass it. When absent, the token is unbound ("universal", e.g. for QR-code login where the redeeming app is not known at generation time) and is only accepted by executions whose "Client ID must match" toggle (`ext-login-token-require-client-binding`, exposed by all three Login Token authenticator factories, default `true`) is set to `false`. Recommended for unbound tokens: short `expiration_seconds`, `reusable=false`. See README "Client binding / universal tokens" for the threat model.
+**Client binding is optional but sticky.** `client_id` on `POST /login-token` is optional. When present, the binding is *always* enforced on redemption — no authenticator configuration can bypass it. When absent, the token is unbound ("universal", e.g. for QR-code login where the redeeming app is not known at generation time) and is only accepted by executions whose "Client ID must match" toggle (`ext-login-token-require-client-binding`, exposed by all three Login Token authenticator factories, default `true`) is set to `false`. Recommended for unbound tokens: short `expiration_seconds`, `max_uses=1`. See README "Client binding / universal tokens" for the threat model.
 
 **`reusable` default is `true`** (reusable), matching the v1 default.
 

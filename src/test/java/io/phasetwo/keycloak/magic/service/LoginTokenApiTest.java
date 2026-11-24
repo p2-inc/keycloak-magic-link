@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.phasetwo.keycloak.magic.Helpers;
+import io.phasetwo.keycloak.magic.LoginTokenTestSupport;
 import io.phasetwo.keycloak.magic.representation.LoginTokenRequest;
 import java.io.IOException;
 import java.net.URI;
@@ -581,5 +582,70 @@ class LoginTokenApiTest extends AbstractMagicLinkTest {
   private static Map<String, Object> decodeJwtPayload(String jwt) throws IOException {
     byte[] decoded = Base64.getUrlDecoder().decode(jwt.split("\\.")[1]);
     return JsonSerialization.readValue(decoded, Map.class);
+  }
+
+  // -------------------------------------------------------------------------
+  // Token formats in the browser flow
+  // -------------------------------------------------------------------------
+
+  /** The legacy token format ({@code lt:{uuid}}) stays the default and keeps working. */
+  @Test
+  void legacyTokenFormat_isIssuedByDefaultAndRedeemsInBrowserFlow() throws Exception {
+    Testcontainers.exposeHostPorts(container.getHttpPort());
+    importRealm("/realms/login-token-api-test-setup.json");
+    LoginTokenTestSupport.addLoginTokenKeyProvider(keycloak, TEST_REALM);
+
+    String loginHint = postLoginTokenRequest(buildRequest(null, null));
+    assertTrue(
+        loginHint.matches(LoginTokenTestSupport.LEGACY_LOGIN_HINT_PATTERN),
+        "default login_hint must use the legacy format: " + loginHint);
+
+    String code = followLinkToCode(buildOidcUrl(loginHint, Map.of("redirect_uri", REDIRECT_URI)));
+    assertNotNull(code, "a legacy token must still yield an authorization code");
+  }
+
+  @Test
+  void statelessToken_redeemsInBrowserFlowWithRequestedLoa() throws Exception {
+    Testcontainers.exposeHostPorts(container.getHttpPort());
+    importRealm("/realms/login-token-api-test-setup.json");
+    LoginTokenTestSupport.addLoginTokenKeyProvider(keycloak, TEST_REALM);
+
+    LoginTokenRequest req = buildRequest(2, null);
+    req.setStateless(true);
+    String loginHint = postLoginTokenRequest(req);
+    assertTrue(
+        loginHint.matches(LoginTokenTestSupport.STATELESS_LOGIN_HINT_PATTERN),
+        "login_hint must use the stateless format: " + loginHint);
+
+    Map<String, Object> claims =
+        redeemAndDecodeIdToken(
+            buildOidcUrl(loginHint, Map.of("redirect_uri", REDIRECT_URI, "scope", "openid")));
+
+    assertEquals(
+        "2",
+        String.valueOf(claims.get("acr")),
+        "acr claim must equal the loa carried inside the stateless token");
+  }
+
+  @Test
+  void statelessTokenSingleUse_cannotBeRedeemedTwiceInBrowserFlow() throws Exception {
+    Testcontainers.exposeHostPorts(container.getHttpPort());
+    importRealm("/realms/login-token-api-test-setup.json");
+    LoginTokenTestSupport.addLoginTokenKeyProvider(keycloak, TEST_REALM);
+
+    LoginTokenRequest req = buildRequest(null, null);
+    req.setStateless(true);
+    req.setMaxUses(1);
+    String link = buildOidcUrl(postLoginTokenRequest(req), Map.of("redirect_uri", REDIRECT_URI));
+
+    assertNotNull(followLinkToCode(link), "first redemption must return an authorization code");
+
+    String secondLocation =
+        given().redirects().follow(false).get(link).then().extract().header("Location");
+    assertTrue(
+        secondLocation == null || secondLocation.contains("error"),
+        "second redemption of a single-use stateless token must be rejected (Location: "
+            + secondLocation
+            + ")");
   }
 }

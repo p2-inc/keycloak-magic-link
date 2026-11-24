@@ -13,6 +13,15 @@ public class LoginTokenResourceProviderFactory implements RealmResourceProviderF
 
   private static final String ID = "login-token";
 
+  /**
+   * SPI option that makes stateless tokens the default for requests that do not set {@code
+   * stateless} themselves: {@code --spi-realm-restapi-extension--login-token--stateless=true}.
+   * Enable it only after every node runs a version that can verify stateless tokens.
+   */
+  static final String CONFIG_STATELESS = "stateless";
+
+  private boolean statelessByDefault;
+
   @Override
   public String getId() {
     return ID;
@@ -20,11 +29,14 @@ public class LoginTokenResourceProviderFactory implements RealmResourceProviderF
 
   @Override
   public LoginTokenResourceProvider create(KeycloakSession session) {
-    return new LoginTokenResourceProvider(session);
+    return new LoginTokenResourceProvider(session, statelessByDefault);
   }
 
   @Override
-  public void init(Config.Scope config) {}
+  public void init(Config.Scope config) {
+    statelessByDefault = config.getBoolean(CONFIG_STATELESS, false);
+    log.infof("[LT] stateless login tokens by default: %s", statelessByDefault);
+  }
 
   @Override
   public void postInit(KeycloakSessionFactory factory) {}

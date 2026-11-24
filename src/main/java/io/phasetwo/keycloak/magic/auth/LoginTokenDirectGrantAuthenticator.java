@@ -51,7 +51,7 @@ public class LoginTokenDirectGrantAuthenticator extends AbstractDirectGrantAuthe
 
   public static final String PROVIDER_ID = "direct-grant-login-token";
 
-  /** Form parameter carrying the login token reference ({@code lt:{uuid}} or the bare uuid). */
+  /** Form parameter carrying the login token, with or without the {@code lt:} prefix. */
   public static final String PARAM_LOGIN_TOKEN = "login_token";
 
   @Override
@@ -119,7 +119,7 @@ public class LoginTokenDirectGrantAuthenticator extends AbstractDirectGrantAuthe
     return "Authenticates a Resource Owner Password Credentials (direct grant) request using a"
         + " Login Token reference passed as the '"
         + PARAM_LOGIN_TOKEN
-        + "' form parameter (lt:{uuid} or bare uuid). No browser interaction.";
+        + "' form parameter (with or without the 'lt:' prefix). No browser interaction.";
   }
 
   @Override

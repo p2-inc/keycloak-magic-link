@@ -27,6 +27,13 @@ public class LoginToken {
   public static final String KEY_LOA = "loa";
   public static final String KEY_REMEMBER_ME = "rememberMe";
   public static final String KEY_REUSABLE = "reusable";
+
+  /**
+   * Number of allowed redemptions; {@code "0"} means unlimited. When absent (tokens stored by an
+   * older version), {@link #KEY_REUSABLE} decides between unlimited and single use.
+   */
+  public static final String KEY_MAX_USES = "maxUses";
+
   public static final String KEY_SEV = "sev";
 
   /**
