@@ -34,7 +34,7 @@ class StatelessLoginTokenTest {
   private static StatelessLoginToken.Payload fullPayload() {
     return new StatelessLoginToken.Payload()
         .setUserId(USER_ID)
-        .setClientId("expressvpn-web-client")
+        .setClientId("example-web-client")
         .setExpiry(1_900_000_000L)
         .setIssuedAt(1_899_395_200L)
         .setLoa(2)
@@ -53,7 +53,7 @@ class StatelessLoginTokenTest {
         StatelessLoginToken.open(List.of(key), REALM_ID, token).orElseThrow();
 
     assertEquals(USER_ID, opened.getUserId());
-    assertEquals("expressvpn-web-client", opened.getClientId());
+    assertEquals("example-web-client", opened.getClientId());
     assertEquals(1_900_000_000L, opened.getExpiry());
     assertEquals(1_899_395_200L, opened.getIssuedAt());
     assertEquals(2, opened.getLoa());
@@ -103,7 +103,7 @@ class StatelessLoginTokenTest {
         StatelessLoginToken.open(List.of(key), REALM_ID, token).orElseThrow().toNotes();
 
     assertEquals(USER_ID, notes.get(LoginToken.KEY_USER_ID));
-    assertEquals("expressvpn-web-client", notes.get(LoginToken.KEY_CLIENT_ID));
+    assertEquals("example-web-client", notes.get(LoginToken.KEY_CLIENT_ID));
     assertEquals("1900000000", notes.get(LoginToken.KEY_EXPIRY));
     assertEquals("2", notes.get(LoginToken.KEY_LOA));
     assertEquals("3", notes.get(LoginToken.KEY_MAX_USES));
