@@ -68,11 +68,11 @@ import org.keycloak.models.UserModel;
 @JBossLog
 public class LoginTokenResource extends AbstractAdminResource {
 
-  private final boolean legacyByDefault;
+  private final boolean legacyFormat;
 
-  public LoginTokenResource(KeycloakSession session, boolean legacyByDefault) {
+  public LoginTokenResource(KeycloakSession session, boolean legacyFormat) {
     super(session);
-    this.legacyByDefault = legacyByDefault;
+    this.legacyFormat = legacyFormat;
   }
 
   @POST
@@ -141,10 +141,9 @@ public class LoginTokenResource extends AbstractAdminResource {
     }
 
     long absoluteExpiry = Time.currentTime() + (long) req.getExpirationSeconds();
-    boolean legacy = req.getLegacy() != null ? req.getLegacy() : legacyByDefault;
 
     String tokenId = null;
-    if (!legacy) {
+    if (!legacyFormat) {
       tokenId =
           sealStateless(
               new StatelessLoginToken.Payload()
@@ -258,7 +257,7 @@ public class LoginTokenResource extends AbstractAdminResource {
   }
 
   /**
-   * Reports that a legacy token was issued in place of a requested stateless one. The request
+   * Reports that a legacy token was issued in place of a stateless one. The request
    * itself succeeds, so the log is the only place where this shows — and it matters: every such
    * token is stored in Infinispan again. Logged as an error, at most once per {@link
    * #FALLBACK_LOG_INTERVAL_MILLIS} per node so that a campaign cannot flood the log; the number of

@@ -20,6 +20,14 @@ public final class LoginTokenTestSupport {
   /** {@code login_hint} of a stateless token: {@code lt:v2.} followed by base64url. */
   public static final String STATELESS_LOGIN_HINT_PATTERN = "lt:v2\\.[A-Za-z0-9_-]+";
 
+  /**
+   * Environment variable form of the SPI option {@code
+   * --spi-realm-restapi-extension--login-token--legacy}. Setting it to {@code "false"} makes the
+   * server issue stateless tokens; there is no way to choose the format per request.
+   */
+  public static final String LEGACY_OPTION_ENV =
+      "KC_SPI_REALM_RESTAPI_EXTENSION__LOGIN_TOKEN__LEGACY";
+
   private LoginTokenTestSupport() {}
 
   /**

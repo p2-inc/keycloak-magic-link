@@ -78,15 +78,6 @@ public class LoginTokenRequest {
   private Boolean reusable = true;
 
   /**
-   * Selects the token format. {@code false} issues a stateless (encrypted, self-contained) token;
-   * {@code true} issues a token in the legacy format, whose credential is stored server-side. When
-   * omitted, the server default applies (SPI option {@code legacy} of the {@code login-token}
-   * realm resource, default {@code true}).
-   */
-  @JsonProperty("legacy")
-  private Boolean legacy;
-
-  /**
    * When {@code true}, {@code user.setEmailVerified(true)} is called after the token is
    * successfully validated in the browser flow. Defaults to {@code false}.
    */

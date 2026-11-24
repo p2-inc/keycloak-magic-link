@@ -98,13 +98,13 @@ In the default configuration that store is the embedded Infinispan `actionTokens
 | Revoke all tokens of one user | Disable the user | Immediate, both formats. |
 | Invalidate every outstanding stateless token of a realm | Delete the `login-token` key provider | Immediate. The next stateless mint creates a new key. |
 | Stop issuing stateless tokens in a realm | Disable the `login-token` key provider | Outstanding stateless tokens stop working; every request gets a legacy token and an error is logged. |
-| Stop issuing stateless tokens everywhere | Send `"legacy": true`, or remove the server default | Tokens already issued keep working. |
+| Stop issuing stateless tokens everywhere | Remove the server option `legacy=false` | Takes effect as nodes restart. Tokens already issued keep working: the option only selects what is issued, both formats are always accepted. |
 | Rotate the key | Add a second `login-token` provider with a higher priority (below 100); delete the old one after the longest outstanding token lifetime | No interruption. |
 
 **Rules that the design depends on**
 
 1. **Never share a `login-token` key provider between environments.** Each environment must generate its own key. A database clone carries the key, and a full realm export may as well; a token minted in the source environment is then valid in the copy and vice versa. If an environment is ever created from a copy of another, delete the `login-token` provider in the copy.
-2. **Roll out verification before issuance.** Deploy the plugin version that understands stateless tokens and `max_uses` to every node before any caller sends `"legacy": false` or `max_uses`. An older node cannot verify a stateless token, ignores `max_uses` (issuing an unlimited token instead), and writes a stateless token it cannot resolve to its log in full.
+2. **Roll out verification before issuance.** Deploy the plugin version that understands stateless tokens and `max_uses` to every node before the server option `legacy=false` is set or any caller sends `max_uses` — two separate rollouts, never one. An older node cannot verify a stateless token, ignores `max_uses` (issuing an unlimited token instead), and writes a stateless token it cannot resolve to its log in full.
 3. **Alert on the fallback error.** `[LT] stateless login token could not be issued …` means tokens are being stored in Infinispan again. It is logged as an error at most once per minute per node.
 4. **Treat URLs as sensitive.** `login_hint` is part of the query string and appears in load-balancer, proxy and access logs outside this plugin's control. Keep lifetimes as short as the use case allows and bind tokens to a client.
 

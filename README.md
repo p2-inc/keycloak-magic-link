@@ -397,19 +397,30 @@ Stateless tokens are encrypted with a dedicated key provider of the realm named 
 
 You may also add the provider by hand before issuing the first token: choose **aes-generated**, set **Name** to `login-token` (the plugin finds the key by this name) and **Priority** to a value **below 100**. A realm's default `aes-generated` provider has priority 100; as long as it exists and is active, Keycloak keeps using that one for its own purposes and never picks the Login Token key.
 
-Choose who issues stateless tokens:
+#### Choosing the format
 
-- **Per request:** send `"legacy": false` in the `POST /login-token` body.
-- **Server-wide default:** start Keycloak with `--spi-realm-restapi-extension--login-token--legacy=false`. A request can still ask for the legacy format with `"legacy": true`.
+The format of newly issued tokens is a **server setting**: the SPI option `legacy` of the `login-token` realm resource.
+
+| Setting | Tokens issued |
+| --- | --- |
+| not set, or `--spi-realm-restapi-extension--login-token--legacy=true` | Legacy format (the default) |
+| `--spi-realm-restapi-extension--login-token--legacy=false` | Stateless format |
+
+As an environment variable the option is `KC_SPI_REALM_RESTAPI_EXTENSION__LOGIN_TOKEN__LEGACY`.
+
+Callers of `POST /login-token` cannot choose the format; the request body has no field for it and callers do not need to change anything when the server is switched. The setting only decides what is **issued**. On redemption both formats are always accepted, whatever the setting, so tokens issued before a switch — in either direction — keep working until they expire.
 
 A stateless token is replaced by a **legacy token** — the request never fails because of the format — when it cannot be issued: the `login-token` provider exists but is disabled, or the payload does not fit into 255 characters, for example with a very long federated user id. Every such fallback is reported as an **error** in the server log (`[LT] stateless login token could not be issued …`), at most once per minute per node, with the number of occurrences since the last report. Alert on that message: while it appears, tokens are being stored in Infinispan again.
 
 > **Rolling out to an existing cluster.** A node running an older version of this plugin cannot
 > verify stateless tokens and ignores `max_uses`: it would issue an *unlimited* token for a
-> request that only sends `max_uses`. First deploy the new version to every node, *then* start
-> sending `"legacy": false` and `max_uses`. Callers that need single use during the rollout keep
-> sending `"reusable": false` (alone or together with `max_uses: 1`). Going back to
-> `legacy: true` is the way back: tokens already issued in either format keep working.
+> request that only sends `max_uses`. Do it in two deployments: first roll out the new version
+> to every node with the option unchanged, *then* set `legacy=false` in a second rollout and let
+> callers start sending `max_uses`. Setting the option in the same rollout as the new version
+> would let upgraded nodes issue stateless tokens that the remaining old nodes reject. Callers
+> that need single use during the rollout keep sending `"reusable": false` (alone or together
+> with `max_uses: 1`). Removing the option is the way back: tokens already issued in either
+> format keep working.
 
 **Key rotation.** Add a second `aes-generated` provider with the same name `login-token` and a higher priority (still below 100). New tokens are encrypted with it. Leave the old provider enabled for as long as tokens issued under it may still be valid, then delete it. Rotation is a matter of your key-management policy only; the number of tokens issued never forces it.
 
@@ -427,7 +438,7 @@ A stateless token is replaced by a **legacy token** — the request never fails 
 > **Known limitation (open issue).** This is accepted for now; see open issue O1 in
 > [SECURITY-DESIGN.md](SECURITY-DESIGN.md#9-open-issues) for the options considered.
 
-A use-limited stateless token is therefore single use *as long as the cluster keeps running*. Rolling restarts and deployments, where nodes are replaced one at a time, are not affected. Where a hard guarantee is required, keep `expiration_seconds` short for use-limited stateless tokens or issue them in the legacy format (`"legacy": true`).
+A use-limited stateless token is therefore single use *as long as the cluster keeps running*. Rolling restarts and deployments, where nodes are replaced one at a time, are not affected. Where a hard guarantee is required, keep `expiration_seconds` short for use-limited stateless tokens or keep the server on the legacy format.
 
 #### The legacy token format
 
@@ -458,7 +469,6 @@ Requires `manage-users` role (same as `/magic-link`).
 | `force_create` | N | false | Create the user if they do not exist (email only). |
 | `max_uses` | N | | How often the token may be redeemed within its validity window: `0` = unlimited, `1` = single use, up to `10`. Values outside `0`–`10` are rejected with `400`. When omitted, `reusable` decides; with neither field sent the token is unlimited. A token whose uses are exhausted is treated like an expired one. |
 | `reusable` | N | true | Legacy form of `max_uses`, still accepted: `true` = unlimited, `false` (or an explicit `null`) = single use. Ignored when `max_uses` is set. |
-| `legacy` | N | server default (`true`) | Selects the [token format](#token-formats-stateless-and-legacy): `false` issues a stateless token, `true` one in the legacy format. When omitted, the server default applies. |
 | `set_email_verified` | N | false | When `true`, marks the user's email as verified after the token is successfully validated. |
 | `confirm_user_switch` | N | false | Controls behaviour when a different user is already logged in on the device. When `false` (default), the existing session is silently logged out and the login token is processed automatically. When `true`, a confirmation screen is shown asking the user to approve the logout before continuing. |
 
@@ -530,7 +540,7 @@ curl --request POST https://keycloak.host/realms/test/login-token \
 }
 ```
 
-With `"legacy": false` the response has the same shape and the `login_hint` starts with `lt:v2.`. Pass it on verbatim in both cases; callers do not need to tell the formats apart.
+On a server set to the stateless format the response has the same shape and the `login_hint` starts with `lt:v2.`. Pass it on verbatim in both cases; callers do not need to tell the formats apart.
 
 The caller then constructs the OIDC authorization URL using the returned `login_hint` and opens it in the browser (or sends it to the user by email/SMS):
 
