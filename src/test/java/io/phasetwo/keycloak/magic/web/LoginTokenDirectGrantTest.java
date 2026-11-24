@@ -5,6 +5,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.emptyOrNullString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.hamcrest.Matchers.not;
@@ -15,9 +16,16 @@ import io.phasetwo.keycloak.magic.auth.token.StatelessLoginToken;
 import io.phasetwo.keycloak.magic.representation.LoginTokenRequest;
 import io.restassured.path.json.JsonPath;
 import io.restassured.response.Response;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import lombok.extern.jbosslog.JBossLog;
 import org.junit.jupiter.api.Test;
+import org.keycloak.representations.idm.ComponentRepresentation;
 
 /**
  * Integration test for {@link io.phasetwo.keycloak.magic.auth.LoginTokenDirectGrantAuthenticator}.
@@ -68,7 +76,7 @@ public class LoginTokenDirectGrantTest extends AbstractMagicLinkTest {
 
   private static LoginTokenRequest statelessRequest() {
     LoginTokenRequest request = request();
-    request.setStateless(true);
+    request.setLegacy(false);
     return request;
   }
 
@@ -278,11 +286,59 @@ public class LoginTokenDirectGrantTest extends AbstractMagicLinkTest {
   }
 
   @Test
+  public void legacyFormatIsIssuedWhenRequestedExplicitly() throws Exception {
+    importRealm("/realms/direct-grant-login-token-test-setup.json");
+    LoginTokenTestSupport.addLoginTokenKeyProvider(keycloak, TEST_REALM);
+
+    LoginTokenRequest request = request();
+    request.setLegacy(true);
+    String loginHint = mint(request);
+
+    assertThat(loginHint, matchesPattern(LoginTokenTestSupport.LEGACY_LOGIN_HINT_PATTERN));
+    redeem(loginHint).then().statusCode(200).body("access_token", not(emptyOrNullString()));
+  }
+
+  @Test
   public void legacyTokenWithoutUseLimitStaysReusable() throws Exception {
     importRealm("/realms/direct-grant-login-token-test-setup.json");
 
-    // Neither max_uses nor reusable set: unlimited, as before max_uses existed.
-    String loginHint = mint(request());
+    // The body an existing caller sends: no max_uses, no reusable. Unlimited, as it always was.
+    String loginHint = mintRaw("{\"email\":\"%s\",\"client_id\":\"%s\"}");
+
+    assertThat(loginHint, matchesPattern(LoginTokenTestSupport.LEGACY_LOGIN_HINT_PATTERN));
+    for (int i = 0; i < 3; i++) {
+      redeem(loginHint).then().statusCode(200);
+    }
+  }
+
+  @Test
+  public void reusableFalseStaysSingleUse() throws Exception {
+    importRealm("/realms/direct-grant-login-token-test-setup.json");
+
+    String loginHint = mintRaw("{\"email\":\"%s\",\"client_id\":\"%s\",\"reusable\":false}");
+
+    redeem(loginHint).then().statusCode(200);
+    redeem(loginHint).then().statusCode(401).body("error", equalTo("invalid_grant"));
+  }
+
+  @Test
+  public void explicitNullReusableStaysSingleUse() throws Exception {
+    importRealm("/realms/direct-grant-login-token-test-setup.json");
+
+    // Callers that serialize an unset optional as null got a single-use token before max_uses
+    // existed; they must not silently get an unlimited one now.
+    String loginHint = mintRaw("{\"email\":\"%s\",\"client_id\":\"%s\",\"reusable\":null}");
+
+    redeem(loginHint).then().statusCode(200);
+    redeem(loginHint).then().statusCode(401).body("error", equalTo("invalid_grant"));
+  }
+
+  @Test
+  public void maxUsesTakesPrecedenceOverReusable() throws Exception {
+    importRealm("/realms/direct-grant-login-token-test-setup.json");
+
+    String loginHint =
+        mintRaw("{\"email\":\"%s\",\"client_id\":\"%s\",\"reusable\":false,\"max_uses\":0}");
 
     for (int i = 0; i < 3; i++) {
       redeem(loginHint).then().statusCode(200);
@@ -304,15 +360,17 @@ public class LoginTokenDirectGrantTest extends AbstractMagicLinkTest {
   }
 
   @Test
-  public void legacyFormatIsTheFallbackWithoutKeyProvider() throws Exception {
+  public void legacyFormatIsTheFallbackWhenKeyProviderIsDisabled() throws Exception {
     importRealm("/realms/direct-grant-login-token-test-setup.json");
+    // A disabled provider is an administrator's decision: it is neither used nor replaced, and
+    // issuing does not fail — the caller gets a working legacy token instead.
+    LoginTokenTestSupport.addDisabledLoginTokenKeyProvider(keycloak, TEST_REALM);
 
-    // A stateless token is requested, but the realm has no "login-token" key provider: issuing
-    // must not fail, the caller gets a working legacy token instead.
     String loginHint = mint(statelessRequest());
 
     assertThat(loginHint, matchesPattern(LoginTokenTestSupport.LEGACY_LOGIN_HINT_PATTERN));
     redeem(loginHint).then().statusCode(200).body("access_token", not(emptyOrNullString()));
+    assertThat(LoginTokenTestSupport.loginTokenKeyProviders(keycloak, TEST_REALM), hasSize(1));
   }
 
   // ---------------------------------------------------------------------------
@@ -340,6 +398,84 @@ public class LoginTokenDirectGrantTest extends AbstractMagicLinkTest {
     JsonPath claims = decodeJwtPayload(accessToken);
     assertThat(claims.getList("amr", String.class), hasItem("login_token"));
     assertThat(claims.getString("acr"), equalTo("1"));
+  }
+
+  @Test
+  public void keyProviderIsCreatedOnFirstStatelessToken() throws Exception {
+    importRealm("/realms/direct-grant-login-token-test-setup.json");
+    assertThat(LoginTokenTestSupport.loginTokenKeyProviders(keycloak, TEST_REALM), hasSize(0));
+
+    String first = mint(statelessRequest());
+    String second = mint(statelessRequest());
+
+    assertThat(first, matchesPattern(LoginTokenTestSupport.STATELESS_LOGIN_HINT_PATTERN));
+    assertThat(second, matchesPattern(LoginTokenTestSupport.STATELESS_LOGIN_HINT_PATTERN));
+    List<ComponentRepresentation> providers =
+        LoginTokenTestSupport.loginTokenKeyProviders(keycloak, TEST_REALM);
+    assertThat(providers, hasSize(1));
+    assertThat(providers.get(0).getProviderId(), equalTo("aes-generated"));
+    // Below Keycloak's own key providers (100), so Keycloak never picks it for itself.
+    assertThat(providers.get(0).getConfig().getFirst("priority"), equalTo("10"));
+
+    redeem(first).then().statusCode(200);
+    redeem(second).then().statusCode(200);
+  }
+
+  @Test
+  public void legacyTokensNeverCreateAKeyProvider() throws Exception {
+    importRealm("/realms/direct-grant-login-token-test-setup.json");
+
+    mint(request());
+
+    assertThat(LoginTokenTestSupport.loginTokenKeyProviders(keycloak, TEST_REALM), hasSize(0));
+  }
+
+  @Test
+  public void concurrentFirstTokensShareOneKeyProvider() throws Exception {
+    importRealm("/realms/direct-grant-login-token-test-setup.json");
+    String accessToken = keycloak.tokenManager().getAccessTokenString();
+    String body = Helpers.toJsonString(statelessRequest());
+
+    // Many requests race to create the provider. However the race ends, exactly one provider may
+    // exist afterwards and every issued token — whichever format it got — must be redeemable.
+    int requests = 12;
+    ExecutorService pool = Executors.newFixedThreadPool(requests);
+    CountDownLatch start = new CountDownLatch(1);
+    List<Future<String>> results = new ArrayList<>();
+    for (int i = 0; i < requests; i++) {
+      results.add(
+          pool.submit(
+              () -> {
+                start.await();
+                return given()
+                    .baseUri(getAuthUrl())
+                    .auth()
+                    .oauth2(accessToken)
+                    .contentType("application/json")
+                    .body(body)
+                    .post(LOGIN_TOKEN_PATH)
+                    .then()
+                    .statusCode(200)
+                    .extract()
+                    .jsonPath()
+                    .getString("login_hint");
+              }));
+    }
+    start.countDown();
+    List<String> loginHints = new ArrayList<>();
+    for (Future<String> result : results) {
+      loginHints.add(result.get());
+    }
+    pool.shutdown();
+
+    assertThat(LoginTokenTestSupport.loginTokenKeyProviders(keycloak, TEST_REALM), hasSize(1));
+    for (String loginHint : loginHints) {
+      redeem(loginHint).then().statusCode(200);
+    }
+    // Once the provider exists, tokens are stateless.
+    assertThat(
+        mint(statelessRequest()),
+        matchesPattern(LoginTokenTestSupport.STATELESS_LOGIN_HINT_PATTERN));
   }
 
   @Test
@@ -469,9 +605,15 @@ public class LoginTokenDirectGrantTest extends AbstractMagicLinkTest {
     String loginHint = mint(statelessRequest());
     redeem(loginHint).then().statusCode(200);
 
-    // Removing the key provider is the kill switch for every outstanding stateless token.
+    // Removing the key provider invalidates every outstanding stateless token.
     keycloak.realm(TEST_REALM).components().component(keyProviderId).remove();
 
+    redeem(loginHint).then().statusCode(401).body("error", equalTo("invalid_grant"));
+
+    // The next stateless token gets a fresh provider with a new key; the old token stays dead.
+    String afterRemoval = mint(statelessRequest());
+    assertThat(afterRemoval, matchesPattern(LoginTokenTestSupport.STATELESS_LOGIN_HINT_PATTERN));
+    redeem(afterRemoval).then().statusCode(200);
     redeem(loginHint).then().statusCode(401).body("error", equalTo("invalid_grant"));
   }
 
@@ -513,6 +655,25 @@ public class LoginTokenDirectGrantTest extends AbstractMagicLinkTest {
     request.setExpirationSeconds(0);
 
     postLoginToken(request).then().statusCode(400);
+  }
+
+  /**
+   * Posts a literal JSON body, so that what is absent, null or false on the wire is exactly what
+   * the test says. {@code %s} placeholders are filled with the test email and client id.
+   */
+  private String mintRaw(String jsonTemplate) {
+    return given()
+        .baseUri(getAuthUrl())
+        .auth()
+        .oauth2(keycloak.tokenManager().getAccessTokenString())
+        .contentType("application/json")
+        .body(String.format(jsonTemplate, TEST_EMAIL, TEST_CLIENT))
+        .post(LOGIN_TOKEN_PATH)
+        .then()
+        .statusCode(200)
+        .extract()
+        .jsonPath()
+        .getString("login_hint");
   }
 
   private Response postLoginToken(LoginTokenRequest request) throws Exception {

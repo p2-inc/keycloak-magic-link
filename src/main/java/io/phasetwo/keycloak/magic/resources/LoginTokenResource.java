@@ -7,6 +7,7 @@ import static io.phasetwo.keycloak.magic.auth.token.LoginToken.KEY_EXPIRY;
 import static io.phasetwo.keycloak.magic.auth.token.LoginToken.KEY_LOA;
 import static io.phasetwo.keycloak.magic.auth.token.LoginToken.KEY_MAX_USES;
 import static io.phasetwo.keycloak.magic.auth.token.LoginToken.KEY_REMEMBER_ME;
+import static io.phasetwo.keycloak.magic.auth.token.LoginToken.KEY_REUSABLE;
 import static io.phasetwo.keycloak.magic.auth.token.LoginToken.KEY_SEV;
 import static io.phasetwo.keycloak.magic.auth.token.LoginToken.KEY_USER_ID;
 
@@ -27,6 +28,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import javax.crypto.SecretKey;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.Config;
@@ -66,11 +68,11 @@ import org.keycloak.models.UserModel;
 @JBossLog
 public class LoginTokenResource extends AbstractAdminResource {
 
-  private final boolean statelessByDefault;
+  private final boolean legacyByDefault;
 
-  public LoginTokenResource(KeycloakSession session, boolean statelessByDefault) {
+  public LoginTokenResource(KeycloakSession session, boolean legacyByDefault) {
     super(session);
-    this.statelessByDefault = statelessByDefault;
+    this.legacyByDefault = legacyByDefault;
   }
 
   @POST
@@ -139,16 +141,17 @@ public class LoginTokenResource extends AbstractAdminResource {
     }
 
     long absoluteExpiry = Time.currentTime() + (long) req.getExpirationSeconds();
-    boolean stateless = req.getStateless() != null ? req.getStateless() : statelessByDefault;
+    boolean legacy = req.getLegacy() != null ? req.getLegacy() : legacyByDefault;
 
     String tokenId = null;
-    if (stateless) {
+    if (!legacy) {
       tokenId =
           sealStateless(
               new StatelessLoginToken.Payload()
                   .setUserId(user.getId())
                   .setClientId(clientBound ? req.getClientId() : null)
                   .setExpiry(absoluteExpiry)
+                  .setIssuedAt(Time.currentTime())
                   .setLoa(req.getForceSessionLoa())
                   .setMaxUses(maxUses)
                   .setRememberMe(Boolean.TRUE.equals(req.getRememberMe()))
@@ -167,6 +170,12 @@ public class LoginTokenResource extends AbstractAdminResource {
       }
       notes.put(KEY_EXPIRY, String.valueOf(absoluteExpiry));
       notes.put(KEY_MAX_USES, String.valueOf(maxUses));
+      if (maxUses == 0) {
+        // Versions that predate max_uses only know this flag and treat its absence as single use.
+        // Keep writing it so an unlimited token stays unlimited on such a node during a rolling
+        // upgrade or after a rollback.
+        notes.put(KEY_REUSABLE, "true");
+      }
       if (req.getForceSessionLoa() != null) {
         notes.put(KEY_LOA, String.valueOf(req.getForceSessionLoa()));
       }
@@ -186,13 +195,13 @@ public class LoginTokenResource extends AbstractAdminResource {
     }
 
     log.debugf(
-        "[LT] token issued for user=%s client=%s expiry=%d loa=%s maxUses=%d stateless=%s",
+        "[LT] token issued for user=%s client=%s expiry=%d loa=%s maxUses=%d legacy=%s",
         user.getId(),
         req.getClientId(),
         absoluteExpiry,
         req.getForceSessionLoa(),
         maxUses,
-        StatelessLoginToken.isStateless(tokenId));
+        !StatelessLoginToken.isStateless(tokenId));
 
     LoginTokenResponse resp = new LoginTokenResponse();
     resp.setLoginHint(LoginTokenVerifier.RESUME_PREFIX + tokenId);
@@ -212,41 +221,86 @@ public class LoginTokenResource extends AbstractAdminResource {
       }
       return maxUses;
     }
-    return Boolean.FALSE.equals(req.getReusable()) ? 1 : 0;
+    // As before max_uses existed: an omitted flag defaults to true (unlimited), and only an
+    // explicit true is unlimited — false and an explicit null both mean single use.
+    return Boolean.TRUE.equals(req.getReusable()) ? 0 : 1;
   }
 
   /**
    * Encrypts the payload into a stateless token id.
    *
-   * @return the token id, or {@code null} when a stateless token cannot be issued — no {@value
-   *     LoginTokenKeys#KEY_PROVIDER_NAME} key provider in the realm, or a payload that does not fit
+   * @return the token id, or {@code null} when a stateless token cannot be issued — the realm's
+   *     {@value LoginTokenKeys#KEY_PROVIDER_NAME} key provider is disabled, or a payload that does not fit
    *     the compact format or Keycloak's {@code login_hint} length limit. The caller then falls back
-   *     to a legacy token, so issuing never fails because of the token kind.
+   *     to a legacy token, so issuing never fails because of the token kind; the fallback is
+   *     reported as an error in the log.
    */
   private String sealStateless(StatelessLoginToken.Payload payload) {
-    Optional<SecretKey> key = LoginTokenKeys.encryptionKey(session, realm);
+    Optional<SecretKey> key = LoginTokenKeys.ensureEncryptionKey(session, realm);
     if (key.isEmpty()) {
-      log.warnf(
-          "[LT] stateless token requested but realm '%s' has no active AES key provider named"
-              + " '%s' — falling back to a legacy token",
-          realm.getName(), LoginTokenKeys.KEY_PROVIDER_NAME);
+      logFallback(
+          "key provider '" + LoginTokenKeys.KEY_PROVIDER_NAME + "' offers no active AES key");
       return null;
     }
     String tokenId;
     try {
       tokenId = StatelessLoginToken.seal(key.get(), realm.getId(), payload);
     } catch (IllegalArgumentException e) {
-      log.debugf(
-          "[LT] payload does not fit a stateless token (%s) — issuing a legacy token",
-          e.getMessage());
+      logFallback("payload does not fit the token format: " + e.getMessage());
       return null;
     }
     if (LoginTokenVerifier.RESUME_PREFIX.length() + tokenId.length()
         > StatelessLoginToken.MAX_LOGIN_HINT_LENGTH) {
-      log.debugf(
-          "[LT] stateless token exceeds the login_hint length limit — issuing a legacy token");
+      logFallback("token exceeds the login_hint length limit");
       return null;
     }
     return tokenId;
+  }
+
+  /**
+   * Reports that a legacy token was issued in place of a requested stateless one. The request
+   * itself succeeds, so the log is the only place where this shows — and it matters: every such
+   * token is stored in Infinispan again. Logged as an error, at most once per {@link
+   * #FALLBACK_LOG_INTERVAL_MILLIS} per node so that a campaign cannot flood the log; the number of
+   * occurrences in between is included in the next report.
+   */
+  private void logFallback(String reason) {
+    if (!FALLBACK_LOG.shouldLog(System.currentTimeMillis())) {
+      return;
+    }
+    log.errorf(
+        "[LT] stateless login token could not be issued in realm '%s' (%s) — issued a legacy"
+            + " token instead, which is stored in Infinispan. Unreported occurrences since the"
+            + " last report: %d",
+        realm.getName(), reason, FALLBACK_LOG.takeSuppressed());
+  }
+
+  static final long FALLBACK_LOG_INTERVAL_MILLIS = 60_000L;
+
+  private static final RateLimitedLog FALLBACK_LOG =
+      new RateLimitedLog(FALLBACK_LOG_INTERVAL_MILLIS);
+
+  /** Lets one caller per interval through and counts the rest. Thread-safe. */
+  static final class RateLimitedLog {
+    private final long intervalMillis;
+    private final AtomicLong nextAt = new AtomicLong(Long.MIN_VALUE);
+    private final AtomicLong suppressed = new AtomicLong();
+
+    RateLimitedLog(long intervalMillis) {
+      this.intervalMillis = intervalMillis;
+    }
+
+    boolean shouldLog(long nowMillis) {
+      long next = nextAt.get();
+      if (nowMillis >= next && nextAt.compareAndSet(next, nowMillis + intervalMillis)) {
+        return true;
+      }
+      suppressed.incrementAndGet();
+      return false;
+    }
+
+    long takeSuppressed() {
+      return suppressed.getAndSet(0);
+    }
   }
 }

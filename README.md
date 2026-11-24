@@ -351,7 +351,7 @@ Caller constructs the OIDC authorization URL and opens it in the browser:
 > **Why not a signed JWT?**  Keycloak silently ignores a `login_hint` longer than 255
 > characters. A typical HS512/RS256 JWT is 500–700 characters and would be dropped, causing
 > authentication to fail silently. Both token formats stay well below the limit: the legacy
-> reference (`lt:{uuid}`) is 39 characters, a stateless token is typically 75–105.
+> reference (`lt:{uuid}`) is 39 characters, a stateless token is typically 85–115.
 
 ### Token formats: stateless and legacy
 
@@ -363,50 +363,69 @@ A Login Token exists in two formats. Both are redeemed by the same authenticator
 | Where the credential lives | In Keycloak's single-use object store (Infinispan), for the whole lifetime of the token | Inside the token, encrypted |
 | Stored when the token is created | One entry per token | Nothing |
 | Stored when the token is redeemed | One marker per use, only for use-limited tokens | One marker per use, only for use-limited tokens |
-| Survives a full cluster restart | No | Yes |
+| Survives a full cluster restart | No | Yes — but the use counts of use-limited tokens do not, see [below](#use-limits-and-cluster-restarts) |
 | What the holder of the link can read | Nothing (opaque reference) | Nothing (encrypted) |
-| Requires | Nothing | An AES key provider named `login-token` in the realm |
+| Requires | Nothing | An AES key provider named `login-token` in the realm (created automatically) |
 
 #### Why the stateless format exists
 
-The legacy format keeps every issued token in Infinispan until it expires. That store is in-memory, replicated across the Keycloak nodes and has no size limit, so the memory it needs grows with *tokens issued per day × lifetime*. For interactive use — a handful of short-lived tokens — this is irrelevant. For campaigns it is not: 3.4 million tokens a day with a 7-day lifetime means about 24 million live entries, each held twice in the cluster. That is tens of gigabytes of heap for tokens most recipients never use, it has to be moved between nodes on every deployment or scaling step, and all of it is lost if the cluster restarts.
+The legacy format keeps every issued token in Infinispan until it expires. That store is in-memory, distributed across the Keycloak nodes with two copies of every entry, and has no size limit, so the memory it needs grows with *tokens issued per day × lifetime*. For interactive use — a handful of short-lived tokens — this is irrelevant. For campaigns it is not: 3.4 million tokens a day with a 7-day lifetime means about 24 million live entries, each held twice in the cluster. That is tens of gigabytes of heap for tokens most recipients never use, it has to be moved between nodes on every deployment or scaling step, and all of it is lost if the cluster restarts.
 
 A stateless token carries its own content, so issuing one stores nothing. Keycloak only writes when a *use-limited* token is actually redeemed, and then just a small marker. Memory use follows the number of redemptions rather than the number of tokens sent.
 
 #### How a stateless token is built
 
 ```
-lt:v2.<base64url( nonce[12] ‖ ciphertext ‖ tag[16] )>
+lt:v2.<base64url( salt[16] ‖ ciphertext ‖ tag[16] )>
 ```
 
 - The payload — user id, optional client id, expiry, optional LOA, use limit and the `remember_me` / `set_email_verified` / `confirm_user_switch` flags — is packed into a compact binary form and encrypted with **AES-GCM**. GCM is authenticated encryption: the token cannot be read *and* cannot be modified without the key. Changing a single bit makes it invalid.
 - The realm id is bound to the token as additional authenticated data. A token is only accepted by the realm that issued it.
-- The random nonce doubles as the token's identity for use counting (`lt:used:{nonce}`), so no separate id is needed.
+- **Every token is encrypted under a key of its own.** The realm key is never used for encryption directly: for each token a fresh 16-byte random salt is drawn, and `HMAC-SHA512(realm key, salt)` yields the AES key and nonce for that token alone. AES-GCM limits how many messages a single key may encrypt (about 4 billion with random nonces); with one key per token that limit is never approached, so the realm key does not need to be rotated because of the number of tokens issued.
+- The salt doubles as the token's identity for use counting (`lt:used:{salt}`), so no separate id is needed.
+- The payload also carries the time the token was issued.
 
 Verification replaces the Infinispan lookup of the legacy format (steps 2 and 3 above) with *decrypt and check the expiry inside the token*. Everything after that — client binding, user lookup, user-switch handling, use limit, LOA — is shared.
 
-#### Setting up the key
+#### The encryption key
 
-Stateless tokens are encrypted with a dedicated key provider of the realm, so the key is stored in the database, identical on every node, and can be rotated without touching anything else Keycloak encrypts.
+Stateless tokens are encrypted with a dedicated key provider of the realm named `login-token`, so the key is stored in the database, identical on every node, and can be rotated without touching anything else Keycloak encrypts.
 
-1. In the admin console open **Realm settings → Keys → Add providers** and choose **aes-generated**.
-2. Set **Name** to `login-token` (the plugin finds the key by this name), **AES key size** to `32`, and **Priority** to a value **below 100**, e.g. `10`. Keycloak's own key providers use priority 100; staying below it guarantees Keycloak never picks this key for its own purposes.
+**There is nothing to set up.** The first time a stateless token is issued in a realm, the plugin creates the provider itself (`aes-generated`, AES key size 32, priority 10). You can see it under **Realm settings → Keys → Providers**. Concurrent first requests, also across nodes, end up with a single provider.
 
-Then choose who issues stateless tokens:
+You may also add the provider by hand before issuing the first token: choose **aes-generated**, set **Name** to `login-token` (the plugin finds the key by this name) and **Priority** to a value **below 100**. A realm's default `aes-generated` provider has priority 100; as long as it exists and is active, Keycloak keeps using that one for its own purposes and never picks the Login Token key.
 
-- **Per request:** send `"stateless": true` in the `POST /login-token` body.
-- **Server-wide default:** start Keycloak with `--spi-realm-restapi-extension--login-token--stateless=true`. A request can still opt out with `"stateless": false`.
+Choose who issues stateless tokens:
 
-If a stateless token is requested but cannot be issued — the realm has no active `login-token` key, or the payload does not fit into 255 characters (for example a very long federated user id) — the endpoint logs a warning and returns a **legacy token** instead. Issuing never fails because of the format.
+- **Per request:** send `"legacy": false` in the `POST /login-token` body.
+- **Server-wide default:** start Keycloak with `--spi-realm-restapi-extension--login-token--legacy=false`. A request can still ask for the legacy format with `"legacy": true`.
+
+A stateless token is replaced by a **legacy token** — the request never fails because of the format — when it cannot be issued: the `login-token` provider exists but is disabled, or the payload does not fit into 255 characters, for example with a very long federated user id. Every such fallback is reported as an **error** in the server log (`[LT] stateless login token could not be issued …`), at most once per minute per node, with the number of occurrences since the last report. Alert on that message: while it appears, tokens are being stored in Infinispan again.
 
 > **Rolling out to an existing cluster.** A node running an older version of this plugin cannot
-> verify stateless tokens. First deploy the new version to every node, *then* start issuing
-> stateless tokens (per request or via the server default). Turning the option off again is the
-> way back: tokens already issued in either format keep working.
+> verify stateless tokens and ignores `max_uses`: it would issue an *unlimited* token for a
+> request that only sends `max_uses`. First deploy the new version to every node, *then* start
+> sending `"legacy": false` and `max_uses`. Callers that need single use during the rollout keep
+> sending `"reusable": false` (alone or together with `max_uses: 1`). Going back to
+> `legacy: true` is the way back: tokens already issued in either format keep working.
 
-**Key rotation.** Add a second `aes-generated` provider with the same name `login-token` and a higher priority (still below 100). New tokens are encrypted with it. Leave the old provider enabled for as long as tokens issued under it may still be valid, then delete it. AES-GCM with random nonces should not encrypt more than about 4 billion tokens under one key, so rotate at least once a year at campaign volumes.
+**Key rotation.** Add a second `aes-generated` provider with the same name `login-token` and a higher priority (still below 100). New tokens are encrypted with it. Leave the old provider enabled for as long as tokens issued under it may still be valid, then delete it. Rotation is a matter of your key-management policy only; the number of tokens issued never forces it.
 
-**Kill switch.** Deleting or disabling the key provider invalidates every stateless token issued under it at once. An individual stateless token cannot be revoked before it expires; choose `expiration_seconds` accordingly.
+**Invalidating all stateless tokens.** Deleting the key provider invalidates every stateless token issued under it at once. The next stateless token then gets a new provider with a fresh key. An individual stateless token cannot be revoked before it expires; choose `expiration_seconds` accordingly.
+
+**Switching stateless tokens off for a realm.** *Disable* the provider instead of deleting it (toggle **Enabled** off). Outstanding stateless tokens stop working, the plugin does not create a replacement, and every request gets a legacy token.
+
+#### Use limits and cluster restarts
+
+`max_uses` is enforced with markers in Keycloak's single-use object store, written when a token is redeemed and kept until one minute after the token expires. That store is in-memory. If the whole cluster is restarted — or both nodes holding a marker are lost at the same moment — the markers are gone:
+
+- A **legacy** token is gone as well, because it lives in the same store. It fails closed.
+- A **stateless** token is still valid, and its uses can be claimed again. It fails open.
+
+> **Known limitation (open issue).** This is accepted for now and will be covered in a separate
+> security architecture and threat model document.
+
+A use-limited stateless token is therefore single use *as long as the cluster keeps running*. Rolling restarts and deployments, where nodes are replaced one at a time, are not affected. Where a hard guarantee is required, keep `expiration_seconds` short for use-limited stateless tokens or issue them in the legacy format (`"legacy": true`).
 
 #### The legacy token format
 
@@ -414,7 +433,8 @@ Tokens in the legacy format are fully supported and remain the default:
 
 - A `login_hint` of the form `lt:{uuid}` is always resolved through the single-use object store, exactly as before. Tokens issued before an upgrade stay valid until they expire.
 - Legacy tokens stored by a version that predates `max_uses` only carry the `reusable` flag. They keep their meaning: `reusable: true` is unlimited, anything else is single use.
-- A single-use legacy token redeemed on an old node during a rolling upgrade is also seen as redeemed by the new nodes, and vice versa.
+- The request field `reusable` behaves exactly as before: omitted means unlimited, `false` — and an explicit `null` — means single use.
+- While old and new nodes run side by side, they agree on legacy tokens that are unlimited or single use, whichever node issued or redeemed them. A legacy token with `max_uses` of 2 or more is single use on an old node.
 
 Use the legacy format when you want nothing but the default Keycloak setup, or when you need tokens to disappear on their own if the cluster state is wiped. Use the stateless format whenever tokens are issued in bulk or live longer than a few minutes.
 
@@ -434,9 +454,9 @@ Requires `manage-users` role (same as `/magic-link`).
 | `loa` | N | | Force the session to this LOA level, overriding the flow's Condition configuration. |
 | `remember_me` | N | false | Set the remember-me flag on the session. |
 | `force_create` | N | false | Create the user if they do not exist (email only). |
-| `max_uses` | N | 0 | How often the token may be redeemed within its validity window: `0` = unlimited, `1` = single use, up to `10`. Values outside `0`–`10` are rejected with `400`. |
-| `reusable` | N | | Legacy form of `max_uses`, still accepted: `true` = unlimited, `false` = single use. Ignored when `max_uses` is set. |
-| `stateless` | N | server default (`false`) | `true` issues a token in the [stateless format](#token-formats-stateless-and-legacy), `false` one in the legacy format. When omitted, the server default applies. |
+| `max_uses` | N | | How often the token may be redeemed within its validity window: `0` = unlimited, `1` = single use, up to `10`. Values outside `0`–`10` are rejected with `400`. When omitted, `reusable` decides; with neither field sent the token is unlimited. A token whose uses are exhausted is treated like an expired one. |
+| `reusable` | N | true | Legacy form of `max_uses`, still accepted: `true` = unlimited, `false` (or an explicit `null`) = single use. Ignored when `max_uses` is set. |
+| `legacy` | N | server default (`true`) | Selects the [token format](#token-formats-stateless-and-legacy): `false` issues a stateless token, `true` one in the legacy format. When omitted, the server default applies. |
 | `set_email_verified` | N | false | When `true`, marks the user's email as verified after the token is successfully validated. |
 | `confirm_user_switch` | N | false | Controls behaviour when a different user is already logged in on the device. When `false` (default), the existing session is silently logged out and the login token is processed automatically. When `true`, a confirmation screen is shown asking the user to approve the logout before continuing. |
 
@@ -508,7 +528,7 @@ curl --request POST https://keycloak.host/realms/test/login-token \
 }
 ```
 
-With `"stateless": true` the response has the same shape and the `login_hint` starts with `lt:v2.`. Pass it on verbatim in both cases; callers do not need to tell the formats apart.
+With `"legacy": false` the response has the same shape and the `login_hint` starts with `lt:v2.`. Pass it on verbatim in both cases; callers do not need to tell the formats apart.
 
 The caller then constructs the OIDC authorization URL using the returned `login_hint` and opens it in the browser (or sends it to the user by email/SMS):
 

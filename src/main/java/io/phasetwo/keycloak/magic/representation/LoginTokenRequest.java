@@ -64,25 +64,27 @@ public class LoginTokenRequest {
    * Number of times the token may be redeemed until it expires: {@code 0} = unlimited, {@code 1} =
    * single use, up to {@link
    * io.phasetwo.keycloak.magic.auth.token.StatelessLoginToken#MAX_USES_LIMIT}. Takes precedence
-   * over {@code reusable}. When neither is set the token is unlimited.
+   * over {@code reusable}. When neither is sent the token is unlimited.
    */
   @JsonProperty("max_uses")
   private Integer maxUses;
 
   /**
-   * Legacy form of {@code max_uses}: {@code true} = unlimited, {@code false} = single use. Ignored
-   * when {@code max_uses} is set.
+   * Legacy form of {@code max_uses}: {@code true} (the default when the field is omitted) =
+   * unlimited, {@code false} or an explicit {@code null} = single use. Ignored when {@code
+   * max_uses} is set.
    */
   @JsonProperty("reusable")
-  private Boolean reusable;
+  private Boolean reusable = true;
 
   /**
-   * Whether to issue a stateless (encrypted, self-contained) token instead of a legacy
-   * token whose credential is stored server-side. When omitted, the server default applies (SPI option {@code
-   * stateless} of the {@code login-token} realm resource, default {@code false}).
+   * Selects the token format. {@code false} issues a stateless (encrypted, self-contained) token;
+   * {@code true} issues a token in the legacy format, whose credential is stored server-side. When
+   * omitted, the server default applies (SPI option {@code legacy} of the {@code login-token}
+   * realm resource, default {@code true}).
    */
-  @JsonProperty("stateless")
-  private Boolean stateless;
+  @JsonProperty("legacy")
+  private Boolean legacy;
 
   /**
    * When {@code true}, {@code user.setEmailVerified(true)} is called after the token is

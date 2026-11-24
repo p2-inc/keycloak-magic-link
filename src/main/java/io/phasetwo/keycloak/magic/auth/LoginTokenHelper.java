@@ -62,6 +62,9 @@ class LoginTokenHelper {
   static final String DATA_KEY_PREFIX = "lt:data:";
   static final String USED_KEY_PREFIX = "lt:used:";
 
+  /** How long a use marker is kept beyond the token's expiry. */
+  static final long USE_MARKER_GRACE_SECONDS = 60L;
+
   /**
    * Execution config key for the "Client ID must match" toggle shared by all Login Token
    * authenticators. Default (unset or {@code "true"}): only tokens carrying a {@code clientId} are
@@ -159,7 +162,7 @@ class LoginTokenHelper {
    * rather than propagating a {@link NumberFormatException}.
    */
   static ResolvedToken lookupAndValidate(AuthenticationFlowContext context, String tokenId) {
-    // Never log a stateless token id itself: unlike a legacy token's UUID it is the credential.
+    // Never log a token id itself: it is a bearer credential in both formats.
     String logId = StatelessLoginToken.logId(tokenId);
 
     Map<String, String> notes;
@@ -298,6 +301,8 @@ class LoginTokenHelper {
         onInvalidToken.run();
         return;
       case USER_DISABLED:
+        // Do not leave the token behind as a username suggestion for the next authenticator.
+        clearLoginHint(context);
         context.failure(AuthenticationFlowError.USER_DISABLED);
         return;
       default:
@@ -335,7 +340,7 @@ class LoginTokenHelper {
       return;
     }
 
-    completeAuth(context, resolved.useId, notes, expiryStr, targetUser);
+    completeAuth(context, resolved.useId, notes, expiryStr, targetUser, onInvalidToken);
   }
 
   // -------------------------------------------------------------------------
@@ -537,20 +542,24 @@ class LoginTokenHelper {
    * Enforces the token's use limit, sets the user, applies optional email-verification / LOA /
    * remember-me, and calls {@code context.success()}.
    *
-   * <p>When the limit is exhausted the method calls {@code context.failure(INVALID_CREDENTIALS)}
-   * and returns without calling success.
+   * <p>A token whose uses are exhausted is handled exactly like an expired or unknown one: {@code
+   * onInvalidToken} runs and success is not called. Failing the execution instead would let the
+   * flow fall through to the next alternative with the token still in {@code login_hint}, where
+   * the username form would offer it as the username.
    *
    * @param useId identity under which redemptions are counted, see {@link ResolvedToken#useId}.
+   * @param onInvalidToken the caller's reaction to an unusable token, see {@link #handleTokenId}.
    */
   static void completeAuth(
       AuthenticationFlowContext context,
       String useId,
       Map<String, String> notes,
       String expiryStr,
-      UserModel user) {
+      UserModel user,
+      Runnable onInvalidToken) {
 
     if (!reserveUse(context, useId, notes, expiryStr)) {
-      context.failure(AuthenticationFlowError.INVALID_CREDENTIALS);
+      onInvalidToken.run();
       return;
     }
 
@@ -560,7 +569,8 @@ class LoginTokenHelper {
   /**
    * Number of redemptions the token allows; {@code 0} means unlimited. Tokens stored by a version
    * that predates {@code maxUses} carry only the {@code reusable} flag: unlimited when {@code
-   * true}, single use otherwise. A malformed value is treated as single use.
+   * true}, single use otherwise. A malformed or negative value is treated as single use, so a
+   * damaged note can never widen a token's use limit.
    */
   static int maxUses(Map<String, String> notes) {
     String value = notes.get(KEY_MAX_USES);
@@ -568,7 +578,8 @@ class LoginTokenHelper {
       return "true".equalsIgnoreCase(notes.get(KEY_REUSABLE)) ? 0 : 1;
     }
     try {
-      return Math.max(0, Math.min(StatelessLoginToken.MAX_USES_LIMIT, Integer.parseInt(value)));
+      int maxUses = Integer.parseInt(value);
+      return maxUses < 0 ? 1 : Math.min(StatelessLoginToken.MAX_USES_LIMIT, maxUses);
     } catch (NumberFormatException e) {
       return 1;
     }
@@ -596,10 +607,13 @@ class LoginTokenHelper {
     if (maxUses == 0) {
       return true;
     }
+    // The markers must outlive the token: it is accepted until the end of its expiry second, and
+    // nodes do not share one clock. A marker that expired first would hand the uses back.
     long remainingTtl =
-        expiryStr != null
-            ? Math.max(1L, Long.parseLong(expiryStr) - (System.currentTimeMillis() / 1000L))
-            : 300L;
+        (expiryStr != null
+                ? Math.max(0L, Long.parseLong(expiryStr) - (System.currentTimeMillis() / 1000L))
+                : 300L)
+            + USE_MARKER_GRACE_SECONDS;
     SingleUseObjectProvider singleUse =
         context.getSession().getProvider(SingleUseObjectProvider.class);
     for (int slot = 1; slot <= maxUses; slot++) {
@@ -608,7 +622,7 @@ class LoginTokenHelper {
         return true;
       }
     }
-    log.warnf("[LT] token use limit (%d) reached: '%s'", maxUses, useId);
+    log.warnf("[LT] token use limit (%d) reached", maxUses);
     return false;
   }
 

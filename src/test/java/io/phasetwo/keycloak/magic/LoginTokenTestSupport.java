@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import io.phasetwo.keycloak.magic.auth.token.LoginTokenKeys;
 import jakarta.ws.rs.core.Response;
+import java.util.List;
 import org.keycloak.admin.client.CreatedResponseUtil;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.common.util.MultivaluedHashMap;
@@ -32,11 +33,31 @@ public final class LoginTokenTestSupport {
   }
 
   public static String addLoginTokenKeyProvider(Keycloak keycloak, String realm, int priority) {
+    return addLoginTokenKeyProvider(keycloak, realm, priority, true);
+  }
+
+  /** Adds the key provider in a disabled state: present, but offering no usable key. */
+  public static String addDisabledLoginTokenKeyProvider(Keycloak keycloak, String realm) {
+    return addLoginTokenKeyProvider(keycloak, realm, 10, false);
+  }
+
+  /** The realm's key providers named {@code login-token}. */
+  public static List<ComponentRepresentation> loginTokenKeyProviders(
+      Keycloak keycloak, String realm) {
+    String realmId = keycloak.realm(realm).toRepresentation().getId();
+    return keycloak
+        .realm(realm)
+        .components()
+        .query(realmId, "org.keycloak.keys.KeyProvider", LoginTokenKeys.KEY_PROVIDER_NAME);
+  }
+
+  private static String addLoginTokenKeyProvider(
+      Keycloak keycloak, String realm, int priority, boolean enabled) {
     MultivaluedHashMap<String, String> config = new MultivaluedHashMap<>();
     config.putSingle("priority", String.valueOf(priority));
     config.putSingle("secretSize", "32");
-    config.putSingle("enabled", "true");
-    config.putSingle("active", "true");
+    config.putSingle("enabled", String.valueOf(enabled));
+    config.putSingle("active", String.valueOf(enabled));
 
     ComponentRepresentation component = new ComponentRepresentation();
     component.setName(LoginTokenKeys.KEY_PROVIDER_NAME);

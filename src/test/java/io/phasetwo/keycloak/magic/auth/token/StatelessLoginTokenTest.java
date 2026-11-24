@@ -7,12 +7,16 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
 
@@ -32,6 +36,7 @@ class StatelessLoginTokenTest {
         .setUserId(USER_ID)
         .setClientId("expressvpn-web-client")
         .setExpiry(1_900_000_000L)
+        .setIssuedAt(1_899_395_200L)
         .setLoa(2)
         .setMaxUses(3)
         .setRememberMe(true)
@@ -50,6 +55,7 @@ class StatelessLoginTokenTest {
     assertEquals(USER_ID, opened.getUserId());
     assertEquals("expressvpn-web-client", opened.getClientId());
     assertEquals(1_900_000_000L, opened.getExpiry());
+    assertEquals(1_899_395_200L, opened.getIssuedAt());
     assertEquals(2, opened.getLoa());
     assertEquals(3, opened.getMaxUses());
     assertTrue(opened.isRememberMe());
@@ -137,7 +143,7 @@ class StatelessLoginTokenTest {
     byte[] raw =
         Base64.getUrlDecoder().decode(token.substring(StatelessLoginToken.PREFIX.length()));
 
-    // Flipping any single byte — nonce, ciphertext or tag — must invalidate the token.
+    // Flipping any single byte — salt, ciphertext or tag — must invalidate the token.
     for (int i = 0; i < raw.length; i++) {
       byte[] tampered = raw.clone();
       tampered[i] ^= 0x01;
@@ -206,16 +212,58 @@ class StatelessLoginTokenTest {
   }
 
   @Test
-  void logIdRevealsOnlyTheNonce() {
+  void logIdOfAStatelessTokenIsItsSaltOnly() {
     SecretKey key = newKey();
     String token = StatelessLoginToken.seal(key, REALM_ID, fullPayload());
+    String body = token.substring(StatelessLoginToken.PREFIX.length());
+    String useId = StatelessLoginToken.open(List.of(key), REALM_ID, token).orElseThrow().getUseId();
+
     String logId = StatelessLoginToken.logId(token);
 
-    assertEquals(
-        "v2:" + StatelessLoginToken.open(List.of(key), REALM_ID, token).orElseThrow().getUseId(),
-        logId);
-    assertFalse(logId.contains(token.substring(StatelessLoginToken.PREFIX.length())));
-    // A legacy token id is a lookup key, not the credential, and is logged as is.
-    assertEquals(USER_ID, StatelessLoginToken.logId(USER_ID));
+    // The salt is also the use-counting id, so a log line can be matched to a token.
+    assertEquals("v2:" + useId.substring(0, 21), logId);
+    // Nothing of the encrypted part (everything after the 16-byte salt) may appear.
+    assertFalse(logId.contains(body.substring(22, 30)), logId);
+    // What is logged does not decrypt.
+    assertTrue(
+        StatelessLoginToken.open(List.of(key), REALM_ID, "v2." + logId.substring(3)).isEmpty());
+  }
+
+  @Test
+  void logIdNeverContainsACredential() {
+    SecretKey key = newKey();
+    String token = StatelessLoginToken.seal(key, REALM_ID, fullPayload());
+    String body = token.substring(StatelessLoginToken.PREFIX.length());
+
+    // Inputs a user or a broken client may produce that still contain the whole valid token.
+    for (String wrapped : List.of("lt:" + token, " " + token, "V2." + body, token + "\"")) {
+      String logId = StatelessLoginToken.logId(wrapped);
+      assertEquals("<malformed:" + wrapped.length() + ">", logId);
+      assertFalse(logId.contains(body.substring(0, 8)));
+    }
+
+    // A legacy token id is a bearer credential too: only its first block is logged.
+    assertEquals("3b241101…", StatelessLoginToken.logId(USER_ID));
+    assertEquals("<none>", StatelessLoginToken.logId(null));
+  }
+
+  @Test
+  void tokenIsEncryptedUnderAKeyOfItsOwn() throws Exception {
+    // Decrypting with the realm key directly — as if no per-token key were derived — must fail
+    // for every nonce an implementation could plausibly have used. This pins the derivation: a
+    // regression to "encrypt with the realm key" would make one of these attempts succeed.
+    SecretKey key = newKey();
+    String token = StatelessLoginToken.seal(key, REALM_ID, fullPayload());
+    byte[] raw =
+        Base64.getUrlDecoder().decode(token.substring(StatelessLoginToken.PREFIX.length()));
+    byte[] aad = ("keycloak-login-token:v2:" + REALM_ID).getBytes(StandardCharsets.UTF_8);
+
+    for (int offset : new int[] {12, 16}) {
+      Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+      cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, raw, 0, 12));
+      cipher.updateAAD(aad);
+      assertThrows(
+          GeneralSecurityException.class, () -> cipher.doFinal(raw, offset, raw.length - offset));
+    }
   }
 }

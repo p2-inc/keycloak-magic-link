@@ -4,16 +4,16 @@ import org.keycloak.models.KeycloakSession;
 
 public class LoginTokenResourceProvider extends BaseRealmResourceProvider {
 
-  private final boolean statelessByDefault;
+  private final boolean legacyByDefault;
 
-  public LoginTokenResourceProvider(KeycloakSession session, boolean statelessByDefault) {
+  public LoginTokenResourceProvider(KeycloakSession session, boolean legacyByDefault) {
     super(session);
-    this.statelessByDefault = statelessByDefault;
+    this.legacyByDefault = legacyByDefault;
   }
 
   @Override
   public Object getRealmResource() {
-    LoginTokenResource resource = new LoginTokenResource(session, statelessByDefault);
+    LoginTokenResource resource = new LoginTokenResource(session, legacyByDefault);
     resource.setup();
     return resource;
   }

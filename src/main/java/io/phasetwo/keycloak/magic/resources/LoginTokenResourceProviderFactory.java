@@ -14,13 +14,14 @@ public class LoginTokenResourceProviderFactory implements RealmResourceProviderF
   private static final String ID = "login-token";
 
   /**
-   * SPI option that makes stateless tokens the default for requests that do not set {@code
-   * stateless} themselves: {@code --spi-realm-restapi-extension--login-token--stateless=true}.
-   * Enable it only after every node runs a version that can verify stateless tokens.
+   * SPI option that sets the token format for requests that do not set {@code legacy} themselves.
+   * Defaults to {@code true} (legacy format). {@code
+   * --spi-realm-restapi-extension--login-token--legacy=false} makes stateless tokens the default;
+   * set it only after every node runs a version that can verify stateless tokens.
    */
-  static final String CONFIG_STATELESS = "stateless";
+  static final String CONFIG_LEGACY = "legacy";
 
-  private boolean statelessByDefault;
+  private boolean legacyByDefault = true;
 
   @Override
   public String getId() {
@@ -29,13 +30,13 @@ public class LoginTokenResourceProviderFactory implements RealmResourceProviderF
 
   @Override
   public LoginTokenResourceProvider create(KeycloakSession session) {
-    return new LoginTokenResourceProvider(session, statelessByDefault);
+    return new LoginTokenResourceProvider(session, legacyByDefault);
   }
 
   @Override
   public void init(Config.Scope config) {
-    statelessByDefault = config.getBoolean(CONFIG_STATELESS, false);
-    log.infof("[LT] stateless login tokens by default: %s", statelessByDefault);
+    legacyByDefault = config.getBoolean(CONFIG_LEGACY, true);
+    log.infof("[LT] legacy login token format by default: %s", legacyByDefault);
   }
 
   @Override

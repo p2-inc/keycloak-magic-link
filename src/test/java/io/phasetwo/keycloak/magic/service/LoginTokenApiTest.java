@@ -611,7 +611,7 @@ class LoginTokenApiTest extends AbstractMagicLinkTest {
     LoginTokenTestSupport.addLoginTokenKeyProvider(keycloak, TEST_REALM);
 
     LoginTokenRequest req = buildRequest(2, null);
-    req.setStateless(true);
+    req.setLegacy(false);
     String loginHint = postLoginTokenRequest(req);
     assertTrue(
         loginHint.matches(LoginTokenTestSupport.STATELESS_LOGIN_HINT_PATTERN),
@@ -634,18 +634,66 @@ class LoginTokenApiTest extends AbstractMagicLinkTest {
     LoginTokenTestSupport.addLoginTokenKeyProvider(keycloak, TEST_REALM);
 
     LoginTokenRequest req = buildRequest(null, null);
-    req.setStateless(true);
+    req.setLegacy(false);
     req.setMaxUses(1);
     String link = buildOidcUrl(postLoginTokenRequest(req), Map.of("redirect_uri", REDIRECT_URI));
 
     assertNotNull(followLinkToCode(link), "first redemption must return an authorization code");
 
-    String secondLocation =
-        given().redirects().follow(false).get(link).then().extract().header("Location");
+    assertUsedUpTokenIsRefused(link);
+  }
+
+  /**
+   * A token whose uses are exhausted must be treated like an expired one: the login form is
+   * shown with the "invalid or expired" message and an empty username field. In particular the
+   * token must not end up as the suggested username.
+   */
+  @Test
+  void usedUpLegacyToken_showsLoginFormWithMessageAndEmptyUsername() throws Exception {
+    Testcontainers.exposeHostPorts(container.getHttpPort());
+    importRealm("/realms/login-token-invalid-hint-test-setup.json");
+
+    LoginTokenRequest req = buildRequest(null, null);
+    req.setMaxUses(1);
+    assertUsedUpTokenShowsCleanLoginForm(postLoginTokenRequest(req));
+  }
+
+  @Test
+  void usedUpStatelessToken_showsLoginFormWithMessageAndEmptyUsername() throws Exception {
+    Testcontainers.exposeHostPorts(container.getHttpPort());
+    importRealm("/realms/login-token-invalid-hint-test-setup.json");
+
+    LoginTokenRequest req = buildRequest(null, null);
+    req.setLegacy(false);
+    req.setMaxUses(1);
+    String loginHint = postLoginTokenRequest(req);
+    assertTrue(loginHint.matches(LoginTokenTestSupport.STATELESS_LOGIN_HINT_PATTERN), loginHint);
+
+    assertUsedUpTokenShowsCleanLoginForm(loginHint);
+  }
+
+  private void assertUsedUpTokenShowsCleanLoginForm(String loginHint) throws Exception {
+    String link = buildOidcUrl(loginHint, Map.of("redirect_uri", REDIRECT_URI));
+    assertNotNull(followLinkToCode(link), "first redemption must return an authorization code");
+
+    String html = followUntilPage(link);
+
+    assertTrue(html.contains("name=\"username\""), "username form must be shown");
     assertTrue(
-        secondLocation == null || secondLocation.contains("error"),
-        "second redemption of a single-use stateless token must be rejected (Location: "
-            + secondLocation
+        html.contains("Invalid or expired login token. Please try again."),
+        "the used-up token must be reported like an invalid one");
+    assertFalse(html.contains(loginHint), "the token must not appear anywhere in the login page");
+  }
+
+  /** Second redemption must not yield an authorization code. */
+  private void assertUsedUpTokenIsRefused(String link) {
+    var second = given().redirects().follow(false).get(link);
+    String location = second.header("Location");
+    assertTrue(second.statusCode() < 500, "must not be a server error: " + second.statusCode());
+    assertTrue(
+        location == null || !location.contains("code="),
+        "second redemption of a single-use token must not return a code (Location: "
+            + location
             + ")");
   }
 }

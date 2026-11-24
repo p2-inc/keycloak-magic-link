@@ -21,9 +21,12 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import javax.crypto.Cipher;
+import javax.crypto.Mac;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 
 /**
  * Self-contained ("stateless") Login Token: the credential travels inside the token, encrypted and
@@ -32,22 +35,29 @@ import javax.crypto.spec.GCMParameterSpec;
  * <p>Wire format of the token id (the part after the {@code lt:} login-hint prefix):
  *
  * <pre>
- *   v2.&lt;base64url( nonce[12] || ciphertext || tag[16] )&gt;
+ *   v2.&lt;base64url( salt[16] || ciphertext || tag[16] )&gt;
  * </pre>
  *
- * The realm id is bound as additional authenticated data, so a token is only accepted by the realm
- * that issued it. The random nonce doubles as the token's identity for use counting — see {@link
+ * <p><b>One key per token.</b> The realm key is never used for encryption directly. For every
+ * token a fresh 16-byte random salt is drawn and {@code HMAC-SHA512(realmKey, context || salt)}
+ * yields a 256-bit AES key and a 96-bit GCM nonce used for that token only. AES-GCM limits how
+ * many messages one key may encrypt with random nonces (about 2<sup>32</sup>); deriving a key per
+ * token removes that limit, so the realm key does not have to be rotated because of the number of
+ * tokens issued.
+ *
+ * <p>The realm id is bound as additional authenticated data, so a token is only accepted by the
+ * realm that issued it. The salt doubles as the token's identity for use counting — see {@link
  * Payload#getUseId()}.
  *
  * <p>Plaintext layout (kept binary so the login hint stays well below Keycloak's 255-character
  * {@code login_hint} limit):
  *
  * <pre>
- *   flags[1] maxUses[1] expiry[4, unsigned epoch seconds] [loa[1]] userId [clientId]
+ *   flags[1] maxUses[1] expiry[4] issuedAt[4] [loa[1]] userId [clientId]
  * </pre>
  *
- * A canonical UUID is written as 16 raw bytes; any other id is written as a length byte followed by
- * its UTF-8 bytes.
+ * Times are unsigned epoch seconds. A canonical UUID is written as 16 raw bytes; any other id is
+ * written as a length byte followed by its UTF-8 bytes.
  */
 public final class StatelessLoginToken {
 
@@ -61,10 +71,20 @@ public final class StatelessLoginToken {
   public static final int MAX_USES_LIMIT = 10;
 
   private static final String CIPHER = "AES/GCM/NoPadding";
+  private static final String KDF = "HmacSHA512";
+  private static final int SALT_LENGTH = 16;
+
+  /** Leading base64 characters that encode salt bits only (21 * 6 = 126 of its 128 bits). */
+  private static final int SALT_LOG_LENGTH = 21;
+
+  private static final int KEY_LENGTH = 32;
   private static final int NONCE_LENGTH = 12;
   private static final int TAG_LENGTH = 16;
-  private static final int NONCE_LENGTH_BASE64 = 16;
   private static final String AAD_PREFIX = "keycloak-login-token:v2:";
+  private static final byte[] KDF_CONTEXT =
+      "keycloak-login-token:v2:token-key:".getBytes(StandardCharsets.UTF_8);
+  private static final Pattern LEGACY_TOKEN_ID =
+      Pattern.compile("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}");
 
   private static final int FLAG_REMEMBER_ME = 1;
   private static final int FLAG_SET_EMAIL_VERIFIED = 1 << 1;
@@ -83,6 +103,7 @@ public final class StatelessLoginToken {
     private String userId;
     private String clientId;
     private long expiry;
+    private long issuedAt;
     private Integer loa;
     private int maxUses;
     private boolean rememberMe;
@@ -115,6 +136,16 @@ public final class StatelessLoginToken {
 
     public Payload setExpiry(long expiry) {
       this.expiry = expiry;
+      return this;
+    }
+
+    /** Time the token was issued, in epoch seconds. */
+    public long getIssuedAt() {
+      return issuedAt;
+    }
+
+    public Payload setIssuedAt(long issuedAt) {
+      this.issuedAt = issuedAt;
       return this;
     }
 
@@ -165,7 +196,7 @@ public final class StatelessLoginToken {
     }
 
     /**
-     * Identity of this token for use counting: the base64url-encoded nonce. Only set on payloads
+     * Identity of this token for use counting: the base64url-encoded salt. Only set on payloads
      * returned by {@link #open}.
      */
     public String getUseId() {
@@ -206,15 +237,25 @@ public final class StatelessLoginToken {
   }
 
   /**
-   * Returns a value that identifies the token in log output without revealing the credential: the
-   * nonce for a stateless token, the id itself for a legacy token.
+   * Returns a value that identifies the token in log output without revealing the credential. Both
+   * token kinds are bearer credentials, so neither is ever logged in full: a stateless token is
+   * reduced to its salt (which is also its use-counting id), a legacy UUID to its first block, and
+   * anything else — a mistyped or doubly prefixed token may still contain a valid one — to its
+   * length.
    */
   public static String logId(String tokenId) {
-    if (!isStateless(tokenId)) {
-      return tokenId;
+    if (tokenId == null) {
+      return "<none>";
     }
-    String body = tokenId.substring(PREFIX.length());
-    return "v2:" + body.substring(0, Math.min(NONCE_LENGTH_BASE64, body.length()));
+    if (isStateless(tokenId)) {
+      String body = tokenId.substring(PREFIX.length());
+      if (body.length() > SALT_LOG_LENGTH && body.matches("[A-Za-z0-9_-]+=*")) {
+        return "v2:" + body.substring(0, SALT_LOG_LENGTH);
+      }
+    } else if (LEGACY_TOKEN_ID.matcher(tokenId).matches()) {
+      return tokenId.substring(0, 8) + "…";
+    }
+    return "<malformed:" + tokenId.length() + ">";
   }
 
   /**
@@ -225,16 +266,15 @@ public final class StatelessLoginToken {
    */
   public static String seal(SecretKey key, String realmId, Payload payload) {
     byte[] plaintext = encode(payload);
-    byte[] nonce = new byte[NONCE_LENGTH];
-    RANDOM.nextBytes(nonce);
+    byte[] salt = new byte[SALT_LENGTH];
+    RANDOM.nextBytes(salt);
     try {
-      Cipher cipher = Cipher.getInstance(CIPHER);
-      cipher.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(TAG_LENGTH * 8, nonce));
+      Cipher cipher = tokenCipher(Cipher.ENCRYPT_MODE, key, salt);
       cipher.updateAAD(aad(realmId));
       byte[] ciphertext = cipher.doFinal(plaintext);
-      byte[] token = new byte[NONCE_LENGTH + ciphertext.length];
-      System.arraycopy(nonce, 0, token, 0, NONCE_LENGTH);
-      System.arraycopy(ciphertext, 0, token, NONCE_LENGTH, ciphertext.length);
+      byte[] token = new byte[SALT_LENGTH + ciphertext.length];
+      System.arraycopy(salt, 0, token, 0, SALT_LENGTH);
+      System.arraycopy(ciphertext, 0, token, SALT_LENGTH, ciphertext.length);
       return PREFIX + Base64.getUrlEncoder().withoutPadding().encodeToString(token);
     } catch (GeneralSecurityException e) {
       throw new IllegalStateException("Failed to encrypt login token", e);
@@ -258,7 +298,7 @@ public final class StatelessLoginToken {
     } catch (IllegalArgumentException e) {
       return Optional.empty();
     }
-    if (token.length <= NONCE_LENGTH + TAG_LENGTH) {
+    if (token.length <= SALT_LENGTH + TAG_LENGTH) {
       return Optional.empty();
     }
     for (SecretKey key : keys) {
@@ -269,7 +309,7 @@ public final class StatelessLoginToken {
       try {
         Payload payload = decode(plaintext);
         payload.useId =
-            Base64.getUrlEncoder().withoutPadding().encodeToString(slice(token, 0, NONCE_LENGTH));
+            Base64.getUrlEncoder().withoutPadding().encodeToString(slice(token, 0, SALT_LENGTH));
         return Optional.of(payload);
       } catch (BufferUnderflowException | IllegalArgumentException e) {
         return Optional.empty();
@@ -280,15 +320,32 @@ public final class StatelessLoginToken {
 
   private static byte[] decrypt(SecretKey key, String realmId, byte[] token) {
     try {
-      Cipher cipher = Cipher.getInstance(CIPHER);
-      cipher.init(
-          Cipher.DECRYPT_MODE, key, new GCMParameterSpec(TAG_LENGTH * 8, token, 0, NONCE_LENGTH));
+      Cipher cipher = tokenCipher(Cipher.DECRYPT_MODE, key, slice(token, 0, SALT_LENGTH));
       cipher.updateAAD(aad(realmId));
-      return cipher.doFinal(token, NONCE_LENGTH, token.length - NONCE_LENGTH);
+      return cipher.doFinal(token, SALT_LENGTH, token.length - SALT_LENGTH);
     } catch (GeneralSecurityException e) {
       // Wrong key, wrong realm or a modified token: indistinguishable by design.
       return null;
     }
+  }
+
+  /**
+   * Derives the AES key and GCM nonce that belong to this token alone and returns a cipher
+   * initialised with them. Because the pair is a function of the realm key and a 128-bit random
+   * salt, no key/nonce pair is ever used for two tokens.
+   */
+  private static Cipher tokenCipher(int mode, SecretKey realmKey, byte[] salt)
+      throws GeneralSecurityException {
+    Mac mac = Mac.getInstance(KDF);
+    mac.init(new SecretKeySpec(realmKey.getEncoded(), KDF));
+    mac.update(KDF_CONTEXT);
+    byte[] derived = mac.doFinal(salt);
+    Cipher cipher = Cipher.getInstance(CIPHER);
+    cipher.init(
+        mode,
+        new SecretKeySpec(derived, 0, KEY_LENGTH, "AES"),
+        new GCMParameterSpec(TAG_LENGTH * 8, derived, KEY_LENGTH, NONCE_LENGTH));
+    return cipher;
   }
 
   private static byte[] aad(String realmId) {
@@ -301,6 +358,9 @@ public final class StatelessLoginToken {
     }
     if (p.expiry < 0 || p.expiry > MAX_EXPIRY) {
       throw new IllegalArgumentException("expiry out of range");
+    }
+    if (p.issuedAt < 0 || p.issuedAt > MAX_EXPIRY) {
+      throw new IllegalArgumentException("issuedAt out of range");
     }
     if (p.maxUses < 0 || p.maxUses > MAX_USES_LIMIT) {
       throw new IllegalArgumentException("maxUses out of range");
@@ -321,7 +381,7 @@ public final class StatelessLoginToken {
     ByteArrayOutputStream out = new ByteArrayOutputStream(64);
     out.write(flags);
     out.write(p.maxUses);
-    out.writeBytes(ByteBuffer.allocate(4).putInt((int) p.expiry).array());
+    out.writeBytes(ByteBuffer.allocate(8).putInt((int) p.expiry).putInt((int) p.issuedAt).array());
     if (p.loa != null) {
       out.write(p.loa);
     }
@@ -349,6 +409,7 @@ public final class StatelessLoginToken {
       throw new IllegalArgumentException("maxUses out of range");
     }
     p.expiry = Integer.toUnsignedLong(in.getInt());
+    p.issuedAt = Integer.toUnsignedLong(in.getInt());
     if ((flags & FLAG_HAS_LOA) != 0) {
       p.loa = (int) in.get();
     }

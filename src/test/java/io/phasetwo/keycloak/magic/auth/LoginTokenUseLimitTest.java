@@ -111,13 +111,26 @@ class LoginTokenUseLimitTest {
   }
 
   @Test
-  void useMarkersLiveUntilTheTokenExpires() {
+  void useMarkersOutliveTheToken() {
     Map<String, String> notes = Map.of(LoginToken.KEY_MAX_USES, "1");
 
     assertTrue(LoginTokenHelper.reserveUse(context, USE_ID, notes, expiryIn(600)));
 
+    // Longer than the token itself, so a marker can never expire while the token is still valid.
     long ttl = store.lifespan("lt:used:" + USE_ID);
-    assertTrue(ttl > 590 && ttl <= 600, "ttl was " + ttl);
+    long grace = LoginTokenHelper.USE_MARKER_GRACE_SECONDS;
+    assertTrue(ttl > 590 + grace && ttl <= 600 + grace, "ttl was " + ttl);
+  }
+
+  @Test
+  void markerOfATokenInItsLastSecondStillOutlivesIt() {
+    Map<String, String> notes = Map.of(LoginToken.KEY_MAX_USES, "1");
+
+    // Redeemed in the very second it expires: the marker must not be gone a moment later.
+    assertTrue(LoginTokenHelper.reserveUse(context, USE_ID, notes, expiryIn(0)));
+
+    assertTrue(store.lifespan("lt:used:" + USE_ID) >= LoginTokenHelper.USE_MARKER_GRACE_SECONDS);
+    assertFalse(LoginTokenHelper.reserveUse(context, USE_ID, notes, expiryIn(0)));
   }
 
   @Test
@@ -125,7 +138,8 @@ class LoginTokenUseLimitTest {
     assertEquals(
         StatelessLoginToken.MAX_USES_LIMIT,
         LoginTokenHelper.maxUses(Map.of(LoginToken.KEY_MAX_USES, "5000")));
-    assertEquals(0, LoginTokenHelper.maxUses(Map.of(LoginToken.KEY_MAX_USES, "-4")));
+    // Never unlimited: a damaged note must not widen the limit.
+    assertEquals(1, LoginTokenHelper.maxUses(Map.of(LoginToken.KEY_MAX_USES, "-4")));
     assertEquals(1, LoginTokenHelper.maxUses(Map.of(LoginToken.KEY_MAX_USES, "many")));
   }
 
