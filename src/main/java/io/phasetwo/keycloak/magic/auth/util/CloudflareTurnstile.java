@@ -22,7 +22,6 @@ import org.keycloak.connections.httpclient.HttpClientProvider;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.provider.ProviderConfigProperty;
-import org.keycloak.services.ServicesLogger;
 import org.keycloak.util.JsonSerialization;
 import org.keycloak.utils.StringUtil;
 
@@ -201,26 +200,45 @@ public class CloudflareTurnstile {
       return false;
     }
 
+    // Every failure below fails closed. Log lines never include the token or the secret.
+    HttpResponse response;
     try {
       HttpPost request = buildAssessmentRequest(remoteAddr, turnstileResponse, config);
       HttpClient httpClient = session.getProvider(HttpClientProvider.class).getHttpClient();
-      HttpResponse response = httpClient.execute(request);
-
-      if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
-        log.errorf("Could not create Turnstile assessment: %s", response.getStatusLine());
-        EntityUtils.consumeQuietly(response.getEntity());
-        throw new Exception(response.getStatusLine().getReasonPhrase());
-      }
-
-      var assessment =
-          JsonSerialization.readValue(response.getEntity().getContent(), TurnstileResponse.class);
-      log.tracef("Got assessment response: %s", assessment);
-
-      return assessment.isSuccess() && config.getAction().equals(assessment.getAction());
+      response = httpClient.execute(request);
     } catch (Exception e) {
-      ServicesLogger.LOGGER.recaptchaFailed(e);
-
+      log.warnf("Turnstile siteverify call failed: %s", e.toString());
       return false;
     }
+
+    if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
+      log.warnf("Turnstile siteverify returned %s", response.getStatusLine());
+      EntityUtils.consumeQuietly(response.getEntity());
+      return false;
+    }
+
+    TurnstileResponse assessment;
+    try {
+      assessment =
+          JsonSerialization.readValue(response.getEntity().getContent(), TurnstileResponse.class);
+    } catch (Exception e) {
+      log.warnf("Could not parse Turnstile siteverify reply: %s", e.toString());
+      return false;
+    }
+
+    boolean actionMatches = config.getAction().equals(assessment.getAction());
+    if (!assessment.isSuccess() || !actionMatches) {
+      log.warnf(
+          "Turnstile verification rejected: success=%s error-codes=%s hostname=%s"
+              + " action=%s expectedAction=%s ratelimited=%s",
+          assessment.isSuccess(),
+          assessment.getErrorCodes(),
+          assessment.getHostname(),
+          assessment.getAction(),
+          config.getAction(),
+          assessment.getMetadata() == null ? null : assessment.getMetadata().getRatelimited());
+      return false;
+    }
+    return true;
   }
 }

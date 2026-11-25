@@ -80,6 +80,11 @@ public class TurnstileResponse {
     this.metadata = metadata;
   }
 
+  /**
+   * Cloudflare adds fields to {@code metadata} without notice (for example {@code ratelimited}), so
+   * unknown fields are ignored rather than failing the whole verification.
+   */
+  @JsonIgnoreProperties(ignoreUnknown = true)
   public static class Metadata {
     @JsonProperty(value = "ephemeral_id", required = false)
     private String ephemeralId;
@@ -89,6 +94,9 @@ public class TurnstileResponse {
 
     @JsonProperty(value = "result_with_testing_key", required = false)
     private String resultWithTestKey;
+
+    @JsonProperty(value = "ratelimited", required = false)
+    private Boolean ratelimited;
 
     public String getEphemeralId() {
       return ephemeralId;
@@ -107,11 +115,19 @@ public class TurnstileResponse {
     }
 
     public String getResultWithTestKey() {
-        return resultWithTestKey;
+      return resultWithTestKey;
     }
 
     public void setResultWithTestKey(String resultWithTestKey) {
-        this.resultWithTestKey = resultWithTestKey;
+      this.resultWithTestKey = resultWithTestKey;
+    }
+
+    public Boolean getRatelimited() {
+      return ratelimited;
+    }
+
+    public void setRatelimited(Boolean ratelimited) {
+      this.ratelimited = ratelimited;
     }
   }
 }
