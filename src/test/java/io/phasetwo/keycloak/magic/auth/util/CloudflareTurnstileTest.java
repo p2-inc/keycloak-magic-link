@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import io.phasetwo.keycloak.magic.auth.cloudflare.TurnstileResponse;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +25,7 @@ import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.util.JsonSerialization;
 
 class CloudflareTurnstileTest {
 
@@ -120,6 +122,54 @@ class CloudflareTurnstileTest {
     stubSiteverify(session, 500, "");
 
     assertFalse(CloudflareTurnstile.validate(config(), "token", "127.0.0.1", session));
+  }
+
+  @Test
+  void unknownFieldsInReplyAreIgnored() throws Exception {
+    KeycloakSession session = mock(KeycloakSession.class);
+    stubSiteverify(
+        session,
+        200,
+        "{\"success\":true,\"action\":\""
+            + ACTION
+            + "\",\"hostname\":\"example.com\","
+            + "\"error-codes\":[],\"some_new_field\":\"x\","
+            + "\"metadata\":{\"ephemeral_id\":\"abc\",\"interactive\":false,"
+            + "\"ratelimited\":false,\"some_new_metadata_field\":{\"nested\":1}}}");
+
+    assertTrue(CloudflareTurnstile.validate(config(), "token", "127.0.0.1", session));
+  }
+
+  @Test
+  void rateLimitedReplyFailsClosed() throws Exception {
+    KeycloakSession session = mock(KeycloakSession.class);
+    stubSiteverify(
+        session,
+        200,
+        "{\"success\":false,\"action\":\""
+            + ACTION
+            + "\","
+            + "\"error-codes\":[\"internal-error\"],\"metadata\":{\"ratelimited\":true}}");
+
+    assertFalse(CloudflareTurnstile.validate(config(), "token", "127.0.0.1", session));
+  }
+
+  @Test
+  void unparseableReplyFails() throws Exception {
+    KeycloakSession session = mock(KeycloakSession.class);
+    stubSiteverify(session, 200, "not json");
+
+    assertFalse(CloudflareTurnstile.validate(config(), "token", "127.0.0.1", session));
+  }
+
+  @Test
+  void ratelimitedMetadataIsParsed() throws Exception {
+    TurnstileResponse response =
+        JsonSerialization.readValue(
+            "{\"success\":false,\"metadata\":{\"ratelimited\":true,\"other\":1}}",
+            TurnstileResponse.class);
+
+    assertEquals(Boolean.TRUE, response.getMetadata().getRatelimited());
   }
 
   private static CloudflareTurnstile.Config config() {
