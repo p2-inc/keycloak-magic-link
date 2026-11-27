@@ -3,6 +3,7 @@ package io.phasetwo.keycloak.magic.auth;
 import static io.phasetwo.keycloak.magic.auth.LoginTokenHelper.NOTE_PENDING_TOKEN;
 import static io.phasetwo.keycloak.magic.auth.LoginTokenHelper.clearLoginHint;
 
+import io.phasetwo.keycloak.magic.auth.token.StatelessLoginToken;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.Authenticator;
@@ -71,7 +72,7 @@ public class LoginTokenVerifier implements Authenticator {
         tid -> {
           String hint =
               context.getAuthenticationSession().getClientNote(OIDCLoginProtocol.LOGIN_HINT_PARAM);
-          log.debugf("[LT] auto-logout for token '%s'", tid);
+          log.debugf("[LT] auto-logout for token '%s'", StatelessLoginToken.logId(tid));
           LoginTokenHelper.redirectAfterLogout(context, tid, hint);
         });
   }
@@ -91,7 +92,8 @@ public class LoginTokenVerifier implements Authenticator {
           String hint =
               context.getAuthenticationSession().getClientNote(OIDCLoginProtocol.LOGIN_HINT_PARAM);
           log.debugf(
-              "[LT] user-switch confirmed, expiring cookies and redirecting for token '%s'", tid);
+              "[LT] user-switch confirmed, expiring cookies and redirecting for token '%s'",
+              StatelessLoginToken.logId(tid));
           LoginTokenHelper.redirectAfterLogout(context, tid, hint);
         });
   }

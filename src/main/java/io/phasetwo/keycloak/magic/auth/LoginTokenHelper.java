@@ -4,14 +4,18 @@ import static io.phasetwo.keycloak.magic.auth.token.LoginToken.KEY_CLIENT_ID;
 import static io.phasetwo.keycloak.magic.auth.token.LoginToken.KEY_CONFIRM_USER_SWITCH;
 import static io.phasetwo.keycloak.magic.auth.token.LoginToken.KEY_EXPIRY;
 import static io.phasetwo.keycloak.magic.auth.token.LoginToken.KEY_LOA;
+import static io.phasetwo.keycloak.magic.auth.token.LoginToken.KEY_MAX_USES;
 import static io.phasetwo.keycloak.magic.auth.token.LoginToken.KEY_REMEMBER_ME;
 import static io.phasetwo.keycloak.magic.auth.token.LoginToken.KEY_REUSABLE;
 import static io.phasetwo.keycloak.magic.auth.token.LoginToken.KEY_SEV;
 import static io.phasetwo.keycloak.magic.auth.token.LoginToken.KEY_USER_ID;
 
+import io.phasetwo.keycloak.magic.auth.token.LoginTokenKeys;
+import io.phasetwo.keycloak.magic.auth.token.StatelessLoginToken;
 import jakarta.ws.rs.core.Response;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Consumer;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.AuthenticationFlowContext;
@@ -23,10 +27,12 @@ import org.keycloak.authentication.authenticators.util.AcrStore;
 import org.keycloak.authentication.authenticators.util.LoAUtil;
 import org.keycloak.events.Details;
 import org.keycloak.models.AuthenticationExecutionModel;
+import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.Constants;
 import org.keycloak.models.SingleUseObjectProvider;
 import org.keycloak.models.UserModel;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
+import org.keycloak.provider.ProviderConfigProperty;
 import org.keycloak.services.managers.AuthenticationManager;
 
 /**
@@ -44,7 +50,7 @@ import org.keycloak.services.managers.AuthenticationManager;
  *   <li>{@link #handleUserSwitchAction} — logout / cancel dispatch for the user-switch confirmation
  *       form.
  *   <li>{@link #redirectAfterLogout} — cookie expiry + fresh OIDC auth redirect.
- *   <li>{@link #completeAuth} — single-use enforcement, user/LOA/remember-me setup, {@code
+ *   <li>{@link #completeAuth} — use-limit enforcement, user/LOA/remember-me setup, {@code
  *       context.success()}.
  * </ul>
  */
@@ -55,6 +61,20 @@ class LoginTokenHelper {
   static final String RESUME_PREFIX = "lt:";
   static final String DATA_KEY_PREFIX = "lt:data:";
   static final String USED_KEY_PREFIX = "lt:used:";
+
+  /** How long a use marker is kept beyond the token's expiry. */
+  static final long USE_MARKER_GRACE_SECONDS = 60L;
+
+  /**
+   * Execution config key for the "Client ID must match" toggle shared by all Login Token
+   * authenticators. Default (unset or {@code "true"}): only tokens carrying a {@code clientId} are
+   * accepted, and it must equal the client of the current session. When {@code "false"}, tokens
+   * created <em>without</em> a {@code client_id} ("universal" tokens, e.g. for QR-code login) are
+   * accepted as well — but a client binding that <em>is</em> present on the token is still
+   * enforced; a mismatch is always rejected.
+   */
+  static final String REQUIRE_CLIENT_BINDING_CONFIG_PROPERTY =
+      "ext-login-token-require-client-binding";
 
   // Direct-grant verification result codes (see verifyDirectGrant)
   /** Token missing, expired, client-mismatched, or already redeemed. */
@@ -95,44 +115,87 @@ class LoginTokenHelper {
     final String expiryStr;
     final UserModel user;
 
+    /**
+     * Identity under which redemptions are counted: the UUID of a legacy token, the nonce of a
+     * stateless one.
+     */
+    final String useId;
+
     private ResolvedToken(
-        LookupStatus status, Map<String, String> notes, String expiryStr, UserModel user) {
+        LookupStatus status,
+        Map<String, String> notes,
+        String expiryStr,
+        UserModel user,
+        String useId) {
       this.status = status;
       this.notes = notes;
       this.expiryStr = expiryStr;
       this.user = user;
+      this.useId = useId;
     }
 
     static ResolvedToken invalid() {
-      return new ResolvedToken(LookupStatus.INVALID, null, null, null);
+      return new ResolvedToken(LookupStatus.INVALID, null, null, null, null);
     }
 
     static ResolvedToken userDisabled() {
-      return new ResolvedToken(LookupStatus.USER_DISABLED, null, null, null);
+      return new ResolvedToken(LookupStatus.USER_DISABLED, null, null, null, null);
     }
 
-    static ResolvedToken ok(Map<String, String> notes, String expiryStr, UserModel user) {
-      return new ResolvedToken(LookupStatus.OK, notes, expiryStr, user);
+    static ResolvedToken ok(
+        Map<String, String> notes, String expiryStr, UserModel user, String useId) {
+      return new ResolvedToken(LookupStatus.OK, notes, expiryStr, user, useId);
     }
   }
 
   /**
    * Shared token resolution used by both the browser ({@link #handleTokenId}) and direct-grant
-   * ({@link #verifyDirectGrant}) flows: Infinispan lookup → expiry → client → user resolution. Does
-   * not perform the cookie user-switch check or the single-use reservation, and never touches the
-   * flow context — each caller decides how to signal the outcome.
+   * ({@link #verifyDirectGrant}) flows: credential resolution (Infinispan lookup for a legacy
+   * token, decryption for a stateless one) → expiry → client binding → user resolution. Does not perform the cookie user-switch check or the single-use reservation, and
+   * never touches the flow context — each caller decides how to signal the outcome.
+   *
+   * <p>Client binding: a {@code clientId} stored on the token must always match the session's
+   * client. A token <em>without</em> a stored {@code clientId} is only accepted when the
+   * execution's {@link #REQUIRE_CLIENT_BINDING_CONFIG_PROPERTY} config is set to {@code false}.
    *
    * <p>A present-but-non-numeric {@code expiry} note is treated as {@link LookupStatus#INVALID}
    * rather than propagating a {@link NumberFormatException}.
    */
   static ResolvedToken lookupAndValidate(AuthenticationFlowContext context, String tokenId) {
-    SingleUseObjectProvider singleUse =
-        context.getSession().getProvider(SingleUseObjectProvider.class);
+    // Never log a token id itself: it is a bearer credential in both formats.
+    String logId = StatelessLoginToken.logId(tokenId);
 
-    Map<String, String> notes = singleUse.get(DATA_KEY_PREFIX + tokenId);
-    if (notes == null) {
-      log.warnf("[LT] credential not found or expired for tokenId='%s'", tokenId);
-      return ResolvedToken.invalid();
+    Map<String, String> notes;
+    String useId;
+    if (StatelessLoginToken.isStateless(tokenId)) {
+      Optional<StatelessLoginToken.Payload> payload =
+          StatelessLoginToken.open(
+              LoginTokenKeys.decryptionKeys(context.getSession(), context.getRealm()),
+              context.getRealm().getId(),
+              tokenId);
+      if (payload.isEmpty()) {
+        log.warnf("[LT] stateless token could not be decrypted for tokenId='%s'", logId);
+        return ResolvedToken.invalid();
+      }
+      notes = payload.get().toNotes();
+      useId = payload.get().getUseId();
+    } else {
+      if (!StatelessLoginToken.isLegacy(tokenId)) {
+        // Not a token we ever issued. Reject it here rather than look it up: the input is
+        // attacker-controlled and would otherwise become a key in the single-use store.
+        log.warnf("[LT] malformed token id rejected for tokenId='%s'", logId);
+        return ResolvedToken.invalid();
+      }
+      notes =
+          context
+              .getSession()
+              .getProvider(SingleUseObjectProvider.class)
+              .get(DATA_KEY_PREFIX + tokenId);
+      if (notes == null) {
+        log.warnf("[LT] credential not found or expired for tokenId='%s'", logId);
+        return ResolvedToken.invalid();
+      }
+      useId = tokenId;
     }
 
     String expiryStr = notes.get(KEY_EXPIRY);
@@ -141,20 +204,33 @@ class LoginTokenHelper {
       try {
         expiry = Long.parseLong(expiryStr);
       } catch (NumberFormatException e) {
-        log.warnf("[LT] malformed expiry '%s' for tokenId='%s'", expiryStr, tokenId);
+        log.warnf("[LT] malformed expiry '%s' for tokenId='%s'", expiryStr, logId);
         return ResolvedToken.invalid();
       }
       if (System.currentTimeMillis() / 1000L > expiry) {
-        log.warnf("[LT] credential expired for tokenId='%s'", tokenId);
+        log.warnf("[LT] credential expired for tokenId='%s'", logId);
         return ResolvedToken.invalid();
       }
     }
 
     String storedClientId = notes.get(KEY_CLIENT_ID);
-    String sessionClientId = context.getAuthenticationSession().getClient().getClientId();
-    if (storedClientId != null && !storedClientId.equals(sessionClientId)) {
-      log.warnf("[LT] client mismatch: stored='%s', flow='%s'", storedClientId, sessionClientId);
-      return ResolvedToken.invalid();
+    if (storedClientId == null) {
+      // Unbound ("universal") token: only accepted when this execution explicitly opted out of
+      // client binding via the "Client ID must match" config toggle.
+      if (isClientBindingRequired(context)) {
+        log.warnf(
+            "[LT] unbound token rejected for tokenId='%s' (execution requires client binding)",
+            logId);
+        return ResolvedToken.invalid();
+      }
+    } else {
+      // A client binding present on the token is ALWAYS enforced, regardless of the
+      // "Client ID must match" toggle — the token creator explicitly requested it.
+      String sessionClientId = context.getAuthenticationSession().getClient().getClientId();
+      if (!storedClientId.equals(sessionClientId)) {
+        log.warnf("[LT] client mismatch: stored='%s', flow='%s'", storedClientId, sessionClientId);
+        return ResolvedToken.invalid();
+      }
     }
 
     String userId = notes.get(KEY_USER_ID);
@@ -164,7 +240,42 @@ class LoginTokenHelper {
       return ResolvedToken.userDisabled();
     }
 
-    return ResolvedToken.ok(notes, expiryStr, user);
+    return ResolvedToken.ok(notes, expiryStr, user, useId);
+  }
+
+  /**
+   * Reads the "Client ID must match" toggle from the execution's authenticator config. Defaults to
+   * {@code true} (strict) when no config is attached to the execution or the property is unset —
+   * accepting unbound tokens is an explicit per-execution opt-in.
+   */
+  static boolean isClientBindingRequired(AuthenticationFlowContext context) {
+    AuthenticatorConfigModel config = context.getAuthenticatorConfig();
+    if (config == null || config.getConfig() == null) {
+      return true;
+    }
+    String value = config.getConfig().get(REQUIRE_CLIENT_BINDING_CONFIG_PROPERTY);
+    if (value == null) {
+      return true;
+    }
+    return Boolean.parseBoolean(value);
+  }
+
+  /**
+   * Builds the "Client ID must match" {@link ProviderConfigProperty} shown in the admin console
+   * for all three Login Token authenticator factories.
+   */
+  static ProviderConfigProperty requireClientBindingConfigProperty() {
+    ProviderConfigProperty prop = new ProviderConfigProperty();
+    prop.setType(ProviderConfigProperty.BOOLEAN_TYPE);
+    prop.setName(REQUIRE_CLIENT_BINDING_CONFIG_PROPERTY);
+    prop.setLabel("Client ID must match");
+    prop.setHelpText(
+        "When ON (default), a login token must carry a client_id and it must match the client of"
+            + " the current session. When OFF, tokens created without a client_id (universal"
+            + " tokens, e.g. for QR-code login) are accepted as well. A client_id that is present"
+            + " on the token is always enforced, even when this option is OFF.");
+    prop.setDefaultValue("true");
+    return prop;
   }
 
   // -------------------------------------------------------------------------
@@ -172,7 +283,7 @@ class LoginTokenHelper {
   // -------------------------------------------------------------------------
 
   /**
-   * Full Login Token verification: Infinispan lookup → expiry → client → user → cookie user-switch
+   * Full Login Token verification: credential resolution → expiry → client → user → cookie user-switch
    * check → {@link #completeAuth}.
    *
    * <p>The two parameters capture the only behavioural differences between the two authenticators:
@@ -196,6 +307,8 @@ class LoginTokenHelper {
         onInvalidToken.run();
         return;
       case USER_DISABLED:
+        // Do not leave the token behind as a username suggestion for the next authenticator.
+        clearLoginHint(context);
         context.failure(AuthenticationFlowError.USER_DISABLED);
         return;
       default:
@@ -233,7 +346,7 @@ class LoginTokenHelper {
       return;
     }
 
-    completeAuth(context, tokenId, notes, expiryStr, targetUser);
+    completeAuth(context, resolved.useId, notes, expiryStr, targetUser, onInvalidToken);
   }
 
   // -------------------------------------------------------------------------
@@ -374,7 +487,7 @@ class LoginTokenHelper {
       authUri.queryParam("nonce", nonce);
     }
 
-    log.debugf("[LT] cookie expiry + redirect for token '%s'", tokenId);
+    log.debugf("[LT] cookie expiry + redirect for token '%s'", StatelessLoginToken.logId(tokenId));
     context.challenge(Response.seeOther(authUri.build(context.getRealm().getName())).build());
   }
 
@@ -432,21 +545,27 @@ class LoginTokenHelper {
   }
 
   /**
-   * Enforces single-use, sets the user, applies optional email-verification / LOA / remember-me,
-   * and calls {@code context.success()}.
+   * Enforces the token's use limit, sets the user, applies optional email-verification / LOA /
+   * remember-me, and calls {@code context.success()}.
    *
-   * <p>On duplicate-use the method calls {@code context.failure(INVALID_CREDENTIALS)} and returns
-   * without calling success.
+   * <p>A token whose uses are exhausted is handled exactly like an expired or unknown one: {@code
+   * onInvalidToken} runs and success is not called. Failing the execution instead would let the
+   * flow fall through to the next alternative with the token still in {@code login_hint}, where
+   * the username form would offer it as the username.
+   *
+   * @param useId identity under which redemptions are counted, see {@link ResolvedToken#useId}.
+   * @param onInvalidToken the caller's reaction to an unusable token, see {@link #handleTokenId}.
    */
   static void completeAuth(
       AuthenticationFlowContext context,
-      String tokenId,
+      String useId,
       Map<String, String> notes,
       String expiryStr,
-      UserModel user) {
+      UserModel user,
+      Runnable onInvalidToken) {
 
-    if (!reserveSingleUse(context, tokenId, notes, expiryStr)) {
-      context.failure(AuthenticationFlowError.INVALID_CREDENTIALS);
+    if (!reserveUse(context, useId, notes, expiryStr)) {
+      onInvalidToken.run();
       return;
     }
 
@@ -454,43 +573,69 @@ class LoginTokenHelper {
   }
 
   /**
-   * Atomically reserves a non-reusable token for single use by recording {@code lt:used:{tokenId}}
-   * in {@link SingleUseObjectProvider}. Reusable tokens always pass.
+   * Number of redemptions the token allows; {@code 0} means unlimited. Tokens stored by a version
+   * that predates {@code maxUses} carry only the {@code reusable} flag: unlimited when {@code
+   * true}, single use otherwise. A malformed or negative value is treated as single use, so a
+   * damaged note can never widen a token's use limit.
+   */
+  static int maxUses(Map<String, String> notes) {
+    String value = notes.get(KEY_MAX_USES);
+    if (value == null) {
+      return "true".equalsIgnoreCase(notes.get(KEY_REUSABLE)) ? 0 : 1;
+    }
+    try {
+      int maxUses = Integer.parseInt(value);
+      return maxUses < 0 ? 1 : Math.min(StatelessLoginToken.MAX_USES_LIMIT, maxUses);
+    } catch (NumberFormatException e) {
+      return 1;
+    }
+  }
+
+  /**
+   * Atomically claims one of the token's allowed redemptions. Each redemption occupies one slot in
+   * {@link SingleUseObjectProvider} — {@code lt:used:{useId}} for the first, {@code
+   * lt:used:{useId}:{n}} for the n-th — created with {@code putIfAbsent}, the only atomic primitive
+   * the provider offers. Concurrent redemptions therefore never share a slot. Slots live until the
+   * token expires; unlimited tokens store nothing.
    *
-   * <p>This method has no side effect on the flow context — the caller decides how to signal a
-   * duplicate redemption (the browser authenticators fail without a response; the direct-grant
+   * <p>This method has no side effect on the flow context — the caller decides how to signal an
+   * exhausted token (the browser authenticators fail without a response; the direct-grant
    * authenticator returns an OAuth error response).
    *
-   * @return {@code false} if a non-reusable token was already redeemed, {@code true} otherwise.
+   * @return {@code false} if every allowed redemption was already claimed, {@code true} otherwise.
    */
-  static boolean reserveSingleUse(
+  static boolean reserveUse(
       AuthenticationFlowContext context,
-      String tokenId,
+      String useId,
       Map<String, String> notes,
       String expiryStr) {
-    boolean isReusable = "true".equalsIgnoreCase(notes.get(KEY_REUSABLE));
-    if (isReusable) {
+    int maxUses = maxUses(notes);
+    if (maxUses == 0) {
       return true;
     }
+    // The markers must outlive the token: it is accepted until the end of its expiry second, and
+    // nodes do not share one clock. A marker that expired first would hand the uses back.
     long remainingTtl =
-        expiryStr != null
-            ? Math.max(1L, Long.parseLong(expiryStr) - (System.currentTimeMillis() / 1000L))
-            : 300L;
-    boolean reserved =
-        context
-            .getSession()
-            .getProvider(SingleUseObjectProvider.class)
-            .putIfAbsent(USED_KEY_PREFIX + tokenId, remainingTtl);
-    if (!reserved) {
-      log.warnf("[LT] token already used: '%s'", tokenId);
+        (expiryStr != null
+                ? Math.max(0L, Long.parseLong(expiryStr) - (System.currentTimeMillis() / 1000L))
+                : 300L)
+            + USE_MARKER_GRACE_SECONDS;
+    SingleUseObjectProvider singleUse =
+        context.getSession().getProvider(SingleUseObjectProvider.class);
+    for (int slot = 1; slot <= maxUses; slot++) {
+      String key = slot == 1 ? USED_KEY_PREFIX + useId : USED_KEY_PREFIX + useId + ":" + slot;
+      if (singleUse.putIfAbsent(key, remainingTtl)) {
+        return true;
+      }
     }
-    return reserved;
+    log.warnf("[LT] token use limit (%d) reached", maxUses);
+    return false;
   }
 
   /**
    * Sets the authenticated user on the context, applies optional email-verification / LOA /
-   * remember-me from the token notes, and calls {@code context.success()}. Assumes single-use has
-   * already been reserved via {@link #reserveSingleUse}.
+   * remember-me from the token notes, and calls {@code context.success()}. Assumes a redemption
+   * has already been claimed via {@link #reserveUse}.
    */
   private static void applyAuthenticatedUser(
       AuthenticationFlowContext context, Map<String, String> notes, UserModel user) {
@@ -547,7 +692,7 @@ class LoginTokenHelper {
 
   /**
    * Verifies a Login Token in a non-interactive Direct Grant (Resource Owner Password Credentials)
-   * flow. Runs the same Infinispan lookup → expiry → client → user-resolution → single-use → {@code
+   * flow. Runs the same credential resolution → expiry → client → user-resolution → use limit → {@code
    * context.success()} pipeline as {@link #handleTokenId}, but deliberately omits the cookie
    * user-switch check and never renders a browser challenge — a direct grant has no browser session
    * to switch and cannot present forms or redirects.
@@ -572,7 +717,7 @@ class LoginTokenHelper {
         break;
     }
 
-    if (!reserveSingleUse(context, tokenId, resolved.notes, resolved.expiryStr)) {
+    if (!reserveUse(context, resolved.useId, resolved.notes, resolved.expiryStr)) {
       return DG_INVALID_TOKEN;
     }
 

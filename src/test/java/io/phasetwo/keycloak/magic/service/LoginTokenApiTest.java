@@ -9,16 +9,12 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.phasetwo.keycloak.magic.Helpers;
+import io.phasetwo.keycloak.magic.LoginTokenTestSupport;
 import io.phasetwo.keycloak.magic.representation.LoginTokenRequest;
-import java.io.IOException;
-import java.net.URI;
-import java.util.Base64;
-import java.util.HashMap;
 import java.util.Map;
 import lombok.extern.jbosslog.JBossLog;
 import org.junit.jupiter.api.Test;
 import org.keycloak.representations.idm.UserRepresentation;
-import org.keycloak.util.JsonSerialization;
 import org.testcontainers.Testcontainers;
 
 /**
@@ -41,17 +37,7 @@ import org.testcontainers.Testcontainers;
  * </ul>
  */
 @JBossLog
-class LoginTokenApiTest extends AbstractMagicLinkTest {
-
-  private static final String TEST_REALM = "test-realm-v2";
-  private static final String TEST_CLIENT = "v2-test-client";
-  private static final String REDIRECT_URI = "http://localhost/callback";
-  private static final String TEST_EMAIL = "testuser@phasetwo.io";
-
-  private static final String LOGIN_TOKEN_PATH = "realms/" + TEST_REALM + "/login-token";
-  private static final String TOKEN_PATH =
-      "realms/" + TEST_REALM + "/protocol/openid-connect/token";
-  private static final String AUTH_PATH = "realms/" + TEST_REALM + "/protocol/openid-connect/auth";
+class LoginTokenApiTest extends AbstractLoginTokenApiTest {
 
   // -------------------------------------------------------------------------
   // API validation tests
@@ -88,10 +74,12 @@ class LoginTokenApiTest extends AbstractMagicLinkTest {
   }
 
   @Test
-  void createLoginToken_missingClientId_returnsBadRequest() {
+  void createLoginToken_missingClientId_createsUnboundToken() {
     Testcontainers.exposeHostPorts(container.getHttpPort());
     importRealm("/realms/login-token-api-test-setup.json");
 
+    // client_id is optional: omitting it mints an unbound ("universal") token. Such tokens are
+    // only redeemable by executions with "Client ID must match" switched OFF (default is ON).
     given()
         .baseUri(getAuthUrl())
         .auth()
@@ -100,7 +88,8 @@ class LoginTokenApiTest extends AbstractMagicLinkTest {
         .body(Map.of("email", TEST_EMAIL))
         .post(LOGIN_TOKEN_PATH)
         .then()
-        .statusCode(400);
+        .statusCode(200)
+        .body("login_hint", not(emptyOrNullString()));
   }
 
   @Test
@@ -348,235 +337,37 @@ class LoginTokenApiTest extends AbstractMagicLinkTest {
   }
 
   // -------------------------------------------------------------------------
-  // Helpers
+  // Token formats in the browser flow
   // -------------------------------------------------------------------------
 
-  private LoginTokenRequest buildRequest(Integer loa, Boolean reusable) {
-    LoginTokenRequest req = new LoginTokenRequest();
-    req.setEmail(TEST_EMAIL);
-    req.setClientId(TEST_CLIENT);
-    req.setForceSessionLoa(loa);
-    req.setReusable(reusable);
-    return req;
-  }
+  /** The legacy token format ({@code lt:{uuid}}) stays the default and keeps working. */
+  @Test
+  void legacyTokenFormat_isIssuedByDefaultAndRedeemsInBrowserFlow() throws Exception {
+    Testcontainers.exposeHostPorts(container.getHttpPort());
+    importRealm("/realms/login-token-api-test-setup.json");
+    LoginTokenTestSupport.addLoginTokenKeyProvider(keycloak, TEST_REALM);
 
-  private String createLoginToken(Map<String, String> additionalParams) throws Exception {
-    return createLoginToken(additionalParams, null, null);
-  }
+    String loginHint = postLoginTokenRequest(buildRequest(null, null));
+    assertTrue(
+        loginHint.matches(LoginTokenTestSupport.LEGACY_LOGIN_HINT_PATTERN),
+        "default login_hint must use the legacy format: " + loginHint);
 
-  private String createLoginToken(
-      Map<String, String> additionalParams, Integer loa, Boolean reusable) throws Exception {
-    String loginHint = postLoginTokenRequest(buildRequest(loa, reusable));
-    Map<String, String> params = new HashMap<>();
-    params.put("redirect_uri", REDIRECT_URI);
-    params.putAll(additionalParams);
-    return buildOidcUrl(loginHint, params);
-  }
-
-  /** Posts to {@code /login-token} and returns the {@code login_hint} from the response. */
-  private String postLoginTokenRequest(LoginTokenRequest req) throws Exception {
-    return given()
-        .baseUri(getAuthUrl())
-        .auth()
-        .oauth2(keycloak.tokenManager().getAccessTokenString())
-        .contentType("application/json")
-        .body(Helpers.toJsonString(req))
-        .post(LOGIN_TOKEN_PATH)
-        .then()
-        .statusCode(200)
-        .extract()
-        .jsonPath()
-        .getString("login_hint");
+    String code = followLinkToCode(buildOidcUrl(loginHint, Map.of("redirect_uri", REDIRECT_URI)));
+    assertNotNull(code, "a legacy token must still yield an authorization code");
   }
 
   /**
-   * Constructs an OIDC authorization URL from the returned {@code login_hint}.
-   * The caller is responsible for PKCE, state, nonce, etc. in the additionalParams.
-   * {@code prompt=login} is always added to prevent session short-circuiting.
+   * A token whose uses are exhausted must be treated like an expired one: the login form is
+   * shown with the "invalid or expired" message and an empty username field. In particular the
+   * token must not end up as the suggested username.
    */
-  private String buildOidcUrl(String loginHint, Map<String, String> additionalParams) {
-    String base = getAuthUrl().endsWith("/") ? getAuthUrl() : getAuthUrl() + "/";
-    StringBuilder url =
-        new StringBuilder(base)
-            .append(AUTH_PATH)
-            .append("?client_id=")
-            .append(TEST_CLIENT)
-            .append("&response_type=code")
-            .append("&login_hint=")
-            .append(loginHint)
-            .append("&prompt=login");
-    additionalParams.forEach((k, v) -> url.append("&").append(k).append("=").append(v));
-    return url.toString();
-  }
+  @Test
+  void usedUpLegacyToken_showsLoginFormWithMessageAndEmptyUsername() throws Exception {
+    Testcontainers.exposeHostPorts(container.getHttpPort());
+    importRealm("/realms/login-token-invalid-hint-test-setup.json");
 
-  private Map<String, Object> redeemAndDecodeIdToken(String link) throws Exception {
-    String code = followLinkToCode(link);
-    assertNotNull(code, "authorization code must be present");
-
-    var tokenResponse =
-        given()
-            .baseUri(getAuthUrl())
-            .contentType("application/x-www-form-urlencoded")
-            .formParam("grant_type", "authorization_code")
-            .formParam("client_id", TEST_CLIENT)
-            .formParam("code", code)
-            .formParam("redirect_uri", REDIRECT_URI)
-            .post(TOKEN_PATH)
-            .then()
-            .statusCode(200)
-            .extract()
-            .response();
-
-    String idToken = tokenResponse.jsonPath().getString("id_token");
-    assertNotNull(idToken, "id_token must be present (scope=openid was requested)");
-    return decodeJwtPayload(idToken);
-  }
-
-  /**
-   * Follows Keycloak redirects from an authorization URL until the first HTML page. Cookies are
-   * kept so the auth session survives the redirect onto the login form.
-   */
-  private String followUntilPage(String startUrl) throws Exception {
-    var cookieManager = new java.net.CookieManager(null, java.net.CookiePolicy.ACCEPT_ALL);
-    var httpClient =
-        java.net.http.HttpClient.newBuilder()
-            .cookieHandler(cookieManager)
-            .followRedirects(java.net.http.HttpClient.Redirect.NEVER)
-            .build();
-
-    String nextUrl = startUrl;
-    var debug = new StringBuilder("Redirect chain:\n");
-    for (int attempt = 0; attempt < 10; attempt++) {
-      var response =
-          httpClient.send(
-              java.net.http.HttpRequest.newBuilder().uri(URI.create(nextUrl)).GET().build(),
-              java.net.http.HttpResponse.BodyHandlers.ofString());
-      int status = response.statusCode();
-      String location = response.headers().firstValue("Location").orElse(null);
-      debug.append(
-          String.format("  [%d] GET %s → %d  Location: %s%n", attempt, nextUrl, status, location));
-      if (status >= 300 && status < 400) {
-        if (location == null) {
-          break;
-        }
-        nextUrl = location;
-        continue;
-      }
-      if (status == 200) {
-        return response.body();
-      }
-      debug.append("  Response body: ").append(response.body()).append("\n");
-      break;
-    }
-    throw new AssertionError("Login page not reached.\n" + debug);
-  }
-
-  /**
-   * Follows all Keycloak redirects starting from the login token authorization URL until the
-   * final redirect to {@link #REDIRECT_URI} containing a {@code code} query parameter.
-   *
-   * <p>A fresh {@link java.net.CookieManager} is used on every call so that sessions from
-   * previous calls do not interfere (important for the single-use and reusable tests).
-   * The {@code AUTH_SESSION_ID} cookie is maintained within the chain so that Keycloak 26.x's
-   * required-action page can look up the auth session correctly.
-   */
-  private String followLinkToCode(String startUrl) throws Exception {
-    var cookieManager = new java.net.CookieManager(null, java.net.CookiePolicy.ACCEPT_ALL);
-    var httpClient =
-        java.net.http.HttpClient.newBuilder()
-            .cookieHandler(cookieManager)
-            .followRedirects(java.net.http.HttpClient.Redirect.NEVER)
-            .build();
-
-    String nextUrl = startUrl;
-    String nextMethod = "GET";
-    String nextBody = null;
-    var debug = new StringBuilder("Redirect chain:\n");
-
-    for (int attempt = 0; attempt < 15; attempt++) {
-      var reqBuilder = java.net.http.HttpRequest.newBuilder().uri(URI.create(nextUrl));
-      if ("POST".equals(nextMethod)) {
-        String body = nextBody != null ? nextBody : "";
-        reqBuilder
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(body));
-      } else {
-        reqBuilder.GET();
-      }
-
-      var response =
-          httpClient.send(reqBuilder.build(), java.net.http.HttpResponse.BodyHandlers.ofString());
-      int status = response.statusCode();
-      String location = response.headers().firstValue("Location").orElse(null);
-      debug.append(
-          String.format(
-              "  [%d] %s %s → %d  Location: %s%n", attempt, nextMethod, nextUrl, status, location));
-
-      nextMethod = "GET";
-      nextBody = null;
-
-      if (status >= 300 && status < 400) {
-        if (location == null) break;
-        if (location.contains("code=")) return extractQueryParam(location, "code");
-        nextUrl = location;
-      } else if (status == 200) {
-        // Keycloak 26.x may show a required-action page that auto-submits via JS.
-        // Parse the form action and hidden fields, then POST them.
-        String html = response.body();
-        var actionMatch =
-            java.util.regex.Pattern.compile(
-                    "action=\"([^\"]+)\"", java.util.regex.Pattern.CASE_INSENSITIVE)
-                .matcher(html);
-        if (!actionMatch.find()) {
-          debug.append("  No form action found in HTML — giving up.\n");
-          break;
-        }
-        nextUrl = actionMatch.group(1).replace("&amp;", "&");
-        nextMethod = "POST";
-
-        var sb = new StringBuilder();
-        var inputMatch =
-            java.util.regex.Pattern.compile(
-                    "<input([^>]*)>", java.util.regex.Pattern.CASE_INSENSITIVE)
-                .matcher(html);
-        while (inputMatch.find()) {
-          String tag = inputMatch.group(1);
-          var nm = java.util.regex.Pattern.compile("name=\"([^\"]+)\"").matcher(tag);
-          var vm = java.util.regex.Pattern.compile("value=\"([^\"]*)\"").matcher(tag);
-          if (nm.find() && vm.find()) {
-            if (sb.length() > 0) sb.append('&');
-            sb.append(
-                    java.net.URLEncoder.encode(
-                        nm.group(1), java.nio.charset.StandardCharsets.UTF_8))
-                .append('=')
-                .append(
-                    java.net.URLEncoder.encode(
-                        vm.group(1), java.nio.charset.StandardCharsets.UTF_8));
-          }
-        }
-        nextBody = sb.toString();
-      } else {
-        debug.append(String.format("  Unexpected status %d — giving up.%n", status));
-        debug.append("  Response body: ").append(response.body()).append("\n");
-        break;
-      }
-    }
-    throw new AssertionError(
-        "Authorization code not found in login token redirect chain.\n" + debug);
-  }
-
-  private static String extractQueryParam(String url, String param) throws Exception {
-    String query = new URI(url).getQuery();
-    if (query == null) return null;
-    for (String part : query.split("&")) {
-      if (part.startsWith(param + "=")) return part.substring(param.length() + 1);
-    }
-    return null;
-  }
-
-  @SuppressWarnings("unchecked")
-  private static Map<String, Object> decodeJwtPayload(String jwt) throws IOException {
-    byte[] decoded = Base64.getUrlDecoder().decode(jwt.split("\\.")[1]);
-    return JsonSerialization.readValue(decoded, Map.class);
+    LoginTokenRequest req = buildRequest(null, null);
+    req.setMaxUses(1);
+    assertUsedUpTokenShowsCleanLoginForm(postLoginTokenRequest(req));
   }
 }

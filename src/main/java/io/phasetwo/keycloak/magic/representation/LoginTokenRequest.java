@@ -27,8 +27,11 @@ public class LoginTokenRequest {
   private String username;
 
   /**
-   * Client ID validated when the login token is redeemed. The browser flow verifier rejects
-   * redemption attempts from any other client.
+   * Optional client ID the token is bound to. When set, redemption from any other client is
+   * rejected — this binding is always enforced, regardless of authenticator configuration. When
+   * omitted, an unbound ("universal") token is created that can be redeemed at any client, but
+   * only by authenticator executions configured with "Client ID must match" = OFF. Unbound tokens
+   * should use a short {@code expiration_seconds} and {@code reusable=false}.
    */
   @JsonProperty("client_id")
   private String clientId;
@@ -58,8 +61,18 @@ public class LoginTokenRequest {
   private boolean forceCreate = false;
 
   /**
-   * When {@code true} the token may be used multiple times until it expires. Default is
-   * {@code true} (reusable).
+   * Number of times the token may be redeemed until it expires: {@code 0} = unlimited, {@code 1} =
+   * single use, up to {@link
+   * io.phasetwo.keycloak.magic.auth.token.StatelessLoginToken#MAX_USES_LIMIT}. Takes precedence
+   * over {@code reusable}. When neither is sent the token is unlimited.
+   */
+  @JsonProperty("max_uses")
+  private Integer maxUses;
+
+  /**
+   * Legacy form of {@code max_uses}: {@code true} (the default when the field is omitted) =
+   * unlimited, {@code false} or an explicit {@code null} = single use. Ignored when {@code
+   * max_uses} is set.
    */
   @JsonProperty("reusable")
   private Boolean reusable = true;

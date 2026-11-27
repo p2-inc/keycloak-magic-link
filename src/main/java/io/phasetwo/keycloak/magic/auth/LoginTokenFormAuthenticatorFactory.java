@@ -45,7 +45,7 @@ public class LoginTokenFormAuthenticatorFactory implements AuthenticatorFactory 
 
   @Override
   public boolean isConfigurable() {
-    return false;
+    return true;
   }
 
   @Override
@@ -64,7 +64,7 @@ public class LoginTokenFormAuthenticatorFactory implements AuthenticatorFactory 
 
   @Override
   public List<ProviderConfigProperty> getConfigProperties() {
-    return List.of();
+    return List.of(LoginTokenHelper.requireClientBindingConfigProperty());
   }
 
   @Override

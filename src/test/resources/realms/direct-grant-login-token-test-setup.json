@@ -66,6 +66,24 @@
         "basic",
         "email"
       ]
+    },
+    {
+      "clientId": "dg-other-client",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["http://localhost/*", "http://host.testcontainers.internal:*"],
+      "webOrigins": ["+"],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "amr",
+        "profile",
+        "roles",
+        "basic",
+        "email"
+      ]
     }
   ],
   "authenticationFlows": [

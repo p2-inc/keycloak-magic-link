@@ -10,7 +10,7 @@ package io.phasetwo.keycloak.magic.auth.token;
  * <p>Fields stored:
  * <ul>
  *   <li>{@code userId}     — subject (user ID)</li>
- *   <li>{@code clientId}   — intended OIDC client</li>
+ *   <li>{@code clientId}   — intended OIDC client (optional; absent = unbound "universal" token)</li>
  *   <li>{@code expiry}     — absolute expiry (Unix epoch seconds)</li>
  *   <li>{@code loa}        — optional forced session LOA level</li>
  *   <li>{@code rememberMe} — whether to set the remember-me flag</li>
@@ -21,13 +21,21 @@ package io.phasetwo.keycloak.magic.auth.token;
 public class LoginToken {
 
   // Map keys used in SingleUseObjectProvider notes
-  public static final String KEY_USER_ID      = "userId";
-  public static final String KEY_CLIENT_ID    = "clientId";
-  public static final String KEY_EXPIRY       = "expiry";
-  public static final String KEY_LOA          = "loa";
-  public static final String KEY_REMEMBER_ME         = "rememberMe";
-  public static final String KEY_REUSABLE            = "reusable";
-  public static final String KEY_SEV                 = "sev";
+  public static final String KEY_USER_ID = "userId";
+  public static final String KEY_CLIENT_ID = "clientId";
+  public static final String KEY_EXPIRY = "expiry";
+  public static final String KEY_LOA = "loa";
+  public static final String KEY_REMEMBER_ME = "rememberMe";
+  public static final String KEY_REUSABLE = "reusable";
+
+  /**
+   * Number of allowed redemptions; {@code "0"} means unlimited. When absent (tokens stored by an
+   * older version), {@link #KEY_REUSABLE} decides between unlimited and single use.
+   */
+  public static final String KEY_MAX_USES = "maxUses";
+
+  public static final String KEY_SEV = "sev";
+
   /**
    * When {@code "true"}, show the user-switch confirmation form instead of performing an automatic
    * logout. Default (absent / {@code "false"}) is auto-logout.
@@ -42,24 +50,59 @@ public class LoginToken {
   private Boolean reusable;
   private Boolean setEmailVerified;
 
-  public String getUserId() { return userId; }
-  public void setUserId(String userId) { this.userId = userId; }
+  public String getUserId() {
+    return userId;
+  }
 
-  public String getClientId() { return clientId; }
-  public void setClientId(String clientId) { this.clientId = clientId; }
+  public void setUserId(String userId) {
+    this.userId = userId;
+  }
 
-  public long getExpiry() { return expiry; }
-  public void setExpiry(long expiry) { this.expiry = expiry; }
+  public String getClientId() {
+    return clientId;
+  }
 
-  public Integer getForceSessionLoa() { return forceSessionLoa; }
-  public void setForceSessionLoa(Integer forceSessionLoa) { this.forceSessionLoa = forceSessionLoa; }
+  public void setClientId(String clientId) {
+    this.clientId = clientId;
+  }
 
-  public Boolean getRememberMe() { return rememberMe; }
-  public void setRememberMe(Boolean rememberMe) { this.rememberMe = rememberMe; }
+  public long getExpiry() {
+    return expiry;
+  }
 
-  public Boolean getReusable() { return reusable; }
-  public void setReusable(Boolean reusable) { this.reusable = reusable; }
+  public void setExpiry(long expiry) {
+    this.expiry = expiry;
+  }
 
-  public Boolean getSetEmailVerified() { return setEmailVerified; }
-  public void setSetEmailVerified(Boolean setEmailVerified) { this.setEmailVerified = setEmailVerified; }
+  public Integer getForceSessionLoa() {
+    return forceSessionLoa;
+  }
+
+  public void setForceSessionLoa(Integer forceSessionLoa) {
+    this.forceSessionLoa = forceSessionLoa;
+  }
+
+  public Boolean getRememberMe() {
+    return rememberMe;
+  }
+
+  public void setRememberMe(Boolean rememberMe) {
+    this.rememberMe = rememberMe;
+  }
+
+  public Boolean getReusable() {
+    return reusable;
+  }
+
+  public void setReusable(Boolean reusable) {
+    this.reusable = reusable;
+  }
+
+  public Boolean getSetEmailVerified() {
+    return setEmailVerified;
+  }
+
+  public void setSetEmailVerified(Boolean setEmailVerified) {
+    this.setEmailVerified = setEmailVerified;
+  }
 }

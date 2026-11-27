@@ -300,6 +300,8 @@ Keycloak consoles do ([keycloak#52462](https://github.com/keycloak/keycloak/pull
 
 Login Token is a drop-in parallel implementation that can be deployed alongside the existing Magic Link without any breaking changes or flow migration.
 
+> Security architecture, guarantees, threat model and known open issues are described in [SECURITY-DESIGN.md](SECURITY-DESIGN.md).
+
 ### Why Login Token?
 
 The original Magic Link authenticates the user *directly* via the action-token handler, bypassing the standard Keycloak browser flow entirely. This means:
@@ -307,9 +309,11 @@ The original Magic Link authenticates the user *directly* via the action-token h
 - `acr_values` / step-up authentication cannot be evaluated natively.
 - Subsequent authenticators (e.g. TOTP for LOA=2) cannot run in the same browser session.
 
-Login Token solves this by returning a **login token** instead of an action-token URL. The credential is stored server-side in Infinispan; only a short UUID reference (`lt:{uuid}`) is returned in `login_hint`. The standard browser flow runs in full — `acr_values`, `Condition – Level of Authentication`, and all step-up logic work natively.
+Login Token solves this by returning a **login token** instead of an action-token URL. The token is passed to Keycloak in `login_hint`, either as a short reference to a credential stored server-side (`lt:{uuid}`, the [legacy token format](#token-formats-stateless-and-legacy)) or as a self-contained encrypted credential (`lt:v2.…`, the stateless format). The standard browser flow runs in full — `acr_values`, `Condition – Level of Authentication`, and all step-up logic work natively.
 
 ### How it works
+
+The walkthrough below shows the legacy token format. A stateless token takes the same path through the flow; only steps 2 and 3 differ — see [Token formats](#token-formats-stateless-and-legacy).
 
 ```
 POST /realms/{realm}/login-token
@@ -334,8 +338,8 @@ Caller constructs the OIDC authorization URL and opens it in the browser:
       2. Looks up credential data in Infinispan by "lt:data:{uuid}"
       3. Checks expiry (TTL-enforced by Infinispan + explicit timestamp check)
       4. Verifies stored clientId matches the current OIDC client
-      5. Enforces single-use via putIfAbsent("lt:used:{uuid}", ttl)
-         (unless reusable=true)
+      5. Enforces the use limit via putIfAbsent("lt:used:{uuid}", ttl)
+         (skipped for tokens without a limit)
       6. Sets user, optional LOA, optional remember-me
       7. context.success() → flow continues normally
   → Any subsequent step-up authenticators run in the same browser session
@@ -346,11 +350,106 @@ Caller constructs the OIDC authorization URL and opens it in the browser:
 > This causes an `already authenticated as different user` error when the Verifier later tries
 > to authenticate the login token target user.
 
-> **Why UUID instead of a signed JWT?**  Keycloak silently ignores OIDC parameters longer than
-> 255 characters. A typical HS512/RS256 JWT is 500–700 characters and would be dropped, causing
-> authentication to fail silently. The UUID reference (`lt:{uuid}`) is ~42 characters.
-> Security is equivalent to v1 action tokens: 128-bit random UUID entropy + Infinispan TTL +
-> atomic single-use tracking.
+> **Why not a signed JWT?**  Keycloak silently ignores a `login_hint` longer than 255
+> characters. A typical HS512/RS256 JWT is 500–700 characters and would be dropped, causing
+> authentication to fail silently. Both token formats stay well below the limit: the legacy
+> reference (`lt:{uuid}`) is 39 characters, a stateless token is typically 85–115.
+
+### Token formats: stateless and legacy
+
+A Login Token exists in two formats. Both are redeemed by the same authenticators and can be in circulation at the same time; the format is recognised from the `login_hint` itself.
+
+| | Legacy token format | Stateless token format |
+| --- | --- | --- |
+| `login_hint` | `lt:{uuid}` | `lt:v2.{base64url}` |
+| Where the credential lives | In Keycloak's single-use object store (Infinispan), for the whole lifetime of the token | Inside the token, encrypted |
+| Stored when the token is created | One entry per token | Nothing |
+| Stored when the token is redeemed | One marker per use, only for use-limited tokens | One marker per use, only for use-limited tokens |
+| Survives a full cluster restart | No | Yes — but the use counts of use-limited tokens do not, see [below](#use-limits-and-cluster-restarts) |
+| What the holder of the link can read | Nothing (opaque reference) | Nothing (encrypted) |
+| Requires | Nothing | An AES key provider named `login-token` in the realm (created automatically) |
+
+#### Why the stateless format exists
+
+The legacy format keeps every issued token in Infinispan until it expires. That store is in-memory, distributed across the Keycloak nodes with two copies of every entry, and has no size limit, so the memory it needs grows with *tokens issued per day × lifetime*. For interactive use — a handful of short-lived tokens — this is irrelevant. For campaigns it is not: 3.4 million tokens a day with a 7-day lifetime means about 24 million live entries, each held twice in the cluster. That is tens of gigabytes of heap for tokens most recipients never use, it has to be moved between nodes on every deployment or scaling step, and all of it is lost if the cluster restarts.
+
+A stateless token carries its own content, so issuing one stores nothing. Keycloak only writes when a *use-limited* token is actually redeemed, and then just a small marker. Memory use follows the number of redemptions rather than the number of tokens sent.
+
+#### How a stateless token is built
+
+```
+lt:v2.<base64url( salt[16] ‖ ciphertext ‖ tag[16] )>
+```
+
+- The payload — user id, optional client id, expiry, optional LOA, use limit and the `remember_me` / `set_email_verified` / `confirm_user_switch` flags — is packed into a compact binary form and encrypted with **AES-GCM**. GCM is authenticated encryption: the token cannot be read *and* cannot be modified without the key. Changing a single bit makes it invalid.
+- The realm id is bound to the token as additional authenticated data. A token is only accepted by the realm that issued it.
+- **Every token is encrypted under a key of its own.** The realm key is never used for encryption directly: for each token a fresh 16-byte random salt is drawn, and `HMAC-SHA512(realm key, salt)` yields the AES key and nonce for that token alone. AES-GCM limits how many messages a single key may encrypt (about 4 billion with random nonces); with one key per token that limit is never approached, so the realm key does not need to be rotated because of the number of tokens issued.
+- The salt doubles as the token's identity for use counting (`lt:used:{salt}`), so no separate id is needed.
+- The payload also carries the time the token was issued.
+
+Verification replaces the Infinispan lookup of the legacy format (steps 2 and 3 above) with *decrypt and check the expiry inside the token*. Everything after that — client binding, user lookup, user-switch handling, use limit, LOA — is shared.
+
+#### The encryption key
+
+Stateless tokens are encrypted with a dedicated key provider of the realm named `login-token`, so the key is stored in the database, identical on every node, and can be rotated without touching anything else Keycloak encrypts.
+
+**There is nothing to set up.** The first time a stateless token is issued in a realm, the plugin creates the provider itself (`aes-generated`, AES key size 32, priority 10). You can see it under **Realm settings → Keys → Providers**. Concurrent first requests, also across nodes, end up with a single provider.
+
+You may also add the provider by hand before issuing the first token: choose **aes-generated**, set **Name** to `login-token` (the plugin finds the key by this name) and **Priority** to a value **below 100**. A realm's default `aes-generated` provider has priority 100; as long as it exists and is active, Keycloak keeps using that one for its own purposes and never picks the Login Token key.
+
+#### Choosing the format
+
+The format of newly issued tokens is a **server setting**: the SPI option `legacy` of the `login-token` realm resource.
+
+| Setting | Tokens issued |
+| --- | --- |
+| not set, or `--spi-realm-restapi-extension--login-token--legacy=true` | Legacy format (the default) |
+| `--spi-realm-restapi-extension--login-token--legacy=false` | Stateless format |
+
+As an environment variable the option is `KC_SPI_REALM_RESTAPI_EXTENSION__LOGIN_TOKEN__LEGACY`.
+
+Callers of `POST /login-token` cannot choose the format; the request body has no field for it and callers do not need to change anything when the server is switched. The setting only decides what is **issued**. On redemption both formats are always accepted, whatever the setting, so tokens issued before a switch — in either direction — keep working until they expire.
+
+A stateless token is replaced by a **legacy token** — the request never fails because of the format — when it cannot be issued: the `login-token` provider exists but is disabled, or the payload does not fit into 255 characters, for example with a very long federated user id. Every such fallback is reported as an **error** in the server log (`[LT] stateless login token could not be issued …`), at most once per minute per node, with the number of occurrences since the last report. Alert on that message: while it appears, tokens are being stored in Infinispan again.
+
+> **Rolling out to an existing cluster.** A node running an older version of this plugin cannot
+> verify stateless tokens and ignores `max_uses`: it would issue an *unlimited* token for a
+> request that only sends `max_uses`. Do it in two deployments: first roll out the new version
+> to every node with the option unchanged, *then* set `legacy=false` in a second rollout and let
+> callers start sending `max_uses`. Setting the option in the same rollout as the new version
+> would let upgraded nodes issue stateless tokens that the remaining old nodes reject. Callers
+> that need single use during the rollout keep sending `"reusable": false` (alone or together
+> with `max_uses: 1`). Removing the option is the way back: tokens already issued in either
+> format keep working.
+
+**Key rotation.** Add a second `aes-generated` provider with the same name `login-token` and a higher priority (still below 100). New tokens are encrypted with it. Leave the old provider enabled for as long as tokens issued under it may still be valid, then delete it. Rotation is a matter of your key-management policy only; the number of tokens issued never forces it.
+
+**Invalidating all stateless tokens.** Deleting the key provider invalidates every stateless token issued under it at once. The next stateless token then gets a new provider with a fresh key. An individual stateless token cannot be revoked before it expires; choose `expiration_seconds` accordingly.
+
+**Switching stateless tokens off for a realm.** *Disable* the provider instead of deleting it (toggle **Enabled** off). Outstanding stateless tokens stop working, the plugin does not create a replacement, and every request gets a legacy token.
+
+#### Use limits and cluster restarts
+
+`max_uses` is enforced with markers in Keycloak's single-use object store, written when a token is redeemed and kept until one minute after the token expires. That store is in-memory. If the whole cluster is restarted — or both nodes holding a marker are lost at the same moment — the markers are gone:
+
+- A **legacy** token is gone as well, because it lives in the same store. It fails closed.
+- A **stateless** token is still valid, and its uses can be claimed again. It fails open.
+
+> **Known limitation (open issue).** This is accepted for now; see open issue O1 in
+> [SECURITY-DESIGN.md](SECURITY-DESIGN.md#9-open-issues) for the options considered.
+
+A use-limited stateless token is therefore single use *as long as the cluster keeps running*. Rolling restarts and deployments, where nodes are replaced one at a time, are not affected. Where a hard guarantee is required, keep `expiration_seconds` short for use-limited stateless tokens or keep the server on the legacy format.
+
+#### The legacy token format
+
+Tokens in the legacy format are fully supported and remain the default:
+
+- A `login_hint` of the form `lt:{uuid}` is always resolved through the single-use object store, exactly as before. Tokens issued before an upgrade stay valid until they expire.
+- Legacy tokens stored by a version that predates `max_uses` only carry the `reusable` flag. They keep their meaning: `reusable: true` is unlimited, anything else is single use.
+- The request field `reusable` behaves exactly as before: omitted means unlimited, `false` — and an explicit `null` — means single use.
+- While old and new nodes run side by side, they agree on legacy tokens that are unlimited or single use, whichever node issued or redeemed them. A legacy token with `max_uses` of 2 or more is single use on an old node.
+
+Use the legacy format when you want nothing but the default Keycloak setup, or when you need tokens to disappear on their own if the cluster state is wiped. Use the stateless format whenever tokens are issued in bulk or live longer than a few minutes.
 
 ### REST API — `/login-token`
 
@@ -363,16 +462,46 @@ Requires `manage-users` role (same as `/magic-link`).
 | `user_id` | Y* | | Keycloak user ID. Takes precedence over `email` and `username` when provided. `force_create` is ignored. |
 | `email` | Y* | | Email address of the user. Mutually exclusive with `username`. |
 | `username` | Y* | | Username of the user. When provided, `force_create` is ignored. |
-| `client_id` | Y | | Client ID validated when the login token is redeemed. The verifier rejects redemption attempts from any other client. |
+| `client_id` | N | | Client ID the token is bound to. When set, redemption from any other client is rejected — this is always enforced. When omitted, an unbound ("universal") token is created that is only accepted by authenticator executions configured with **Client ID must match** = OFF (see [Client binding](#client-binding--universal-tokens)). |
 | `expiration_seconds` | N | 300 (5 min) | Token validity in seconds. |
 | `loa` | N | | Force the session to this LOA level, overriding the flow's Condition configuration. |
 | `remember_me` | N | false | Set the remember-me flag on the session. |
 | `force_create` | N | false | Create the user if they do not exist (email only). |
-| `reusable` | N | true | Allow the token to be used more than once within its validity window. |
+| `max_uses` | N | | How often the token may be redeemed within its validity window: `0` = unlimited, `1` = single use, up to `10`. Values outside `0`–`10` are rejected with `400`. When omitted, `reusable` decides; with neither field sent the token is unlimited. A token whose uses are exhausted is treated like an expired one. |
+| `reusable` | N | true | Legacy form of `max_uses`, still accepted: `true` = unlimited, `false` (or an explicit `null`) = single use. Ignored when `max_uses` is set. |
 | `set_email_verified` | N | false | When `true`, marks the user's email as verified after the token is successfully validated. |
 | `confirm_user_switch` | N | false | Controls behaviour when a different user is already logged in on the device. When `false` (default), the existing session is silently logged out and the login token is processed automatically. When `true`, a confirmation screen is shown asking the user to approve the logout before continuing. |
 
 *One of `user_id`, `email`, or `username` is required. `user_id` takes precedence if multiple are provided.
+
+### Client binding / universal tokens
+
+By default, every Login Token is **bound to one client**: the `client_id` stored at generation time must match the client of the session in which the token is redeemed. This limits the blast radius of a leaked token — it can only be redeemed through the bound client, whose redirect-URI allowlist and PKCE configuration control where the authorization code can flow.
+
+For use cases where the target client is not known at generation time — e.g. **QR-code login**, where a user generates a token in account management and any of several apps may scan it — the binding can be relaxed:
+
+1. Omit `client_id` in the `POST /login-token` request. This creates an **unbound ("universal") token**.
+2. Set the **Client ID must match** option to `OFF` on the authenticator execution(s) that should accept unbound tokens (available on `Login Token (with login_hint)`, `Login Token`, and `Login Token Direct Grant`).
+
+The option semantics are:
+
+| Token has `client_id` | **Client ID must match** = ON (default) | **Client ID must match** = OFF |
+| --- | --- | --- |
+| Yes, matches session client | ✅ accepted | ✅ accepted |
+| Yes, different client | ❌ rejected | ❌ **still rejected** |
+| No (universal token) | ❌ rejected | ✅ accepted |
+
+A `client_id` that **is** present on a token is always enforced — the toggle only controls whether tokens *without* a binding are accepted. This means bound and unbound tokens can safely coexist in the same realm: creating a bound token is a guarantee that it cannot be redeemed elsewhere, regardless of how the flows are configured.
+
+**Security recommendations for unbound tokens:**
+
+- Use a **short `expiration_seconds`** (30–120 s). Unbound tokens are meant to be displayed live (e.g. as a QR code), not sent over long-lived channels like email.
+- Set **`max_uses: 1`**. A universal token is password-equivalent for *every* client in the realm during its lifetime; single-use minimizes the window.
+- Be aware that with **Client ID must match** = OFF, the *least strictly configured* client in the realm defines the security level for a stolen token — review clients with permissive redirect URIs (wildcards, `localhost`) and clients with Direct Access Grants enabled.
+- Do not enable unbound tokens in realms that allow **anonymous dynamic client registration** — an attacker could register a client with an arbitrary redirect URI and redeem stolen tokens there.
+- Keep the default (ON) on executions that do not need universal tokens; enable OFF only on the specific flow that serves the QR-login use case.
+
+When the token is transported over email or other uncontrolled channels, or when the target app is known in advance, keep using bound tokens — the binding prevents cross-app replay (e.g. a token issued for a customer app being redeemed against an internal admin portal in the same realm) and gives audit logs a verifiable issued-for/redeemed-at client pair.
 
 > **Important: place the Login Token Verifier before the Cookie authenticator in your flow.**
 > Keycloak evaluates ALTERNATIVE executions in order and stops at the first success. If Cookie
@@ -411,6 +540,8 @@ curl --request POST https://keycloak.host/realms/test/login-token \
 }
 ```
 
+On a server set to the stateless format the response has the same shape and the `login_hint` starts with `lt:v2.`. Pass it on verbatim in both cases; callers do not need to tell the formats apart.
+
 The caller then constructs the OIDC authorization URL using the returned `login_hint` and opens it in the browser (or sends it to the user by email/SMS):
 
 ```
@@ -434,7 +565,7 @@ The caller is fully responsible for PKCE (`code_challenge`, `code_challenge_meth
 When a login token is opened for User B while User A is already logged in on the same device, the verifier detects the session conflict and handles it based on the `confirm_user_switch` parameter:
 
 **Default (`confirm_user_switch: false`) — automatic logout:**
-The existing session cookies are silently expired and the browser is redirected to a fresh OIDC authorization request. The login token is still valid (single-use mark is not set until authentication completes), so the fresh flow picks it up and logs User B in transparently — no screen is shown.
+The existing session cookies are silently expired and the browser is redirected to a fresh OIDC authorization request. The login token is still valid (a use is not counted until authentication completes), so the fresh flow picks it up and logs User B in transparently — no screen is shown.
 
 **`confirm_user_switch: true` — confirmation screen:**
 A confirmation page is shown informing the user that they are currently signed in on this device and asking whether they want to continue. Two options are presented:

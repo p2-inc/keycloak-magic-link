@@ -1,7 +1,9 @@
 package io.phasetwo.keycloak.magic.auth;
 
-import static io.phasetwo.keycloak.magic.auth.LoginTokenHelper.*;
+import static io.phasetwo.keycloak.magic.auth.LoginTokenHelper.NOTE_PENDING_TOKEN;
+import static io.phasetwo.keycloak.magic.auth.LoginTokenHelper.RESUME_PREFIX;
 
+import io.phasetwo.keycloak.magic.auth.token.StatelessLoginToken;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.Authenticator;
@@ -55,7 +57,7 @@ public class LoginTokenFormAuthenticator implements Authenticator {
           tid -> {
             log.debugf(
                 "[LT-form] user-switch confirmed, expiring cookies and redirecting for token '%s'",
-                tid);
+                StatelessLoginToken.logId(tid));
             // Reconstruct login_hint from tokenId — the user typed the token manually, so no
             // OIDC login_hint was present in the original auth request.
             LoginTokenHelper.redirectAfterLogout(context, tid, RESUME_PREFIX + tid);
@@ -77,17 +79,13 @@ public class LoginTokenFormAuthenticator implements Authenticator {
 
     // Pass null for onAutoLogout — form always shows confirmation, never auto-logs-out.
     LoginTokenHelper.handleTokenId(
-        context,
-        tokenId,
-        () -> showFormError(context, "loginTokenInvalid"),
-        null);
+        context, tokenId, () -> showFormError(context, "loginTokenInvalid"), null);
   }
 
   // -------------------------------------------------------------------------
 
   private void showFormError(AuthenticationFlowContext context, String errorKey) {
-    context.challenge(
-        context.form().setError(errorKey).createForm("login-token-form.ftl"));
+    context.challenge(context.form().setError(errorKey).createForm("login-token-form.ftl"));
   }
 
   @Override
