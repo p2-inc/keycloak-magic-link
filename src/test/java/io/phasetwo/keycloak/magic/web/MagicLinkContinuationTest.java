@@ -1,6 +1,7 @@
 package io.phasetwo.keycloak.magic.web;
 
 import io.phasetwo.keycloak.magic.Helpers;
+import io.phasetwo.keycloak.magic.auth.magic.continuation.MagicLinkContinuationAuthenticatorFactory;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +39,15 @@ public class MagicLinkContinuationTest extends AbstractMagicLinkWithMailhogTest 
                         }));
     // Deliberately different from the email: the waiting page must not reveal it.
     realm.getUsers().getFirst().setUsername("existing-user");
+    // Configure an external continuation URL for integration testing.
+    realm.getAuthenticatorConfig().stream()
+        .filter(config -> "magic-link-config".equals(config.getAlias()))
+        .findFirst()
+        .orElseThrow()
+        .getConfig()
+        .put(
+            MagicLinkContinuationAuthenticatorFactory.EXTERNAL_MAGIC_LINK_URL,
+            "https://capture.example.test/magic-login");
     importRealm(realm, keycloak);
     try {
       return runCypressTests(
