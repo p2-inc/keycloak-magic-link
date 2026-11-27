@@ -97,8 +97,9 @@ public abstract class AbstractMagicLinkAuthenticatorFactory implements Authentic
     return new MagicLinkAuthenticator(customizationProviderFactory);
   }
 
+  /** Override to read provider options ({@code --spi-authenticator--<provider-id>--<option>}). */
   @Override
-  public final void init(Config.Scope config) {}
+  public void init(Config.Scope config) {}
 
   /** Override to register {@code RealmPostCreateEvent} listeners or other factory-level hooks. */
   @Override
