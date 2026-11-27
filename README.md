@@ -45,6 +45,18 @@ The authenticator can be configured to create a user with the given email addres
 
 ![Configure Magic Link Authenticator with options](docs/assets/magic-link-config.png)
 
+#### Built-in "magic link" flow
+
+When a realm is created, the extension adds a top-level `magic link` flow: Cookie, Identity Provider Redirector, then a `magic link forms` sub-flow holding the Magic Link execution. The flow is flagged built-in, so neither the admin console nor the Admin API can delete it. Its Magic Link execution has no config and runs with the defaults, which create a user for any unknown email address.
+
+To stop the extension from creating this flow, set the provider option to `false`:
+
+```
+--spi-authenticator--ext-magic-form--create-default-flow=false
+```
+
+The environment variable is `KC_SPI_AUTHENTICATOR__EXT_MAGIC_FORM__CREATE_DEFAULT_FLOW=false`. The option defaults to `true`. It applies to realms created while it is set, `master` included on first startup. Flows that already exist stay as they are, and the Magic Link authenticator remains available for flows you build yourself.
+
 ### Customization (SPI)
 
 The core implementation is **closed for modification and open for extension**. All implementation classes (`MagicLinkAuthenticator`, `MagicLinkActionTokenHandler`) are `final` — do not fork this repository to patch them. Instead, **import this artifact as a Java library** in your own Keycloak extension project and extend it through the SPI:
