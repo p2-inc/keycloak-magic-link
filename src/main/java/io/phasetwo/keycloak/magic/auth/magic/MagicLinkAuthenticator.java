@@ -73,7 +73,10 @@ public final class MagicLinkAuthenticator extends UsernamePasswordForm {
 
     MagicLinkConfig config = new MagicLinkConfig(context.getAuthenticatorConfig());
     String clientId = context.getSession().getContext().getClient().getClientId();
-    EventBuilder event = context.newEvent();
+    // Clone rather than context.newEvent(): newEvent() replaces the flow's LOGIN-typed event with
+    // an untyped one, and enabledUser() then fails with "Attempted to define event error without
+    // first setting the event type" (Keycloak 26.8+).
+    EventBuilder event = context.getEvent().clone();
 
     UserModel user =
         MagicLink.getOrCreate(
